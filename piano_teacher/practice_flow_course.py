@@ -123,8 +123,7 @@ class PracticeFlowLessonGenerator:
 
     def decide_teaching(self, event, state):
         from .teaching_decisions import TeachingExposure, decide_standard_teaching
-        decision = decide_standard_teaching(event, state, generator=self,
-                                            allow_heuristic_remediation=False)
+        decision = decide_standard_teaching(event, state)
         course = state.course
         if (event.kind == "manual" and decision.next_exposure is not None
                 and decision.next_exposure.mode == "learn"

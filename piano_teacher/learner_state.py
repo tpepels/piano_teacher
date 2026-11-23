@@ -161,13 +161,3 @@ class LearnerStateStore:
             self.db.execute("""UPDATE learner_stages SET resume_unit=NULL
                                WHERE fingerprint=? AND stage_key=? AND resume_unit=?""",
                             (fingerprint, stage_key, _json(unit)))
-
-    def trouble_for_piece(self, fingerprint: str, *, include_resolved: bool = False) -> list[dict]:
-        _identity(fingerprint, "piece-query")
-        rows = self.db.execute("""SELECT stage_key,unit,failures,errors,pitches,resolved FROM learner_units
-                                  WHERE fingerprint=? AND failures>0 ORDER BY stage_key,start_beat,end_beat""",
-                               (fingerprint,)).fetchall()
-        return [{"stage_key": row[0], **json.loads(row[1]), "failures": row[2], "errors": row[3],
-                 "pitches": json.loads(row[4]), "resolved": bool(row[5])}
-                for row in rows if include_resolved or not row[5]]
-

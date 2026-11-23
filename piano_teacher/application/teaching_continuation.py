@@ -77,14 +77,6 @@ class EnterSelectedExposure:
 
 
 @dataclass(frozen=True, slots=True)
-class ApplySelectedResponse:
-    identity: ContinuationIdentity
-    response: object
-    exposure: object
-    deadline: float
-
-
-@dataclass(frozen=True, slots=True)
 class EnterSelectedRemediation:
     identity: ContinuationIdentity
     assignment: object
@@ -111,7 +103,7 @@ class StopSelectedContinuation:
     message: str
 
 
-SettledEffect = (HandoffScore | EnterSelectedExposure | ApplySelectedResponse |
+SettledEffect = (HandoffScore | EnterSelectedExposure | 
     EnterSelectedRemediation | AwaitSelectedScore | ContinueSelectedScore |
     StopSelectedContinuation)
 
@@ -372,8 +364,6 @@ class TeachingContinuation:
             return ContinuationEffect("guided")
         if prepared:
             return ContinuationEffect("handoff")
-        if decision.response is not None:
-            return ContinuationEffect("response")
         if decision.remediation is not None:
             return ContinuationEffect("remediation")
         return ContinuationEffect("await_score" if score_changed else "continue")
@@ -409,17 +399,13 @@ class TeachingContinuation:
             self.acknowledged = None
         route = chosen.action
         if route == "guided":
-            route = ("remediation" if decision.remediation is not None else
-                "response" if decision.response is not None and decision.response.guided else
-                "exposure")
+            route = "remediation" if decision.remediation is not None else "exposure"
         exposure = decision.next_exposure
         if route == "handoff":
             effect = HandoffScore(identity,exposure,transaction.deadline,
                 facts.count_in_beats,facts.bpm)
         elif route == "exposure":
             effect = EnterSelectedExposure(identity,exposure)
-        elif route == "response" and decision.response is not None and exposure is not None and facts.automatic:
-            effect = ApplySelectedResponse(identity,decision.response,exposure,transaction.deadline)
         elif route == "remediation":
             effect = EnterSelectedRemediation(identity,decision.remediation,exposure,transaction.deadline)
         elif route == "await_score":

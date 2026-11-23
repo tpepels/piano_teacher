@@ -113,13 +113,6 @@ class TransportTiming:
                 source_end=deadline if self.transport.rest_take_end is None else None),
             automatic=self.lesson.plan is not None and self.transport.auto)
 
-    def start_rate_bpm(self, from_beat: float, bpm: float) -> float:
-        """Authored tempo-map rate at a take's first beat, at this BPM."""
-        if self.lesson.plan is None or bpm <= 0 or self.transport.mode not in ("practice", "listen"):
-            return float(bpm)
-        tempo = self.score.tempo_map(self.lesson.plan.active_stage, bpm)
-        return float(tempo.bpm_at(from_beat)) if tempo is not None else float(bpm)
-
     def schedule_preparation(self, target: float, *, now: float,
                               from_visual: float, reverse_seconds: float,
                               reading_lead_included: bool = False,

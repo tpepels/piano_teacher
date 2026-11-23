@@ -36,9 +36,8 @@ class HistoryReads:
 class PlanReinstallation:
     """Install a fresh plan for the same piece at its first step."""
 
-    def __init__(self, *, lesson, recovery_streak, transport, score):
+    def __init__(self, *, lesson, transport, score):
         self.lesson = lesson
-        self.recovery_streak = recovery_streak
         self.transport = transport
         self.score = score
 
@@ -53,7 +52,6 @@ class PlanReinstallation:
 
     def adopt(self, install_plan) -> None:
         """Install a plan (new source or fresh path) at its first step."""
-        self.recovery_streak.clear()
         install_plan()
         self.lesson.select_opening(0.0)
         self.lesson.set_course_guided(False)

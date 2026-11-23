@@ -10,7 +10,7 @@ from ..lesson_settings import SETTINGS
 from .playback_facts import FullPassageFacts
 from .teaching_continuation import (
     UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
-    SettledSourceFacts, EnterSelectedExposure, ApplySelectedResponse,
+    SettledSourceFacts, EnterSelectedExposure,
     EnterSelectedRemediation, ContinueSelectedScore,
 )
 
@@ -18,7 +18,7 @@ from .teaching_continuation import (
 class SettlementContinuation:
     def __init__(self, *, lesson, notices, score, take, transport,
                  course, transport_timing, selected_recovery,
-                 continuation, mistake_policy):
+                 continuation):
         self.lesson = lesson
         self.notices = notices
         self.score = score
@@ -28,7 +28,6 @@ class SettlementContinuation:
         self.transport_timing = transport_timing
         self.selected_recovery = selected_recovery
         self.continuation = continuation
-        self.mistake_policy = mistake_policy
         # Successful effects are consumed by their exact durable identity.
         # A continuation dispatch error leaves the receipt retryable.
         self._applied_continuation_effect = None
@@ -190,8 +189,6 @@ class SettlementContinuation:
             return
         if isinstance(effect,EnterSelectedExposure):
             self.course.enter_selected_exposure(effect.exposure)
-        elif isinstance(effect,ApplySelectedResponse):
-            self.selected_recovery.apply_policy_response(effect.response,now=now,deadline=effect.deadline)
         elif isinstance(effect,EnterSelectedRemediation):
             self.selected_recovery.start_remedial_assignment(effect.assignment,deadline=effect.deadline,
                 exposure=effect.exposure)
@@ -228,13 +225,10 @@ class SettlementContinuation:
             committed = self.take.commit_full_passage(
                 plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
                 continuation=self.score,
-                policy=self.mistake_policy(),
                 score_revision=self.lesson.revision,
                 visual_offset=self.transport.visual_offset_beats)
             outcome = committed.receipt
             self.take.apply_settlement(committed,plan=self.lesson.plan)
-            if decision.verdict is not None and decision.verdict.clears_trouble:
-                self.course.reset_trouble()
             if outcome.stage_changed:
                 self.lesson.select_opening(0.0)
                 self.lesson.publish_revision(committed.selection.revision)

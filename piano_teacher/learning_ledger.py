@@ -5,6 +5,7 @@ records facts, not alternative grading or MIDI interpretations. Retention,
 schema and export are distinct collaborators on the same SQLite connection.
 """
 from __future__ import annotations
+import math
 
 from collections import Counter
 from hashlib import sha256
@@ -12,7 +13,6 @@ import json
 import sqlite3
 from uuid import NAMESPACE_URL, uuid4, uuid5
 
-from .diagnosis_policies import AssessmentEvidence, LearnerSnapshot
 from .learning_ledger_common import (
     SCHEMA_VERSION, _compact, _context_summary, _hash, _identifier, _json, _object, _utc,
 )
@@ -152,7 +152,10 @@ class LearningLedger:
                 or isinstance(extra, bool) or not isinstance(extra, int)
                 or isinstance(bpm, bool) or not isinstance(bpm, (float, int))):
             raise ValueError("An assessment needs actual statuses, positive BPM and extra-note count")
-        AssessmentEvidence(stage_key, tuple(statuses), extra, bpm)
+        allowed = {"correct", "early", "late", "short", "long", "missed", "wrong"}
+        if (not stage_key or any(status not in allowed for status in statuses)
+                or extra < 0 or not math.isfinite(bpm) or bpm <= 0):
+            raise ValueError("Invalid graded assessment evidence")
         for field in ("clean", "passed", "mastery_eligible"):
             if not legacy and not isinstance(assessment.get(field), bool):
                 raise ValueError(f"An assessment must explicitly record {field}")
@@ -314,22 +317,6 @@ class LearningLedger:
                 self._censor_decisions(session_id, "process_interrupted")
                 self.db.execute("UPDATE learning_sessions SET closure_reason='process_interrupted',recovered_utc=? WHERE session_id=?", (_utc(), session_id))
             return len(sessions)
-
-    def recent(self, fingerprint, stage_key, limit=8) -> LearnerSnapshot:
-        _identifier(fingerprint, "source fingerprint")
-        _identifier(stage_key, "exact stage key")
-        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 64:
-            raise ValueError("History needs a bounded query from 1 to 64")
-        rows = self.db.execute("""SELECT a.bpm,a.statuses_json,a.extra_notes
-            FROM learning_assessments a JOIN learning_attempts t USING(attempt_id)
-            JOIN learning_sessions s USING(session_id)
-            WHERE s.learner_id=? AND t.fingerprint=? AND t.stage_key=? AND a.assessed=1
-            AND a.statuses_json<>'[]'
-            AND (t.provenance='legacy_bounded' OR
-                 (t.state='completed' AND json_extract(t.summary_json,'$.scope')='full'))
-            ORDER BY a.id DESC LIMIT ?""", (self.learner_id, fingerprint, stage_key, limit)).fetchall()
-        return LearnerSnapshot(stage_key, tuple(AssessmentEvidence(stage_key, tuple(json.loads(statuses)), extra, bpm)
-                                                for bpm, statuses, extra in reversed(rows)))
 
     def migrate_legacy(self):
         """Called inside ProgressRepository's versioned migration savepoint."""

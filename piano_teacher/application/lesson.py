@@ -156,9 +156,6 @@ class Lesson:
     def execute_flow(self, *args, **kwargs):
         return self._flow.execute(*args, **kwargs)
 
-    def flow_applies(self, *args, **kwargs):
-        return self._flow.active(*args, **kwargs)
-
     @property
     def flow_active(self) -> bool:
         """Practice Flow governs the selected source (not the warm-up)."""

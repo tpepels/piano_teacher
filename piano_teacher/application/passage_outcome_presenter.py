@@ -33,7 +33,6 @@ def teaching_instruction(pending) -> str:
 def next_action(pending, *, target_bpm: float, start_beat: float,
                 assessed_bpm: float | None) -> str:
     decision = pending.decision
-    response = decision.response
     if decision.verdict is not None and decision.verdict.accepted:
         label = "Clean" if decision.verdict.clean else "Accepted"
         if pending.state.progress.bpm < pending.state.progress.target_bpm:
@@ -46,12 +45,6 @@ def next_action(pending, *, target_bpm: float, start_beat: float,
     else:
         message = ("Retry the whole passage (red errors or at least half "
                    "the attacks yellow).")
-    if response is not None and response.restart_beat > start_beat+1e-7:
-        return (f"Repeat the difficult measure at {response.bpm} BPM, "
-                "then play the whole passage.")
-    if (response is not None and assessed_bpm is not None
-            and response.bpm < assessed_bpm):
-        return f"Retry more slowly at {response.bpm} BPM."
     return message
 
 

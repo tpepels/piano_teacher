@@ -1,4 +1,4 @@
-"""Tempo-map-aware live feedback, bounded grading and rolling recovery.
+"""Tempo-map-aware live feedback and bounded grading.
 
 All matching uses *seconds*, while note identity and measure windows remain
 anchored to the original source phrase. No per-frame state is retained here.
@@ -12,10 +12,8 @@ from .exercise_contracts import TempoMap
 from .assessment_clock import expected_note_seconds as expected_seconds
 from .feedback import project_assessment
 from .live_feedback import live_assessment
-from .measure_grid import chunk_start_at_end
 from .music import Phrase
 from .practice import Assessment, PlayedNote, evaluate
-from .recovery import RecoveryDecision, rolling_recovery_verdict
 
 
 def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
@@ -62,28 +60,3 @@ def timed_live_marks(phrase: Phrase, hand: str, tempo: TempoMap,
         elapsed_seconds=elapsed_seconds, tempo=tempo,
         grade_note_holds=grade_note_holds)
     return project_assessment(result, phrase, 60, layout)["marks"]
-
-
-def timed_rolling_recovery(phrase: Phrase, hand: str, tempo: TempoMap,
-                           played: Sequence[PlayedNote], *, from_beat: float,
-                           end_beat: float, grid: tuple[float, ...],
-                           threshold: int = 5,
-                           grade_note_holds: bool = False) -> RecoveryDecision | None:
-    """Original two-measure sliding error rule, scored in warped seconds."""
-    if threshold <= 0:
-        raise ValueError("A positive failure threshold is required")
-    chunk = chunk_start_at_end(grid, end_beat)
-    index = grid.index(chunk)
-    start = max(from_beat, grid[max(0, index-2)])
-    selected = [n for n in phrase.notes
-                if (hand == "both" or n.hand == hand)
-                and phrase.start+start-1e-7 <= n.start < phrase.start+end_beat-1e-7]
-    if len(selected) < threshold:
-        return None
-    assessed = assess_timed_window(
-        phrase, hand, tempo, played, from_beat=from_beat,
-        start_beat=start, end_beat=end_beat, grade_note_holds=grade_note_holds)
-
-    return rolling_recovery_verdict(
-        assessed, phrase, grid=grid, from_beat=from_beat,
-        end_beat=end_beat, threshold=threshold)

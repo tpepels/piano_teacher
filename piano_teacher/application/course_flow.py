@@ -16,7 +16,7 @@ from .stage_change import prepare_stage_change
 
 class CourseFlow:
     def __init__(self, *, lesson, notices, exposure_workflows, transport, take,
-                 progress, measurement, recovery_streak, mistake_policy, clock):
+                 progress, measurement, clock):
         self.lesson = lesson
         self.notices = notices
         self.exposure_workflows = exposure_workflows
@@ -24,8 +24,6 @@ class CourseFlow:
         self.take = take
         self.progress = progress
         self.measurement = measurement
-        self.recovery_streak = recovery_streak
-        self.mistake_policy = mistake_policy
         self.clock = clock
 
     def _save(self) -> None:
@@ -45,8 +43,7 @@ class CourseFlow:
         try:
             self.take.seal_guided_preparation(
                 pending,guidance=guidance,plan=self.lesson.plan,
-                binding=self.lesson.decision_binding(),now=self.clock(),
-                policy=self.mistake_policy())
+                binding=self.lesson.decision_binding(),now=self.clock())
         except Exception:
             self.transport.freeze_after_fault(self.clock())
             self.notices.fault("Could not save the guided preparation",
@@ -102,9 +99,6 @@ class CourseFlow:
         if selected is not None:
             self.enter_selected_exposure(selected,bump_revision=bump_revision,reason=reason)
 
-    def reset_trouble(self):
-        self.recovery_streak.clear()
-
     def begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
                      recovery: bool = False,
                      remediation: RemedialAssignment | None = None,
@@ -136,10 +130,6 @@ class LessonNavigation:
         self.progress = progress
         self.lifecycle = lifecycle
         self.course = course
-
-    def _stop(self, *, reason=None, preserve_episode=False, persist_evidence=True) -> None:
-        self.lifecycle.stop(reason=reason or "transition",
-            preserve_episode=preserve_episode, persist_evidence=persist_evidence)
 
     def _save(self) -> None:
         self.progress.save(self.lesson.plan, self.lesson.fingerprint)
@@ -182,7 +172,6 @@ class LessonNavigation:
             "open_at", values=kwargs, effect=effect)
         self.lifecycle.stop(reason="open_at")
         selected = self.lesson.install_command(effect)
-        self.course.reset_trouble()
         self.lesson.set_course_guided(selected.mode == "learn")
         self.lesson.select_opening(selected.from_beat)
         if selected.mode == "learn":
@@ -209,7 +198,6 @@ class LessonNavigation:
         guided_return = self.lesson.guided_return_context
         guided_retry_range = self.take.retry_range
         self.lifecycle.stop(reason=action)
-        self.course.reset_trouble()
         # Preserve the original ordering of the source opening reset.
         if action in ("select_step", "next", "previous"):
             self.lesson.select_opening(0.0)

@@ -6,7 +6,6 @@ every client resolves the same current instances.
 """
 from __future__ import annotations
 from .practice_assessment import PracticeAssessmentPolicies
-from ..practice_history import PracticePolicyService
 
 
 class PolicyRegistry:
@@ -15,7 +14,6 @@ class PolicyRegistry:
         self.ledger = ledger
         self.grading = PracticeAssessmentPolicies.defaults(
             assessment, grade_note_holds=settings["grade_note_holds"])
-        self.learning = PracticePolicyService(ledger)
 
     def apply_hold_rule(self, grade_note_holds: bool) -> None:
         self.grading = PracticeAssessmentPolicies.defaults(

@@ -15,8 +15,7 @@ from ..feedback import project_assessment
 from ..measure_grid import phrase_grid
 from ..music import Phrase
 from ..practice import Assessment, PlayedNote, evaluate
-from ..recovery import RecoveryDecision, fixed_rolling_recovery
-from ..timed_assessment import assess_timed_window, timed_live_marks, timed_rolling_recovery
+from ..timed_assessment import assess_timed_window, timed_live_marks
 
 
 class PracticeTimingPolicy(Protocol):
@@ -29,11 +28,6 @@ class PracticeTimingPolicy(Protocol):
              elapsed_seconds: float, bar_boundaries: Sequence[float],
              layout: dict, tempo: TempoMap | None) -> list[dict]: ...
 
-    def recover(self, phrase: Phrase, *, hand: str, bpm: float,
-                played: Sequence[PlayedNote], from_beat: float,
-                end_beat: float, grid: tuple[float, ...],
-                threshold: int, warmup: bool, tempo: TempoMap | None
-                ) -> RecoveryDecision | None: ...
 
 
 @dataclass(frozen=True)
@@ -56,12 +50,6 @@ class FixedTimingPolicy:
             bar_boundaries=bar_boundaries, layout=layout,
             projector=project_assessment, grade_note_holds=self.grade_note_holds)
 
-    def recover(self, phrase, *, hand, bpm, played, from_beat,
-                end_beat, grid, threshold, warmup, tempo):
-        return fixed_rolling_recovery(
-            phrase, hand, bpm, played, from_beat=from_beat,
-            end_beat=end_beat, grid=grid, threshold=threshold,
-            warmup=warmup, grade_note_holds=self.grade_note_holds)
 
 
 @dataclass(frozen=True)
@@ -87,12 +75,6 @@ class MappedTimingPolicy:
             grid=phrase_grid(phrase, bar_boundaries), layout=layout,
             grade_note_holds=self.grade_note_holds)
 
-    def recover(self, phrase, *, hand, bpm, played, from_beat,
-                end_beat, grid, threshold, warmup, tempo):
-        return timed_rolling_recovery(
-            phrase, hand, self._require(tempo), played, from_beat=from_beat,
-            end_beat=end_beat, grid=grid, threshold=threshold,
-            grade_note_holds=self.grade_note_holds)
 
 
 @dataclass(frozen=True)

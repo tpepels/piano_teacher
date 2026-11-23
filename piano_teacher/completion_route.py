@@ -27,13 +27,10 @@ def completion_route(mode: str, review_end_beat: float | None,
 class CompletionEffect:
     action: str
     exposure: object = None
-    response: object = None
 
 
 def completion_effect(route: CompletionRoute, decision) -> CompletionEffect:
     """Dispatch one selected teaching consequence; never select another."""
-    if decision.response is not None and route != "full_passage":
-        return CompletionEffect("response",response=decision.response)
     if route == "partial_recovery":
         if decision.continuation in ("stop","pause"):
             return CompletionEffect("stop_review")

@@ -29,11 +29,5 @@ def two_bar_chunks(grid: tuple[float, ...]) -> tuple[tuple[float, float], ...]:
 def next_chunk_end(grid: tuple[float, ...], from_beat: float) -> float:
     return next((end for _, end in two_bar_chunks(grid) if end > from_beat + 1e-7), 0.0)
 
-def chunk_start_at_end(grid: tuple[float, ...], end_beat: float) -> float:
-    for start, end in two_bar_chunks(grid):
-        if abs(end - end_beat) < 1e-6:
-            return start
-    raise ValueError("Requested boundary is not a two-measure boundary")
-
 def bar_number_at(grid: tuple[float, ...], offset: float, first_bar: int) -> int:
     return first_bar + min(len(grid) - 2, max(0, bisect_right(grid, offset + 1e-7) - 1))

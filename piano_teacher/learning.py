@@ -50,7 +50,6 @@ class LearningPlan:
         # Only independently earned tempo advances (clean practice or
         # explicit +BPM), never a settings-target change, are transferable.
         self.transferable_tempos: set[str] = set()
-        self._repeated_groups: tuple[dict[str, tuple], dict[tuple, list[str]]] | None = None
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
         self._lesson_step_numbers: dict[str, int] = {}
         self.bpm = self.target_bpm
@@ -157,7 +156,6 @@ class LearningPlan:
         self._variants_cached = None
         self._lesson_steps_cache = None
         self._lesson_step_numbers = {}
-        self._repeated_groups = None
 
     def restore_mastered_stages(self, keys: Mapping[str, int]) -> None:
         """Recover only exact current-course identities from its source catalog."""

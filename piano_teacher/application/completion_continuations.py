@@ -14,7 +14,7 @@ from .passage_outcome_presenter import performance_next_action
 
 class TakeCompletion:
     def __init__(self, *, lesson, notices, take, transport, transport_timing,
-                 continuation, selected_recovery, course,
+                 continuation, course,
                  grading, settlement):
         self.lesson = lesson
         self.notices = notices
@@ -22,7 +22,6 @@ class TakeCompletion:
         self.transport = transport
         self.transport_timing = transport_timing
         self.continuation = continuation
-        self.selected_recovery = selected_recovery
         self.course = course
         self.grading = grading
         self.settlement = settlement
@@ -57,27 +56,21 @@ class TakeCompletion:
             self.continuation.continue_at(self.transport.next_at,
                 from_beat=0.0)
             return False
-        completed_visual = self.transport_timing.visual_motion(now)[0]
         completed = self.grading.grade(phrase, ending, now)
         result = completed.assessed.result
         self.notices.feedback = completed.assessed.feedback
         if not self.apply_focused(
-                completed.effect, phrase=phrase, result=result, now=now,
-                visual_from=completed_visual):
+                completed.effect, phrase=phrase, result=result, now=now):
             return self.settlement.finish_full_passage(result,total_beats,duration,now)
         return False
 
-    def apply_focused(self, effect, *, phrase, result, now: float,
-                      visual_from: float) -> bool:
+    def apply_focused(self, effect, *, phrase, result, now: float) -> bool:
         """Apply one immediately settled focused/performance consequence.
 
         Returns False for a full passage, whose consequence is applied by
         dispatch_effect only after its durable successor boundary.
         """
-        if effect.action == "response":
-            self.selected_recovery.apply_policy_response(
-                effect.response,now=now,visual_from=visual_from)
-        elif effect.action == "perform":
+        if effect.action == "perform":
             self.finish_performance_review(phrase,result)
         elif effect.action == "section_review":
             self.finish_section_review(result)

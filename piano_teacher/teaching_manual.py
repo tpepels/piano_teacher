@@ -103,7 +103,7 @@ def choose_manual(event, state):
         if action == "learn_next" and route.guided_return is not None:
             mode, continuation = "practice", "reintegrate"
             start = route.guided_return[1]
-            end = route.guided_range[1] if state.policy.whole_handler is not None and route.guided_range else None
+            end = None
         elif event.from_beat is not None:
             start = event.from_beat
         elif action == "learn_retry":
@@ -128,7 +128,7 @@ def choose_manual(event, state):
             start,end = 0.,None
         if route.guided_return and route.guided_return[0] == c.key and mode == "practice":
             start = route.guided_return[1]
-            end = route.guided_range[1] if state.policy.whole_handler is not None and route.guided_range else None
+            end = None
     if mode == "learn" and continuation == "guided":
         fragment = select_guided_fragment(c.stage.variant.phrase,c.piece.bar_boundaries,start)
         start,end = fragment.start,fragment.end

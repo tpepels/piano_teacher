@@ -22,9 +22,3 @@ class SourceAttackIndex:
         low = bisect_left(self._starts, start)
         high = bisect_left(self._starts, end)
         return tuple(self._notes[i] for i in sorted(self._indices[low:high]))
-
-    def crossing(self, start: float, end: float) -> bool:
-        return any(note.end > end + 1e-7
-                   for note in self.notes_in(start, end - 1e-7))
-
-

@@ -7,7 +7,6 @@ from __future__ import annotations
 from dataclasses import dataclass, replace, asdict
 from contextlib import contextmanager
 from ..teaching_decisions import TeachingBinding, validate_teaching_decision
-from .mistake_responses import mistake_policy_facts
 from .assessment_settlement import AssessedTake, assess_completed_take
 from ..completion_route import completion_route, completion_effect, CompletionEffect
 from typing import Callable, Sequence
@@ -87,7 +86,6 @@ class CompletedTake:
     route: str
     summary: dict
     pending: object
-    response: object
     settled: bool
     effect: CompletionEffect
     take: TakeResult
@@ -105,10 +103,9 @@ class PendingFullCompletion:
 
 
 class AttemptSettlement:
-    def __init__(self, repository, capture, source_feedback, learner_progress):
+    def __init__(self, repository, capture, learner_progress):
         self.repository = repository
         self.capture = capture
-        self.source_feedback = source_feedback
         self.learner_progress = learner_progress
         self.pending = None
         self._completion = None
@@ -229,7 +226,7 @@ class AttemptSettlement:
         self.authority_revision += 1
 
     def commit_full_passage(self, *, plan, binding, now: float,
-                            continuation, policy, score_revision: int,
+                            continuation, score_revision: int,
                             visual_offset: float) -> CommittedAttempt:
         """Freeze successor publication before committing any progress.
 
@@ -266,8 +263,6 @@ class AttemptSettlement:
                 raise ValueError("Committed source changed before publication")
             return committed
         continuation.validate_announcement(pending)
-        if policy != pending.state.policy:
-            raise ValueError("Teaching policy changed before settlement")
         decision, state = pending.decision,pending.state
         chosen = replace(state.course,definition=decision.definition_after,
                          progress=decision.progress_after)
@@ -284,7 +279,7 @@ class AttemptSettlement:
         source = state.course.stage.variant.phrase
         duration = source.sounding_end-source.start
         outcome = self.settle(pending,plan=plan,binding=binding,now=now,
-                              continuation=continuation,policy=policy)
+                              continuation=continuation)
         pending.publication = CommittedAttempt(
             outcome,selection,prepared,score_revision,duration,visual_offset,now)
         return pending.publication
@@ -297,7 +292,7 @@ class AttemptSettlement:
         review_end_beat: float | None, automatic_remedial_review: bool,
         performance_review: Callable[[Phrase, Assessment], dict],
         prepare_decision: Callable, plan,
-        binding: TeachingBinding, now: float, policy,
+        binding: TeachingBinding, now: float,
         score_revision: int,
     ) -> CompletedTake:
         """One full/focused grading and evidence-settlement boundary.
@@ -321,10 +316,8 @@ class AttemptSettlement:
             summary = performance_review(phrase,result)
             if route == "full_passage":
                 pending = prepare_decision("full_result",result)
-                response = None
             else:
                 pending = prepare_decision("focused_result",result,end_beat=end_beat)
-                response = pending.decision.response
             take = TakeResult(
                 binding=binding, score_revision=score_revision,
                 attempt_id=pending.event.attempt_id, mode=mode,
@@ -333,7 +326,7 @@ class AttemptSettlement:
                 source_note_ids=tuple(
                     entry.note.source_id for entry in result.notes))
             self._completion = CompletedTake(
-                assessed,route,summary,pending,response,False,
+                assessed,route,summary,pending,False,
                 completion_effect(route,pending.decision),take)
         completed = self._completion
         take = completed.take
@@ -373,15 +366,15 @@ class AttemptSettlement:
                 or from_beat != take.from_beat or end_beat != take.end_beat):
             raise ValueError(
                 "Completed take source or window changed before evidence settlement")
-        assessed,route,summary,pending,response = (
+        assessed,route,summary,pending = (
             completed.assessed,completed.route,completed.summary,
-            completed.pending,completed.response)
+            completed.pending)
         result = assessed.result
         settled = self.seal_completed_take(
             pending,played=take.played,route=route,mode=take.mode,
             at_target=take.bpm >= plan.target_bpm,
             assessed_end_beat=take.end_beat,result=take.assessment,plan=plan,
-            binding=binding,now=now,policy=policy,performance_summary=summary)
+            binding=binding,now=now,performance_summary=summary)
         self._completion = replace(completed,settled=settled)
         return self._completion
 
@@ -405,7 +398,7 @@ class AttemptSettlement:
             raise
         pending.checkpoint_progress = after
 
-    def settle(self, pending, *, plan, binding, now, performance_summary=None, continuation=None, policy=None):
+    def settle(self, pending, *, plan, binding, now, performance_summary=None, continuation=None):
         if pending is not self.pending:
             raise ValueError("Cannot settle a superseded teaching decision")
         if pending.receipt is not None:
@@ -413,8 +406,6 @@ class AttemptSettlement:
         decision, state, result = pending.decision, pending.state, pending.assessment
         if binding != decision.expected:
             raise ValueError("Stale teaching binding at settlement")
-        if policy is not None and policy != state.policy:
-            raise ValueError("Teaching policy changed before settlement")
         if plan.lesson_definition != state.definition:
             raise ValueError("Teaching course changed before settlement")
         expected = pending.checkpoint_progress or decision.before_progress
@@ -427,12 +418,12 @@ class AttemptSettlement:
         try:
             with self.capture.atomic():
                 self.capture.decision({"version": 1, "trigger": pending.event.kind,
-                    "policy": state.policy.name, "policy_version": state.policy.version,
-                    "parameters": mistake_policy_facts(state.policy),
+                    "policy": "practice-flow", "policy_version": "practice-flow",
+                    "parameters": {},
                     "reason": decision.reason, "eligible": decision.mastery_eligible,
                     "before_stage": state.binding.stage_key,
                     "before_bpm": state.route.performed_bpm, "after_bpm": decision.progress_after.bpm,
-                    "selected": asdict(decision.response) if decision.response else asdict(decision.next_exposure) if decision.next_exposure else None,
+                    "selected": asdict(decision.next_exposure) if decision.next_exposure else None,
                     "wrong_missed_source_ids": [n.note.source_id for n in result.notes if n.status in ("wrong","missed")] if result is not None else [],
                     "origin": "automatic", "state": "applied"}, decision_id=decision.decision_id)
                 self.capture.persist()
@@ -486,12 +477,11 @@ class AttemptSettlement:
 
     def reset_piece_path(self, *, fingerprint: str, replacement,
                          played, now: float) -> None:
-        """Reset the exact piece and its source feedback with one savepoint."""
+        """Reset the exact piece's progress with one savepoint."""
         with self.capture.atomic():
             self.capture.interrupt("lesson_reset",played)
             self.capture.flush_intervals(now)
             self.repository.reset_piece(fingerprint)
-            self.source_feedback.reset(fingerprint)
             self.repository.save(replacement,fingerprint)
             self.capture.event("lesson_reset",{
                 "fingerprint":fingerprint,"preserves_history":True})
@@ -507,7 +497,7 @@ class AttemptSettlement:
         self.capture.checkpoint(played,boundary=boundary)
 
     def seal_guided_preparation(self, pending, *, guidance: dict,
-                                plan, binding, now, policy) -> None:
+                                plan, binding, now) -> None:
         """Atomically finish a completed guided attempt and its decision.
 
         The capture seal precedes the single idempotent settlement, matching
@@ -517,11 +507,11 @@ class AttemptSettlement:
         self.capture.seal(
             self.capture.guided.presses,state="completed",
             reason="guided_preparation",extra={"guidance":guidance})
-        self.settle(pending,plan=plan,binding=binding,now=now,policy=policy)
+        self.settle(pending,plan=plan,binding=binding,now=now)
 
     def seal_completed_take(self, pending, *, played, route: str,
                             mode: str, at_target: bool, assessed_end_beat: float,
-                            result, plan, binding, now, policy,
+                            result, plan, binding, now,
                             performance_summary=None) -> bool:
         """Single owner of end-of-take sealing and focused settlement.
 
@@ -538,7 +528,7 @@ class AttemptSettlement:
         if route == "full_passage":
             return False
         self.settle(pending,plan=plan,binding=binding,now=now,
-                    policy=policy,performance_summary=(
+                    performance_summary=(
                         performance_summary if route == "perform" else None))
         return True
 

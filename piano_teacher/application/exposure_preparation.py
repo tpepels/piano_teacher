@@ -139,27 +139,6 @@ class RecoveryPreparation:
     assignment: RemedialAssignment | None = None
 
 
-def prepare_response(response, *, source_duration: float,
-                     has_deadline: bool) -> RecoveryPreparation:
-    end = (response.end_beat if response.end_beat is not None
-           and response.end_beat < source_duration-1e-7 else None)
-    retry = (("start_beat",response.restart_beat),("end_beat",response.end_beat),
-             ("response",response.action)) if end is not None else None
-    instruction = {
-        "repeat":f"Repeat this passage at {response.bpm} BPM.",
-        "isolate":f"Practise the difficult measures at {response.bpm} BPM before reconnecting the passage.",
-        "slow":f"Practise this passage more slowly at {response.bpm} BPM.",
-        "guided":"Find the notes without timing pressure, then retry without hints.",
-        "reintegrate":f"Reconnect the surrounding measures at {response.bpm} BPM before the full passage.",
-        "pause":"Take a break or choose another retry strategy, then press Start when ready.",
-    }.get(response.action,f"Continue at {response.bpm} BPM.")
-    action = ("pause" if response.action == "pause" else "guided" if response.guided
-              else "continue" if has_deadline else "prepare")
-    return RecoveryPreparation(action,response.restart_beat,end,retry,None,
-        "Practice paused after repeated automatic retries" if action == "pause" else "",
-        instruction)
-
-
 def prepare_remedial(source: ExposureSource, assignment: RemedialAssignment,
                      exposure, *, has_deadline: bool,
                      automatic: bool) -> RecoveryPreparation | None:

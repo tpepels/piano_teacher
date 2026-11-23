@@ -33,10 +33,6 @@ class LiveFeedbackWorkflows:
         return (list(self.live_assessment.latest_marks)
                 if self.transport.running else [])
 
-    def publish_frozen(self, marks) -> None:
-        """Publish marks frozen at a rolling checkpoint (not yet final)."""
-        self.live_assessment.publish(marks, self.feedback_take())
-
     def publish_final(self, marks) -> None:
         """Publish a completed take's settled grades before any successor."""
         self.live_assessment.publish(marks, self.feedback_take(), final=True)

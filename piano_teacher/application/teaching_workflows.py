@@ -10,7 +10,6 @@ from ..teaching_decisions import validate_teaching_decision
 from ..teaching_decisions import (
     TeachingBinding, TeachingState, TeachingRouteFacts, TeachingEvent)
 from ..teaching_manual import ManualFacts
-from ..diagnosis_policies import LearnerSnapshot
 from ..completion_route import completion_route
 from .learning_capture import identifier
 
@@ -23,62 +22,18 @@ class CommandEffect:
     decision: object
 
 
-class LearnerEvidence:
-    """Reads of the learner's stored history and the learning policies."""
-
-    def __init__(self, *, policy_registry, fukuda_mistakes, learner_progress,
-                 learning_evidence):
-        self.policy_registry = policy_registry
-        self.fukuda_mistakes = fukuda_mistakes
-        self.learner_progress = learner_progress
-        self.learning_evidence = learning_evidence
-
-    @property
-    def policies(self):
-        """The learning policy bundle (diagnosis, learner model, history)."""
-        return self.policy_registry.learning
-
-    def recent(self, fingerprint: str, stage_key: str):
-        if not fingerprint:
-            return LearnerSnapshot(stage_key, ())
-        return self.policies.store.recent(fingerprint, stage_key)
-
-    def fukuda(self, fingerprint: str) -> tuple:
-        if not fingerprint:
-            return ()
-        return tuple(sorted(self.fukuda_mistakes.evidence(fingerprint).items()))
-
-    def credits(self, fingerprint: str):
-        return self.learner_progress.teaching_credits(fingerprint)
-
-    def retry_context(self, result, *, plan, fingerprint: str,
-                      from_beat: float, end_beat=None):
-        return self.learning_evidence.adaptive_context(
-            result, plan=plan, fingerprint=fingerprint,
-            from_beat=from_beat, end_beat=end_beat)
-
-
 class TeachingDecisions:
     def __init__(self, *, source_identity, lesson_cursor, take, measurement,
-                          transport, guided_session, recovery_streak,
-                          evidence, mistake_policy, clock):
+                          transport, guided_session, learner_progress, clock):
         self.source_identity = source_identity
         self.lesson_cursor = lesson_cursor
         self.take = take
         self.measurement = measurement
         self.transport = transport
         self.guided_session = guided_session
-        self.recovery_streak = recovery_streak
-        self.evidence = evidence
-        self.mistake_policy = mistake_policy
+        self.learner_progress = learner_progress
         self._last_applied_command = None
         self.clock = clock
-
-    def retry_context(self, result, *, end_beat=None):
-        return self.evidence.retry_context(
-            result, plan=self.source_identity.plan,
-            fingerprint=self.source_identity.fingerprint,
-            from_beat=self.transport.play_from_beat, end_beat=end_beat)
 
     def binding(self):
         owner = self.take
@@ -86,12 +41,12 @@ class TeachingDecisions:
             self.source_identity.fingerprint, self.source_identity.plan.identity, owner.course_revision,
             owner.authority_revision, self.transport.transport_id, owner.cancellation_generation)
 
-    def prepare(self, kind, result=None, *, rolling=None, manual=None, action=None,
+    def prepare(self, kind, result=None, *, manual=None, action=None,
                           from_beat=None, end_beat=None, store=True, values=None, completed=False, assisted_count=0):
         p = self.source_identity.plan
         values = values or {}
-        event = TeachingEvent(1, (identifier() if kind in ("manual","interrupted","source_feedback_changed") else self.measurement.attempt_id or identifier())+":"+kind+(":"+str(end_beat) if kind == "rolling_result" else ""), kind,
-            self.measurement.attempt_id, result, rolling, manual, action, from_beat, end_beat,
+        event = TeachingEvent(1, (identifier() if kind in ("manual","interrupted") else self.measurement.attempt_id or identifier())+":"+kind, kind,
+            self.measurement.attempt_id, result, manual, action, from_beat, end_beat,
             assisted_count=assisted_count, completed=completed, reason=values.get("reason"),
             bar=values.get("bar"), first_bar=values.get("first_bar"), last_bar=values.get("last_bar"),
             scope=values.get("scope"), requested_stage=values.get("stage_key"), requested_mode=values.get("mode"))
@@ -100,11 +55,7 @@ class TeachingDecisions:
             full_from_beat=p.active_phrase.first_attack_beat)
         if self.take.automatic_remedial_review and scope == "section_review":
             scope = "partial_recovery"
-        policy = self.mistake_policy()
-        history = self.evidence.recent(self.source_identity.fingerprint, p.identity)
-        state = TeachingState(1, self.binding(), p.course_state(), policy,
-            self.evidence.fukuda(self.source_identity.fingerprint),
-            history, self.retry_context(result, end_beat=end_beat) if result is not None and (policy.whole_handler is not None or policy.rolling_handler is not None) else None,
+        state = TeachingState(1, self.binding(), p.course_state(),
             TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto,
                 preview_only=self.transport.preview_only, assistance_used=self.measurement.assistance_used,
                 scope=scope, performed_bpm=self.take.pending_assessed_bpm or p.bpm,
@@ -113,11 +64,8 @@ class TeachingDecisions:
                 course_guided=self.lesson_cursor.course_guided, guided_return=self.guided_session.return_context,
                 guided_range=self.guided_session.beat_range, review_end_beat=self.take.review_end_beat,
                 remediation_active=self.take.remediation_active is not None,
-                trouble_key=self.recovery_streak.key, trouble_count=self.recovery_streak.count,
                 parent_decision_id=self.measurement.parent_decision),
-            self.evidence.policies.diagnosis, self.evidence.policies.learner,
-            getattr(p.lesson_generator, "catalog", None),
-            ManualFacts(credits=self.evidence.credits(self.source_identity.fingerprint),
+            ManualFacts(credits=self.learner_progress.teaching_credits(self.source_identity.fingerprint),
                 paused=self.transport.paused,
                 guidance_completed=bool(self.guided_session.controller is not None and self.guided_session.controller.snapshot(now=self.clock())["completed"]),
                 open_from_beat=self.lesson_cursor.opening_beat,pending_rewind=self.transport.pending_rewind))

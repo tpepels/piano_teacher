@@ -17,7 +17,6 @@ from ..clock import Clock
 from ..clock import monotonic
 from ..feedback_events import FeedbackEventLog
 from ..fingering import FingeringService
-from ..fukuda_mistake_store import FukudaMistakeStore
 from ..lesson_settings import SETTINGS
 from ..library import ScoreLibrary
 from ..library_health import LibraryHealth
@@ -35,7 +34,6 @@ from .attempt_settlement import AttemptSettlement
 from .completion_continuations import TakeCompletion
 from .settlement_continuation import SettlementContinuation
 from .take_grading import TakeGrading
-from .mistake_responses import resolve_mistake_policy
 from .device_workflows import DeviceWorkflows
 from .exposure_workflows import (
     ExposureWorkflows, GuidedExposureInstall, TimedExposureInstall)
@@ -70,7 +68,6 @@ from .transport_actions import (
     PlaybackAuthorization, RetainedResultReplay, RouteCommands, TransportCommands)
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
-from .recovery_streak import RecoveryStreak
 from .recovery_workflows import SelectedRecovery
 from .score_artifact_registry import ScoreArtifactRegistry
 from .score_artifacts import ScoreArtifacts
@@ -90,7 +87,7 @@ from .source_preparation_session import SourcePreparationSession
 from .source_workflows import SourcePreparationWorkflow, SourceInstallation
 from .listen_outcomes import ListenOutcomes
 from .teaching_continuation import TeachingContinuation
-from .teaching_workflows import TeachingDecisions, LearnerEvidence
+from .teaching_workflows import TeachingDecisions
 from .tempo_map_cache import TempoMapCache
 from .timed_playback import TimedStart, PlaybackContinuation, PauseResume
 from .lesson import Lesson
@@ -123,7 +120,6 @@ def _session_state(r, *, clock, feedback_events) -> None:
     r.lock = threading.RLock()
     r.guided_session = GuidedSession(clock=r.now)
     r.attempt = AttemptRuntime()
-    r.recovery_streak = RecoveryStreak()
     r.source_identity = SourceIdentity()
     r.lesson_cursor = LessonCursor()
     r.notices = SessionNotices()
@@ -159,8 +155,6 @@ def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
     r.live_input = LiveInputView()
     r.assessment = AssessmentService()
     r.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
-    r.mistake_policy = lambda: resolve_mistake_policy(
-        "adaptive")
     r.midi_key_shortcuts = MidiKeyShortcuts(r.library.settings["midi_key_ranges"])
     r.midi_input = MidiInput(midi=r.midi, shortcuts=r.midi_key_shortcuts,
         calibration=r.midi_calibration, live=r.live_input)
@@ -190,7 +184,6 @@ def _persistence_and_settlement(r) -> None:
     r.measurement = LearningCapture(r.progress.ledger, clock=r.now)
     r.progress.ledger.prune(days=r.library.settings["evidence_retention_days"],
                                budget_mib=r.library.settings["evidence_budget_mib"])
-    r.fukuda_mistakes = FukudaMistakeStore(r.db)
     r.learner_store = r.progress.learner_store
     r.learner_progress = LearnerProgress(r.learner_store)
     r.policy_registry = PolicyRegistry(
@@ -200,7 +193,7 @@ def _persistence_and_settlement(r) -> None:
         r.live_input,r.measurement,r.feedback_events)
     r.midi_input.attach_ingress(r.midi_ingress)
     r.attempt_settlement = AttemptSettlement(r.progress, r.measurement,
-        r.fukuda_mistakes, r.learner_progress)
+        r.learner_progress)
     r.take = Take(runtime=r.attempt, settlement=r.attempt_settlement)
     r.learning_evidence = LearningEvidenceSession(
         r.progress, r.library, r.measurement, r.midi,
@@ -219,7 +212,7 @@ def _persistence_and_settlement(r) -> None:
 def _lesson_source_and_settings_workflows(r) -> None:
     """Lesson decisions, exposures, source/settings/device workflows."""
     r.plans = PlanReinstallation(
-        lesson=r.lesson, recovery_streak=r.recovery_streak,
+        lesson=r.lesson,
         transport=r.transport, score=r.score)
     r.history_reads = HistoryReads(
         lesson=r.lesson, learning_evidence=r.learning_evidence,
@@ -254,13 +247,8 @@ def _lesson_source_and_settings_workflows(r) -> None:
     r.teaching_decisions = TeachingDecisions(
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
         take=r.take, measurement=r.measurement, transport=r.transport,
-        guided_session=r.guided_session, recovery_streak=r.recovery_streak,
-        evidence=LearnerEvidence(
-            policy_registry=r.policy_registry,
-            fukuda_mistakes=r.fukuda_mistakes,
-            learner_progress=r.learner_progress,
-            learning_evidence=r.learning_evidence),
-        mistake_policy=r.mistake_policy, clock=r.now)
+        guided_session=r.guided_session,
+        learner_progress=r.learner_progress, clock=r.now)
     r.lesson.attach_decisions(r.teaching_decisions)
     r.evidence_context = SessionEvidenceContext(
         lesson=r.lesson, transport=r.transport,
@@ -281,7 +269,6 @@ def _lesson_source_and_settings_workflows(r) -> None:
         lesson=r.lesson, notices=r.notices,
         exposure_workflows=r.exposure_workflows, transport=r.transport,
         take=r.take, progress=r.progress, measurement=r.measurement,
-        recovery_streak=r.recovery_streak, mistake_policy=r.mistake_policy,
         clock=r.now)
     r.navigation = LessonNavigation(
         lesson=r.lesson, notices=r.notices,
@@ -332,7 +319,7 @@ def _transport_and_completion(r) -> None:
     r.take_grading = TakeGrading(
         lesson=r.lesson, take=r.take, transport=r.transport,
         transport_timing=r.transport_timing, score=r.score,
-        policy_registry=r.policy_registry, mistake_policy=r.mistake_policy,
+        policy_registry=r.policy_registry,
         assessment=r.assessment,
         live_feedback_workflows=r.live_feedback_workflows,
         measurement=r.measurement)
@@ -347,12 +334,10 @@ def _transport_and_completion(r) -> None:
         transport=r.transport, course=r.course,
         transport_timing=r.transport_timing,
         selected_recovery=r.selected_recovery,
-        continuation=r.continuation,
-        mistake_policy=r.take_grading.mistake_policy)
+        continuation=r.continuation)
     r.completion_continuations = TakeCompletion(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
         transport_timing=r.transport_timing, continuation=r.continuation,
-        selected_recovery=r.selected_recovery,
         course=r.course, grading=r.take_grading,
         settlement=r.settlement)
 

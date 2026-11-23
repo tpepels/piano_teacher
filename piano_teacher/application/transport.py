@@ -23,12 +23,6 @@ class Transport:
         self._timeline.cancel_preparation()
         self._timeline.cancel_continuation()
 
-    def halt_take_after_fault(self, now: float) -> None:
-        """End the live take, stop automatic flow and freeze on a failure."""
-        self._session.finish_take()
-        self._session.stop_automatic()
-        self._session.freeze_after_fault(now)
-
     def reset_for_stop(self, *, rewind_seconds: float) -> None:
         """Return timeline and session intent to idle after Stop."""
         self._timeline.reset_for_stop(rewind_seconds=rewind_seconds)

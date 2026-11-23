@@ -1,25 +1,18 @@
-"""One immutable pedagogical choice from the selected lesson generator.
+"""One immutable Practice Flow decision about what happens next.
 
-The application captures facts and installs effects. Retry/source/tempo and
+The application captures facts and installs effects. Tempo, stage and
 mastery choices live here, before any announcement or durable mutation.
 """
 from __future__ import annotations
-from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, replace
 from math import isfinite
 from .teaching_course import (
-    PlanProgress, CourseState, assessed_progress, refresh_course, revisit_course, minimum_bpm, steps, preserve_mastered,
+    PlanProgress, CourseState, assessed_progress, steps, preserve_mastered,
 )
 from .lesson_contracts import LessonPlanDefinition
 from .practice import Assessment
-from .diagnosis_policies import (LearnerSnapshot, AssessmentEvidence,
-    ErrorFamilyDiagnosis, RepeatedErrorPolicy)
-from .remediation import RemedialAssignment, RemediationPlanner
-from .measure_grid import phrase_grid
-from .application.mistake_responses import (MistakePolicy, AdaptiveContext, WholeResponse,
-    RollingResponse, whole_response, rolling_response)
+from .remediation import RemedialAssignment
 from .application.stage_change import StageChange
-from .recovery import RecoveryDecision
 from .lesson_settings import SETTINGS
 from .teaching_manual import ManualFacts, choose_manual, next_guided_range
 from .application.assessment_verdict import AssessmentVerdict
@@ -45,7 +38,6 @@ class TeachingEvent:
     kind: str
     attempt_id: str | None = None
     assessment: Assessment | None = None
-    rolling: RecoveryDecision | None = None
     manual: StageChange | None = None
     action: str | None = None
     from_beat: float | None = None
@@ -65,7 +57,6 @@ class TeachingEvent:
 class TeachingRouteFacts:
     mode: str = "practice"
     automatic: bool = False
-    warmup: bool = False
     preview_only: bool = False
     assistance_used: bool = False
     scope: str = "full_passage"
@@ -77,8 +68,6 @@ class TeachingRouteFacts:
     guided_range: tuple[float, float] | None = None
     review_end_beat: float | None = None
     remediation_active: bool = False
-    trouble_key: tuple | None = None
-    trouble_count: int = 0
     parent_decision_id: str | None = None
     episode_action_count: int = 0
 
@@ -88,14 +77,7 @@ class TeachingState:
     version: int
     binding: TeachingBinding
     course: CourseState
-    policy: MistakePolicy
-    source_feedback: tuple[tuple[str, str], ...]
-    diagnosis: LearnerSnapshot
-    retry_context: AdaptiveContext | None
     route: TeachingRouteFacts
-    diagnosis_strategy: object = ErrorFamilyDiagnosis()
-    learner_strategy: object = RepeatedErrorPolicy()
-    catalog: LessonPlanDefinition | None = None
     manual_facts: ManualFacts = ManualFacts()
 
     @property
@@ -134,8 +116,6 @@ class TeachingDecision:
     before_progress: PlanProgress
     definition_after: LessonPlanDefinition
     progress_after: PlanProgress
-    feedback_after: tuple[tuple[str, str], ...]
-    response: WholeResponse | RollingResponse | None
     remediation: RemedialAssignment | None
     next_exposure: TeachingExposure | None
     continuation: str
@@ -147,126 +127,46 @@ class TeachingDecision:
     verdict: AssessmentVerdict | None = None
 
 
-def source_safe_response(response, *, phrase, hand, grid):
-    """Expand bounded source measures so no authored hold is cut."""
-    if response.end_beat is None or response.action in ("continue", "pause"):
-        return response
-    start, end = response.restart_beat, response.end_beat
-    notes = tuple(n for n in phrase.notes if hand == "both" or n.hand == hand)
-    while start > grid[0] and any(n.start < phrase.start+start-1e-7 < n.end-1e-7 for n in notes):
-        # Whole-take policy permits restarting at the current playback beat,
-        # which need not coincide with an authored measure boundary. The old
-        # grid.index(start) raised ValueError if a held note crossed that beat.
-        previous = bisect_left(grid, start-1e-7) - 1
-        if previous < 0:
-            break
-        start = grid[previous]
-    while end < grid[-1] and any(phrase.start+start-1e-7 <= n.start < phrase.start+end-1e-7
-            and n.end > phrase.start+end+1e-7 for n in notes):
-        following = bisect_right(grid, end+1e-7)
-        if following >= len(grid):
-            break
-        end = grid[following]
-    return replace(response, restart_beat=start, end_beat=end)
-
-
 def full_source_opening(state) -> bool:
     """Skipping source silence cannot turn a complete take into a partial one."""
     return (abs(state.route.from_beat) <= 1e-7 or
         abs(state.route.from_beat-state.course.stage.variant.phrase.first_attack_beat) <= 1e-7)
 
 
-def decide_standard_teaching(event, state, *, generator=None,
-                             allow_heuristic_remediation=True):
+def full_target_take(event, state) -> bool:
+    """A complete graded Tempo take of the selected window (mastery-eligible)."""
+    route, result = state.route, event.assessment
+    return (event.kind == "full_result" and route.mode == "practice"
+        and not route.preview_only and not route.assistance_used
+        and full_source_opening(state) and route.review_end_beat is None
+        and bool(result and result.notes))
+
+
+def decide_standard_teaching(event, state):
+    """Practice Flow's base decision; PracticeFlowLessonGenerator refines it."""
     c, route, result = state.course, state.route, event.assessment
     chosen, message = c, ""
-    response = remediation = None
-    feedback = dict(state.source_feedback)
     continuation = "continue"
-    eligible = (event.kind == "full_result" and route.mode == "practice"
-        and not route.preview_only and not route.assistance_used and full_source_opening(state)
-        and route.review_end_beat is None and bool(result and result.notes))
-    flow = bool(getattr(generator, "flow_rules", False))
-    verdict = (AssessmentVerdict.decide(result,
-        policy="practice-flow" if flow else "standard",eligible=eligible)
-        if result is not None else None)
+    eligible = full_target_take(event, state)
+    verdict = (AssessmentVerdict.decide(result, policy="practice-flow", eligible=eligible)
+               if result is not None else None)
     passed = verdict.accepted if verdict is not None else False
     flow_outcome = None
-    invalidate = eligible and not passed
-    phrase = c.stage.variant.phrase
-    grid = tuple(phrase_grid(phrase, c.piece.bar_boundaries))
     manual_exposure = None
     if event.kind == "manual":
         chosen,start,end,mode,continuation = choose_manual(event,state)
         manual_exposure = start,end,mode
     elif event.kind == "interrupted":
         continuation = "stop"
-    elif event.kind == "rolling_result":
-        response = rolling_response(state.policy, event.rolling, identity=c.key,
-            bpm=c.progress.bpm, minimum_bpm=min(c.progress.bpm, minimum_bpm(c)),
-            previous_key=route.trouble_key, previous_count=route.trouble_count,
-            grid=grid, allow_guided=not route.automatic, context=state.retry_context)
-        safe = source_safe_response(response, phrase=phrase, hand=c.hand, grid=grid)
-        if response.action == "isolate" and safe != response:
-            response = replace(response, action="continue", reason="source_hold_requires_full_target")
-        if response.action != "continue":
-            chosen = c.with_progress(bpm=response.bpm, streak=0, failures=c.progress.failures+1)
-            continuation = "guided" if response.guided else "pause" if response.action == "pause" else "repair"
     elif event.kind in ("full_result", "focused_result"):
-        full_retry = (event.kind == "full_result" and route.automatic and not passed
-                      and not route.warmup and not flow)
-        focused_retry = (event.kind == "focused_result" and route.automatic
-            and route.scope in ("section_review", "partial_recovery")
-            and state.policy.whole_handler is not None and route.parent_decision_id is not None)
-        if full_retry or focused_retry:
-            response = whole_response(state.policy, result, phrase=phrase, grid=grid,
-                bpm=c.progress.bpm, minimum_bpm=min(c.progress.bpm, minimum_bpm(c)),
-                play_from_beat=route.from_beat, context=state.retry_context)
-            if state.policy.whole_handler is not None:
-                response = source_safe_response(response, phrase=phrase, hand=c.hand, grid=grid)
         if eligible:
-            progress_result = assessed_progress(
+            chosen, message, flow_outcome = assessed_progress(
                 c, correct=result.correct, total=len(result.notes),
                 extras=result.extra_notes, accepted=passed,
-                secure=result.secure, include_outcome=flow)
-            if flow:
-                chosen, message, flow_outcome = progress_result
-            else:
-                chosen, message = progress_result
-        if response is not None:
-            chosen = chosen.with_progress(bpm=response.bpm)
-        if (eligible and not passed and route.automatic and not route.warmup
-                and c.exercise.kind == "learn" and state.policy.whole_handler is None
-                and allow_heuristic_remediation):
-            evidence = AssessmentEvidence.from_result(c.key, result, route.performed_bpm)
-            history = LearnerSnapshot(c.key, (state.diagnosis.recent + (evidence,))[-8:])
-            recommendation = state.learner_strategy.recommend(history, state.diagnosis_strategy)
-            remediation = RemediationPlanner().plan(recommendation, result, c.stage.variant,
-                stage_key=c.key, boundaries=c.piece.bar_boundaries) if recommendation else None
-        hook = getattr(generator, "with_feedback", None)
-        if (eligible and callable(hook) and c.stage.variant.level == "original" and not route.warmup):
-            for entry in result.notes:
-                if entry.status == "correct":
-                    feedback.pop(entry.note.source_id, None)
-                else:
-                    feedback[entry.note.source_id] = entry.status
-            failed_ids = frozenset(n.note.source_id for n in result.notes if n.status != "correct")
-            updated = hook(feedback, c.definition)
-            before_source = chosen.key
-            if updated is not generator:
-                chosen = refresh_course(chosen, updated.generate(c.piece),
-                    focus_ids=failed_ids if not passed else frozenset())
-            elif not passed:
-                chosen = revisit_course(chosen, failed_ids)
-            if chosen.key != before_source:
-                remediation = response = None
-        if not route.automatic or flow_outcome is Outcome.PIECE_DONE or (
-                route.warmup and not passed) or route.scope in ("perform", "section_review") and response is None:
+                secure=result.secure, include_outcome=True)
+        if (not route.automatic or flow_outcome is Outcome.PIECE_DONE
+                or route.scope in ("perform", "section_review")):
             continuation = "stop"
-        elif response is not None:
-            continuation = "guided" if response.guided else "pause" if response.action == "pause" else "repair"
-        elif remediation is not None:
-            continuation = "guided" if remediation.guided and not route.automatic else "repair"
         elif chosen.key != c.key:
             continuation = "advance"
         elif event.kind == "focused_result":
@@ -275,21 +175,19 @@ def decide_standard_teaching(event, state, *, generator=None,
             continuation = "repeat"
     elif event.kind == "guided_completed":
         continuation = "stop" if event.completed else "guided"
-    elif event.kind != "source_feedback_changed":
+    else:
         raise ValueError("Unsupported teaching event")
     exposure = None
     if continuation not in ("stop", "pause"):
-        start = response.restart_beat if response else remediation.start_beat if remediation else (
-            event.from_beat if event.from_beat is not None else 0.)
-        end = response.end_beat if response else remediation.end_beat if remediation else event.end_beat
+        start = event.from_beat if event.from_beat is not None else 0.
+        end = event.end_beat
         mode = "learn" if continuation == "guided" else route.mode
         if manual_exposure is not None:
             start,end,mode = manual_exposure
         elif event.kind == "guided_completed":
             mode = "practice"
             if route.guided_return is not None:
-                start = route.guided_return[1]
-                end = route.guided_range[1] if state.policy.whole_handler is not None and route.guided_range else None
+                start, end = route.guided_return[1], None
         elif chosen.key != c.key and route.course_guided and route.mode == "learn":
             selected = next_guided_range(chosen,state.manual_facts.credits)
             if chosen.exercise.kind == "perform":
@@ -298,29 +196,15 @@ def decide_standard_teaching(event, state, *, generator=None,
                 start,end = selected
                 mode = "learn"
         automatic = mode == "practice" if event.kind == "manual" and event.action in ("start","restart","practice","learn_next","course_stage","open_at") else route.automatic
+        restart = (event.kind == "manual" and event.action == "restart"
+                   and route.mode == "practice" and c.exercise.kind != "perform")
         exposure = TeachingExposure(chosen.key, chosen.hand, start, end, chosen.progress.bpm, mode,
             mode == "learn", automatic, bool(start or end is not None or mode == "learn"),
-            "handoff" if chosen.key != c.key else "rewind" if response or (event.kind == "manual" and event.action == "restart" and route.mode == "practice" and c.exercise.kind != "perform") else "count_in")
+            "handoff" if chosen.key != c.key else "rewind" if restart else "count_in")
     return TeachingDecision(1, event.event_id+":teaching", event.event_id, state.binding,
-        c.progress, chosen.definition, chosen.progress, tuple(sorted(feedback.items())), response,
-        remediation, exposure, continuation, invalidate, eligible and route.performed_bpm >= c.progress.target_bpm,
-        response.reason if response else "course_progression", message,
-        flow_outcome, verdict)
-
-
-def decide_coda_fukuda_teaching(event, state, *, generator):
-    """Selected hybrid generator owns the entire error-driven lesson choice.
-
-    Its compiled original-attack catalog and graded source-ID feedback select
-    real Coda/Fukuda variants through with_feedback() and refresh_course().
-    A separate older diagnosis/RemediationPlanner is not a permissible
-    fallback: it can select an unrelated, non-catalog lesson after an error.
-    Common source-safe transport and mastery arithmetic remain shared.
-    """
-    if state.definition.generator_name != generator.name:
-        raise ValueError("Hybrid teacher cannot decide for a different course")
-    return decide_standard_teaching(event, state, generator=generator,
-                                    allow_heuristic_remediation=False)
+        c.progress, chosen.definition, chosen.progress, None, exposure, continuation,
+        eligible and not passed, eligible and route.performed_bpm >= c.progress.target_bpm,
+        "course_progression", message, flow_outcome, verdict)
 
 
 def validate_teaching_decision(decision, *, event, state):
@@ -330,27 +214,18 @@ def validate_teaching_decision(decision, *, event, state):
     if (decision.expected != state.binding or decision.before_progress != state.progress
             or decision.event_id != event.event_id or not decision.decision_id):
         raise ValueError("Stale teaching decision binding/progress")
-    if event.kind not in {"full_result", "focused_result", "rolling_result", "guided_completed", "manual", "source_feedback_changed", "interrupted"}:
+    if event.kind not in {"full_result", "focused_result", "guided_completed", "manual", "interrupted"}:
         raise ValueError("Unsupported teaching event kind")
-    if (event.kind in {"full_result", "focused_result", "rolling_result"}) != (event.assessment is not None):
+    if (event.kind in {"full_result", "focused_result"}) != (event.assessment is not None):
         raise ValueError("Teaching assessment payload mismatch")
-    if (event.kind == "rolling_result") != (event.rolling is not None):
-        raise ValueError("Teaching rolling payload mismatch")
     if event.manual is not None and event.kind != "manual":
         raise ValueError("Teaching manual payload mismatch")
     if decision.definition_after.generator_name != state.definition.generator_name or decision.definition_after.exercises != state.definition.exercises:
         raise ValueError("Unknown teaching source/course")
-    catalog = state.catalog
-    if catalog is not None:
-        for stage_key, sequence in decision.definition_after.stage_sequences.items():
-            allowed = catalog.stage_sequences.get(stage_key, ()) + state.definition.stage_sequences.get(stage_key, ())
-            if any(stage not in allowed for stage in sequence):
-                raise ValueError("Unknown teaching catalog candidate")
     p = decision.progress_after
-    lower_bpm = 1 if state.definition.generator_name == "practice-flow" else SETTINGS.minimum_bpm
+    lower_bpm = 1
     if (type(p.cursor) is not tuple or len(p.cursor) != 3
-            or any(type(value) is not tuple for value in (p.mastered,p.stage_tempos,p.transferable_tempos,p.free_returns))
-            or type(decision.feedback_after) is not tuple):
+            or any(type(value) is not tuple for value in (p.mastered,p.stage_tempos,p.transferable_tempos,p.free_returns))):
         raise ValueError("Mutable teaching progress")
     for value in (p.bpm, p.target_bpm):
         if type(value) not in (int, float) or not isfinite(value) or not lower_bpm <= value <= SETTINGS.maximum_bpm:
@@ -373,35 +248,23 @@ def validate_teaching_decision(decision, *, event, state):
     earned = set(dict(p.mastered)) - set(dict(state.progress.mastered))
     # Practice flow (docs/practice-flow.md): timing fails only when clearly
     # off, and two clean takes in a row at the target tempo finish a step.
-    flow = state.definition.generator_name == "practice-flow"
     passed = bool(decision.verdict and decision.verdict.accepted)
+    full_target = full_target_take(event, state)
     if event.assessment is not None:
         expected_verdict = AssessmentVerdict.decide(
-            event.assessment,policy="practice-flow" if flow else "standard",
-            eligible=(event.kind == "full_result" and state.route.mode == "practice"
-                and not state.route.preview_only and not state.route.assistance_used
-                and full_source_opening(state)
-                and state.route.review_end_beat is None
-                and bool(event.assessment.notes)))
+            event.assessment, policy="practice-flow", eligible=full_target)
         if decision.verdict != expected_verdict:
             raise ValueError("Teaching and settlement disagree on assessment policy")
-    eligible = (event.kind == "full_result" and state.route.mode == "practice"
-        and not state.route.preview_only and not state.route.assistance_used
-        and full_source_opening(state) and state.route.review_end_beat is None
-        and event.assessment is not None and bool(event.assessment.notes) and passed
+    eligible = (full_target and passed
         and state.route.performed_bpm >= state.progress.target_bpm
         and state.progress.streak+1 >= state.course.clean_runs_required)
     if earned and (not eligible or earned != {state.course.key}):
         raise ValueError("Unearned teaching mastery")
-    full_target = (event.kind == "full_result" and state.route.mode == "practice"
-        and not state.route.preview_only and not state.route.assistance_used
-        and full_source_opening(state) and state.route.review_end_beat is None
-        and event.assessment is not None and bool(event.assessment.notes))
     if decision.invalidate_failed_streak != bool(full_target and not passed):
         raise ValueError("Invalid failed-streak checkpoint")
     if not full_target and (p.streak > state.progress.streak or earned or decision.invalidate_failed_streak):
         raise ValueError("Partial teaching event cannot earn full-target credit")
-    if decision.continuation not in {"continue", "repeat", "repair", "reintegrate", "advance", "guided", "stop", "pause"}:
+    if decision.continuation not in {"continue", "repeat", "reintegrate", "advance", "guided", "stop", "pause"}:
         raise ValueError("Invalid teaching continuation")
     if event.kind == "manual" and event.action in ("pause", "stop") and decision.continuation != event.action:
         raise ValueError("Teaching decision violates explicit stop/pause")

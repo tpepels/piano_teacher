@@ -7,7 +7,7 @@ from __future__ import annotations
 from ..music import Phrase
 from ..remediation import RemedialAssignment
 from ..lesson_settings import SETTINGS, course_rules
-from .exposure_preparation import prepare_remedial, prepare_response
+from .exposure_preparation import prepare_remedial
 from .musical_scheduler import SCHEDULER
 
 
@@ -73,17 +73,6 @@ class SelectedRecovery:
             self.notices.feedback = prepared.feedback
         if prepared.next_action:
             self.notices.next_action = prepared.next_action
-
-    def apply_policy_response(self, response, *, now: float,
-                              deadline: float | None = None,
-                              visual_from: float | None = None):
-        prepared = prepare_response(
-            response,
-            source_duration=(self.lesson.plan.active_phrase.end
-                             - self.lesson.plan.active_phrase.start),
-            has_deadline=deadline is not None)
-        self._apply_prepared_recovery(
-            prepared, now=now, deadline=deadline, visual_from=visual_from)
 
     def start_remedial_assignment(self, assignment: RemedialAssignment,
                                   *, deadline: float | None = None,
