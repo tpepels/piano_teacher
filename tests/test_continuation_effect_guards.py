@@ -1,4 +1,5 @@
 """A2 committed successor effects fail closed on obsolete lesson identity."""
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -19,7 +20,8 @@ def _subject():
     owner.attempt_settlement = SimpleNamespace(
         pending=SimpleNamespace(
             decision=SimpleNamespace(decision_id="committed"),
-            receipt=object(), phase="effects_applied"))
+            receipt=object(), phase="effects_applied"),
+        publishing=lambda pending: nullcontext())
     owner._applied_continuation_effect = None
     owner.playback_session = SimpleNamespace(
         apply_continuation=lambda effect: (
