@@ -70,7 +70,7 @@ func _process(_delta: float) -> bool:
             "world_sample":timeline.last_world,"world_ms":timeline.last_ms,
             "renderer_world":renderer.stream_world_beat,
             "reservation_current":gateway.current,
-            "reservation_problem":gateway._last_problem,
+            "reservation_problem":gateway.last_problem(),
             "reserved_pending":gateway.reserve_request.is_pending(),
             "present_pending":gateway.present_request.is_pending(),
             "prepared_destination":app.score_runway.has_prepared_destination(state)
@@ -173,7 +173,7 @@ func _process(_delta: float) -> bool:
                     not start_requested and not app.command_coordinator.state.pending and \
                     awaiting == null and bool(app.current_state().get("loaded",false)):
                 start_requested = true
-                app._send_action({"action":"start"})
+                app.send_action({"action":"start"})
             return false
         if not str(app.current_state().get("phase","")) in ["count_in","playing"]:
             return false
@@ -223,7 +223,7 @@ func _process(_delta: float) -> bool:
         # audio player before we accept the Play transition.
         var voice = app.get_node_or_null("CountInVoicePlayer")
         if str(app.current_state().get("phase","")) == "count_in" and \
-                app._transport_beat_now() < -0.01:
+                app.transport_beat_now() < -0.01:
             # Speech is opt-in; default Practice Flow uses a click and
             # visible number. A valid count-in must schedule at least one
             # real bundled voice or generated click from its single audio
@@ -290,7 +290,7 @@ func _process(_delta: float) -> bool:
         if app.command_coordinator.state.pending:
             return false
         pause_requested = true
-        app._send_action({"action":"pause"})
+        app.send_action({"action":"pause"})
         return false
     if not pause_seen:
         if not bool(app.current_state().get("paused",false)):
@@ -328,7 +328,7 @@ func _process(_delta: float) -> bool:
         if app.command_coordinator.state.pending:
             return false
         resume_requested = true
-        app._send_action({"action":"resume"})
+        app.send_action({"action":"resume"})
         return false
     if bool(app.current_state().get("paused",false)) or \
             not bool(app.current_state().get("running",false)):

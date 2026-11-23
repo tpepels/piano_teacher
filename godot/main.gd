@@ -123,7 +123,7 @@ func _ready() -> void:
         practice_backdrop,navigation_drawer,practice_view,
         library_view,settings_view,lesson_session,screens)
     navigation_session.suspend_requested.connect(
-        func(): _send_action({"action":"ui_suspend"}))
+        func(): send_action({"action":"ui_suspend"}))
     navigation_session.library_requested.connect(library_catalog.request_catalog)
     navigation_session.settings_requested.connect(settings_interactions.request_settings)
     navigation_session.devices_requested.connect(midi_devices.discover)
@@ -141,7 +141,7 @@ func _ready() -> void:
     input_session.pause_requested.connect(command_coordinator.pause)
     input_session.retry_requested.connect(command_coordinator.retry)
     input_session.listen_requested.connect(command_coordinator.listen)
-    input_session.command_requested.connect(_send_action)
+    input_session.command_requested.connect(send_action)
     # Audio has one root-owned lifetime, including score revisions, Pause,
     # source selection and renderer replacement. The visual countdown merely
     # delegates speech to this service.
@@ -153,7 +153,7 @@ func _ready() -> void:
     demo_player.call("configure", inprocess_bus)
     add_child(demo_player)
     demo_player.prepared.connect(func(token: String, ready_revision: int):
-        _send_action({"action": "demo_ready", "token": token, "revision": ready_revision}))
+        send_action({"action": "demo_ready", "token": token, "revision": ready_revision}))
     demo_player.failed.connect(func(message: String): practice_view.present_message(message))
     countin_audio.install(self)
     countin_audio.bind_preferences(settings_interactions,state_inbox,phase0_smoke_mode)
@@ -358,7 +358,7 @@ void fragment() {
     midi_devices.configure(settings_view,command_coordinator.request_command)
     score_session = ScoreAssetSession.new(
         practice_view.stage.renderer, practice_view.stage.feedback)
-    score_session.action_requested.connect(_send_action)
+    score_session.action_requested.connect(send_action)
 
 
 func _build_home_screen() -> void:
@@ -369,7 +369,7 @@ func _build_home_screen() -> void:
     home_view.library_requested.connect(func(): _navigate("library"))
     home_view.settings_requested.connect(func(): _navigate("settings"))
     home_view.exit_requested.connect(_exit_app)
-    home_view.open_requested.connect(_open_library_piece)
+    home_view.open_requested.connect(open_library_piece)
 
 
 func _build_library_screen() -> void:
@@ -377,7 +377,7 @@ func _build_library_screen() -> void:
     screens["library"] = page
     library_view = LibraryScreen.new()
     page.add_child(library_view)
-    library_view.open_requested.connect(_open_library_piece)
+    library_view.open_requested.connect(open_library_piece)
     library_view.refresh_requested.connect(library_catalog.request_catalog)
     library_view.health_check_requested.connect(func():
         library_catalog.start_health(command_coordinator.state.pending))
@@ -389,7 +389,7 @@ func _build_practice_screen() -> void:
     practice_view = PracticeScreen.new()
     page.add_child(practice_view)
     practice_view.navigation_requested.connect(_navigate)
-    practice_view.command_requested.connect(_send_action)
+    practice_view.command_requested.connect(send_action)
     practice_view.play_requested.connect(command_coordinator.primary)
     practice_view.retry_requested.connect(command_coordinator.retry)
     practice_view.listen_requested.connect(command_coordinator.listen)
@@ -434,7 +434,7 @@ func _build_settings_screen() -> void:
     settings_interactions.devices_requested.connect(midi_devices.show_picker)
     settings_interactions.refresh_devices_requested.connect(midi_devices.discover)
     settings_interactions.command_requested.connect(command_coordinator.request_command)
-    settings_interactions.action_requested.connect(_send_action)
+    settings_interactions.action_requested.connect(send_action)
     settings_view.device_selected.connect(midi_devices.choose)
     settings_interactions.exit_requested.connect(_exit_app)
 
@@ -443,7 +443,7 @@ func _build_lesson_screen() -> void:
     screens["lesson"] = page
     lesson_view = LessonScreen.new()
     page.add_child(lesson_view)
-    lesson_view.command_requested.connect(_send_action)
+    lesson_view.command_requested.connect(send_action)
     lesson_view.advanced_requested.connect(practice_view.open_advanced_pause)
     lesson_session.overview_changed.connect(lesson_view.present_overview)
     lesson_session.request_failed.connect(lesson_view.present_error)
@@ -479,11 +479,11 @@ func _process(delta: float) -> void:
 func current_state() -> Dictionary:
     return state_inbox.current.duplicate(true)
 
-func _send_action(command: Dictionary) -> void:
+func send_action(command: Dictionary) -> void:
     command_coordinator.request_action(command,state_inbox.current)
 
-func _open_library_piece(identifier: String, resume_saved := false) -> void:
+func open_library_piece(identifier: String, resume_saved := false) -> void:
     command_coordinator.open_library_piece(identifier,resume_saved)
 
-func _transport_beat_now() -> float:
+func transport_beat_now() -> float:
     return presentation_session.transport_beat(state_inbox.current,Time.get_ticks_msec())

@@ -82,7 +82,7 @@ func _fail(message: String) -> void:
             "last_ms":timeline.last_ms,
             "intent":state.get("playback_intent"),
             "reservation_current":app.score_admission.current,
-            "reservation_problem":app.score_admission._last_problem
+            "reservation_problem":app.score_admission.last_problem()
         }
     printerr("PHASE6_REAL_SCORE_FAILED: ", phase, ": ", message,
         " witness=", JSON.stringify(witness))
@@ -325,7 +325,7 @@ func _process(_delta: float) -> bool:
                 return true
             if app.command_coordinator.state.pending:
                 return false
-            app._send_action({"action":"select_step","number":2})
+            app.send_action({"action":"select_step","number":2})
             _advance("stage_change")
         "stage_change":
             if app.command_coordinator.state.pending or int(state.get("lesson_step",0)) != 2 or                     not _ready_score():
@@ -345,7 +345,7 @@ func _process(_delta: float) -> bool:
                 _fail("Manual tempo change re-engraved score or changed more than 5 BPM")
                 return true
             resumed_bpm = float(state["bpm"])
-            app._open_library_piece(EXPECTED_PIECE,true)
+            app.open_library_piece(EXPECTED_PIECE,true)
             _advance("reopen")
         "reopen":
             if app.command_coordinator.state.pending or not _ready_score():

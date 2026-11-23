@@ -39,6 +39,10 @@ var last_rejected_fixed_intent := ""
 # adding another half-second delayed the first audible count-in pulse.
 const PHYSICAL_ARM_ROUNDTRIP_MS := 150
 
+func last_problem() -> String:
+    """The most recent admission problem reported to the learner."""
+    return _last_problem
+
 func _report_problem(message: String) -> void:
     var now_ms: int = Time.get_ticks_msec()
     if message != _last_problem or now_ms-_last_problem_ms > 5000:
@@ -118,6 +122,27 @@ func _matching_renderer(intent: Dictionary):
     return runway.prepared_renderer(intent) if runway != null else null
 
 
+static func _intent_matches_state(intent: Dictionary, state: Dictionary) -> bool:
+    """The intent belongs to the source, revision, stage, hand and mode shown."""
+    return (str(state.get("piece_fingerprint","")) == str(intent.get("fingerprint",""))
+            and int(state.get("revision",-1)) == int(intent.get("revision",-2))
+            and str(state.get("stage_key","")) == str(intent.get("stage_key",""))
+            and str(state.get("hand","")) == str(intent.get("hand",""))
+            and str(state.get("mode","")) == str(intent.get("mode","")))
+
+static func _assets_cover_window(view, intent: Dictionary, state: Dictionary) -> bool:
+    # The prepared assets must cover the full selected PracticeWindow,
+    # including a cross-bar key release. Never admit another window's
+    # notes merely because its initial source beat matches.
+    var source_timing: Dictionary = state.get("practice_timeline",{})
+    return (absf(view.timeline.duration_beats -
+            float(source_timing.get("source_duration_beats",-1.0))) <= 0.0001
+            and absf(view.timeline.sounding_duration_beats -
+                float(source_timing.get("sounding_duration_beats",-1.0))) <= 0.0001
+            and absf(float(intent.get("end_beat",-1.0)) -
+                view.timeline.sounding_duration_beats) <= 0.0001)
+
+
 func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> void:
     var view = _matching_renderer(intent)
     if view == null or not is_instance_valid(view):
@@ -128,22 +153,8 @@ func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> v
                 _reject_fixed_intent(intent,
                     "Direct repeat expired while its score was not ready")
         return
-    if (str(state.get("piece_fingerprint","")) != str(intent.get("fingerprint",""))
-            or int(state.get("revision",-1)) != int(intent.get("revision",-2))
-            or str(state.get("stage_key","")) != str(intent.get("stage_key",""))
-            or str(state.get("hand","")) != str(intent.get("hand",""))
-            or str(state.get("mode","")) != str(intent.get("mode",""))):
-        return
-    var source_timing: Dictionary = state.get("practice_timeline",{})
-    if (absf(view.timeline.duration_beats -
-            float(source_timing.get("source_duration_beats",-1.0))) > 0.0001
-            or absf(view.timeline.sounding_duration_beats -
-                float(source_timing.get("sounding_duration_beats",-1.0))) > 0.0001
-            or absf(float(intent.get("end_beat",-1.0)) -
-                view.timeline.sounding_duration_beats) > 0.0001):
-        # The prepared assets must cover the full selected PracticeWindow,
-        # including a cross-bar key release. Never admit another window's
-        # notes merely because its initial source beat matches.
+    if not _intent_matches_state(intent,state) or \
+            not _assets_cover_window(view,intent,state):
         return
     # Capture the two physical-clock coordinates together at admission,
     # not at a possibly old state-reply timestamp. All projection queries

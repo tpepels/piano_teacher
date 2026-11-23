@@ -117,7 +117,7 @@ func _process(_delta: float) -> bool:
             "paused":state.get("paused"),"running":state.get("running"),
             "command_pending":app.command_coordinator.state.pending,
             "score_ready":app.score_session.is_ready(),
-            "admission_problem":app.score_admission._last_problem}
+            "admission_problem":app.score_admission.last_problem()}
         if phase == "free":
             # A stall waiting for the first Free target shows which
             # condition (guided world, held target, projection, painted
@@ -374,7 +374,7 @@ func _process(_delta: float) -> bool:
             # End an already accepted take through the production UI port.
             # Pending auto-continuations must be invalidated; no late score
             # status/reply may restart musical grading after Stop.
-            app._send_action({"action":"ui_stop"})
+            app.send_action({"action":"ui_stop"})
             _advance("stop_tempo")
         "stop_tempo":
             if app.command_coordinator.state.pending or \
