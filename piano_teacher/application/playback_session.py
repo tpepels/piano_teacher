@@ -37,10 +37,6 @@ class PlaybackSession:
     mode: str = "practice"
     auto: bool = False
     preview_only: bool = False
-    transport_id: int = 0
-    count_in_beats: float = 0.0
-    count_in_bar_beats: float = 4.0
-    count_in_meter: list[int] = field(default_factory=lambda: [4, 4])
     awaiting_score_revision: int | None = None
     pause_context: str | None = None
     authorizing: bool = False
@@ -84,6 +80,38 @@ class PlaybackSession:
     @running.setter
     def running(self, value: bool) -> None:
         self._transport.running = bool(value)
+
+    @property
+    def transport_id(self) -> int:
+        return self._transport.transport_id
+
+    @transport_id.setter
+    def transport_id(self, value: int) -> None:
+        self._transport.transport_id = int(value)
+
+    @property
+    def count_in_beats(self) -> float:
+        return self._transport.count_in_beats
+
+    @count_in_beats.setter
+    def count_in_beats(self, value: float) -> None:
+        self._transport.count_in_beats = float(value)
+
+    @property
+    def count_in_bar_beats(self) -> float:
+        return self._transport.count_in_bar_beats
+
+    @count_in_bar_beats.setter
+    def count_in_bar_beats(self, value: float) -> None:
+        self._transport.count_in_bar_beats = float(value)
+
+    @property
+    def count_in_meter(self) -> list[int]:
+        return self._transport.count_in_meter
+
+    @count_in_meter.setter
+    def count_in_meter(self, value: list[int]) -> None:
+        self._transport.count_in_meter = list(value)
 
     def require_authorized_start(self, presentation_required: bool) -> None:
         if presentation_required and not self.authorizing:

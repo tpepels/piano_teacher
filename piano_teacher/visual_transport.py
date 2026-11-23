@@ -6,7 +6,7 @@ preparation measure between repeated takes. No facade backreference.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
@@ -49,6 +49,12 @@ class VisualTransport:
     running: bool = False
     paused: bool = False
     paused_at: float = 0.0
+    # One transport identity and metrical count-in alongside the clock
+    # which the immutable score and MIDI grading actually consume.
+    transport_id: int = 0
+    count_in_beats: float = 0.0
+    count_in_bar_beats: float = 4.0
+    count_in_meter: list[int] = field(default_factory=lambda: [4, 4])
     next_at: float = 0.0
     visual_offset_beats: float = 0.0
     _preview_loop_pending: bool = False
