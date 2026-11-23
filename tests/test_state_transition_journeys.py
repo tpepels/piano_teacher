@@ -112,6 +112,7 @@ def test_fake_keyboard_free_wrong_pause_resume_and_no_unearned_target(practice_s
     session.finish_listen()
     free = state_at(session, step="free", mode="learn", paused=False)
     expected = free["teaching"]["expected_notes"][0]["pitch"]
+    session.reach_free_target()
     session.strike(61)
     wrong = state_at(session, step="free")["teaching"]
     assert wrong["target_index"] == 0 and wrong["hint_reason"] == "wrong_note"

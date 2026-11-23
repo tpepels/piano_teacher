@@ -49,6 +49,8 @@ pace, without rhythm scoring. Free does not silently shrink the selected
 window to an earlier two-bar guided unit.
 
 - The next target waits at the playhead. The axis stays still while thinking.
+- Keys count only once the target is at the playhead. While it is still
+  travelling in, the prompt says to wait and a key earns nothing.
 - A correct note turns green; the staff moves to the next target.
 - A wrong note turns the intended note red, shows the keyboard hint and waits
   for the correct key. No keyboard appears simply because the learner waits.

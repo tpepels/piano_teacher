@@ -54,6 +54,7 @@ def test_wrong_free_key_waits_and_correction_does_not_credit_future_notes(practi
     session = practice_session()
     state = session.finish_listen()
     first = state["teaching"]["expected_notes"][0]
+    session.reach_free_target()
     session.strike(61)
     wrong = session.snapshot()["teaching"]
     assert wrong["target_index"] == 0

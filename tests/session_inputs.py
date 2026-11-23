@@ -207,10 +207,19 @@ class PracticeSession:
         self.tick()
         return self.ready_score()
 
+    def reach_free_target(self):
+        """Wait, as a player does, until the Free target reaches the playhead."""
+        state = self.snapshot()
+        guided = (state.get("playback_timeline") or {}).get("guided")
+        if guided and guided["deadline_at_ms"]/1000.0 > self.clock.at:
+            self.clock.at = guided["deadline_at_ms"]/1000.0
+            state = self.tick()
+        return state
+
     def finish_free(self):
         initial = self.ready_score()
         for _ in range(100):
-            state = self.snapshot()
+            state = self.reach_free_target()
             teaching = state.get("teaching")
             if state["mode"] != "learn" or state["revision"] != initial["revision"]:
                 return state

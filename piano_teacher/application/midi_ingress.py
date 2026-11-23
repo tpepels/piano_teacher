@@ -32,6 +32,9 @@ class MidiInputFacts:
     can_pause: bool
     cancellation_generation: int = 0
     device: str = ""
+    # Free: the moment the first target reaches the playhead. A key before
+    # it would answer notes that are still travelling in (or off screen).
+    guided_open_at: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,6 +242,10 @@ class MidiIngress:
         if live_event is not None:
             self.feedback_events.publish({**live_event,**feedback_take})
         if facts.mode == "learn":
+            if (is_on and facts.guided_open_at is not None
+                    and corrected_at < facts.guided_open_at):
+                # The target is still travelling in; its prompt says so.
+                return False
             if teaching is not None and self.midi.connected:
                 teaching.receive(pitch=message.note,is_on=is_on,
                     channel=getattr(message,"channel",0),at=received_at)

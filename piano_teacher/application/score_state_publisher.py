@@ -71,6 +71,10 @@ class ScoreStatePublisher:
                 count_in_beats=facts.next_count_in_beats,
                 horizon_beats=facts.continuous_horizon_beats,bpm=facts.bpm)
 
+    def guided_open_at(self, source: tuple[str, str, int, int]) -> float | None:
+        """When the published Free target reaches the playhead, for `source`."""
+        return self.guided_deadline if source == self.guided_source else None
+
     def _guided_plan(self, state: dict, facts: ScoreProjectionFacts) -> dict | None:
         if (not facts.has_source or facts.mode != "learn" or facts.paused
                 or facts.awaiting_score or self.guided_deadline is None

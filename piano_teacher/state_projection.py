@@ -196,6 +196,8 @@ class GuidedSnapshot(_Snapshot):
     required_notes: int = 0
     duration_beats: float = 0.0
     feedback_marks: tuple[Mapping, ...] = ()
+    # The first Free target is still travelling to the playhead.
+    arriving: bool = False
 
 
 @dataclass(frozen=True)
@@ -352,7 +354,8 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
             teaching=_payload(guided.teaching), fragment=_payload(guided.fragment),
             session_id=snapshot.transport_id, has_more_units=guided.has_more_units,
             returning=guided.returning, phase=guided.phase,
-            required_notes=guided.required_notes, duration_beats=guided.duration_beats))
+            required_notes=guided.required_notes, duration_beats=guided.duration_beats,
+            arriving=guided.arriving))
         result["feedback_marks"] = _payload(guided.feedback_marks)
     return result
 
@@ -381,7 +384,8 @@ def hand_stage_rows(*, kind: str, exercise_index: int, current_hand: str,
 
 def guided_learning_fields(*, teaching: Mapping, fragment: Mapping, session_id: int,
                            has_more_units: bool, returning: bool, phase: str,
-                           required_notes: int, duration_beats: float) -> dict:
+                           required_notes: int, duration_beats: float,
+                           arriving: bool = False) -> dict:
     """Project a captured teaching snapshot; never sample clocks or change state."""
     snapshot = dict(teaching)
     snapshot["fragment"] = dict(fragment)
@@ -408,7 +412,10 @@ def guided_learning_fields(*, teaching: Mapping, fragment: Mapping, session_id: 
         keys = " + ".join(labels)
         together = " together" if len(labels) > 1 else ""
         feedback = f"Play {keys}{together}. Take your time."
-        if snapshot.get("hint_reason") == "wrong_note":
+        if arriving:
+            # Keys count only once the note is at the line (midi_ingress).
+            feedback = f"Wait for {keys} to reach the line."
+        elif snapshot.get("hint_reason") == "wrong_note":
             feedback = f"Find {keys} on the keyboard below, then try again."
         elif snapshot.get("target_index", 0) > 0:
             feedback = "Good. Next: " + keys + together + "."

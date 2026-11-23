@@ -340,7 +340,7 @@ def _event_boundary(r) -> None:
 
     r.midi_application_input = MidiApplicationInput(
         lesson=r.lesson, transport=r.transport, take=r.take,
-        midi_input=r.midi_input, lock=r.lock,
+        midi_input=r.midi_input, score=r.score, lock=r.lock,
         runtime_timings=r.runtime_timings, device_workflows=r.device_workflows,
         settings_workflows=r.settings_workflows, library=r.library,
         transport_timing=r.transport_timing,

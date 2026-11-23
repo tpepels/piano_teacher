@@ -36,6 +36,7 @@ class SnapshotValues:
     feedback_unmapped: int
     fingerprint: str
     guided_range: tuple[float, float] | None
+    guided_open_at: float | None
     is_builtin_warmup: bool
     metronome: bool
     midi_input_count: int
@@ -230,6 +231,8 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
                             else len(phrase.notes)),
             duration_beats=phrase.end-phrase.start,
             feedback_marks=reads.guided_marks(teaching),
+            arriving=(state.guided_open_at is not None
+                      and sampled_at < state.guided_open_at),
         )
     return SessionSnapshot(mode=state.mode, feedback=state.feedback,
         device=state.midi_device, revision=state.score_revision,

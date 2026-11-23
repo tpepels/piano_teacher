@@ -307,6 +307,7 @@ def test_a_configured_end_key_in_the_exercise_remains_a_musical_note(practice_se
     session.ask("settings.update", midi_key_ranges={"Test piano": [72,79]})
     state = session.finish_listen()
     assert state["teaching"]["target_index"] == 0
+    session.reach_free_target()
     session.strike(72)
     assert session.snapshot()["teaching"]["target_index"] == 1
     session.strike(79)

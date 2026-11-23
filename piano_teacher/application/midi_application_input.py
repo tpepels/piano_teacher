@@ -9,7 +9,7 @@ from .midi_ingress import MidiInputFacts, InputTransportFacts
 
 
 class MidiApplicationInput:
-    def __init__(self, *, lesson, transport, take, midi_input, lock,
+    def __init__(self, *, lesson, transport, take, midi_input, score, lock,
                           runtime_timings, device_workflows,
                           settings_workflows, library, transport_timing,
                           live_feedback_workflows, timed_playback, notices,
@@ -17,6 +17,7 @@ class MidiApplicationInput:
         self.lesson = lesson
         self.transport = transport
         self.take = take
+        self.score = score
         self.lock = lock
         self.midi_input = midi_input
         self.runtime_timings, self.device_workflows = runtime_timings, device_workflows
@@ -111,7 +112,12 @@ class MidiApplicationInput:
             self.transport.play_from_beat,self.transport.run_at,self.transport.transport_id,
             self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
             self.take.cancellation_generation,
-            self.midi_input.device)
+            self.midi_input.device,
+            self.score.guided_open_at((
+                self.lesson.fingerprint,
+                self.lesson.plan.identity if self.lesson.plan else "",
+                self.lesson.revision, self.transport.transport_id))
+            if self.transport.mode == "learn" else None)
         early = self.midi_input.dispatch_midi(
             message,facts=facts,received_at=now,
             corrected_at=corrected_at,deferred=deferred,
@@ -123,8 +129,8 @@ class MidiApplicationInput:
             teaching=lambda: self.lesson.guided_controller,
             feedback_take=self.live_feedback_workflows.feedback_take)
         if early:
-            # A key during the count-in earns no credit; say so instead of
-            # silently ignoring it.
+            # A key before its notes can be played earns no credit; say so
+            # instead of silently ignoring it.
             self.notices.feedback = "Too early – wait for the count-in, then play"
 
     def poll_midi_connection(self):
