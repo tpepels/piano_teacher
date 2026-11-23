@@ -58,9 +58,9 @@ class PracticeSession:
     def __init__(self, *,
                  attempt, attempt_settlement, device_workflows, exposure_workflows,
                  history_management, learning_commands, lock, measurement,
-                 midi, midi_key_shortcuts, playback_session, read_models,
+                 midi, midi_key_shortcuts, transport, read_models,
                  settings_workflows, source_identity, teaching_decisions,
-                 timed_playback, transport_commands, visual_transport,
+                 timed_playback, transport_commands, 
                  timeline, midi_ingress, midi_application_input, runtime_timings,
                  source_workflows, lesson_execution, score_preload,
                  lifecycle, progress, notices, clock):
@@ -74,14 +74,13 @@ class PracticeSession:
         self.measurement = measurement
         self.midi = midi
         self.midi_key_shortcuts = midi_key_shortcuts
-        self.playback_session = playback_session
+        self.transport = transport
         self.read_models = read_models
         self.settings_workflows = settings_workflows
         self.source_identity = source_identity
         self.teaching_decisions = teaching_decisions
         self.timed_playback = timed_playback
         self.transport_commands = transport_commands
-        self.visual_transport = visual_transport
         self.timeline = timeline
         self.midi_ingress = midi_ingress
         self.midi_application_input = midi_application_input
@@ -148,7 +147,7 @@ class PracticeSession:
             kwargs.update(options)
         before = {"fingerprint": self.source_identity.fingerprint,
                   "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                  "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}
+                  "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.transport.mode}
         effect = None
         route = _COMMAND_ROUTES.get(action, "stage")
         # Stop/Pause/Resume only mutate transport state. The selected lesson
@@ -172,7 +171,7 @@ class PracticeSession:
                 "parameters": kwargs, "before": before,
                 "after": {"fingerprint": self.source_identity.fingerprint,
                           "stage_key": self.source_identity.plan.identity if self.source_identity.plan else None,
-                          "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.playback_session.mode}})
+                          "bpm": self.source_identity.plan.bpm if self.source_identity.plan else None, "mode": self.transport.mode}})
         return project_command_outcome(action)
 
     def _dispatch_control(self, action: str, route: str, *, effect=None, **kwargs) -> None:
@@ -186,7 +185,7 @@ class PracticeSession:
             else:
                 if not self.midi.connected:
                     raise ValueError("Connect a MIDI piano before setting its key range")
-                if self.playback_session.running and not self.visual_transport.paused:
+                if self.transport.running and not self.transport.paused:
                     self.timed_playback.pause()
                 self.midi_key_shortcuts.begin_capture(self.midi.device)
             return
@@ -213,9 +212,9 @@ class PracticeSession:
             self.source_identity.revision,
             plan.identity if plan is not None else "",
             plan.hand if plan is not None else "both",
-            self.playback_session.transport_id,
+            self.transport.transport_id,
             self.attempt_settlement.cancellation_generation,
-            bool(self.playback_session.auto))
+            bool(self.transport.auto))
 
     def midi_arrival(self) -> MidiArrival:
         """Lock-free immutable snapshot for the physical callback timestamp."""
@@ -239,7 +238,7 @@ class PracticeSession:
         # only during a same-source automatic repeat, after the new
         # physical start. Manual restart/Stop never inherits old keys.
         if (not arrival.automatic or not current.automatic or
-                not self.playback_session.running or self.visual_transport.paused):
+                not self.transport.running or self.transport.paused):
             return False
         if received_at is None:
             # An unspecified hardware timestamp can never authorize a
@@ -247,7 +246,7 @@ class PracticeSession:
             return False
         adjusted_at = self.midi_application_input.corrected_time(
             received_at, corrected_at)
-        return adjusted_at >= self.visual_transport.run_at
+        return adjusted_at >= self.transport.run_at
 
     def apply(self, event: PracticeEvent) -> dict | int | None:
         """Serialize the event and atomically publish its committed MIDI epoch.
@@ -389,7 +388,7 @@ class PracticeSession:
                 if self.timeline.update_transition():
                     immediate.append(ImmediateTransition())
         except Exception:
-            self.playback_session.freeze_after_fault(self.clock())
+            self.transport.freeze_after_fault(self.clock())
             # A failing transition bypasses the normal publish_settled()
             # tail. Reconcile the original physical take's current paused
             # status without reentering assessment or successor effects.
@@ -408,13 +407,13 @@ class PracticeSession:
                 item.message, received_at=item.received_at,
                 corrected_at=item.corrected_at, deferred=True)
         self.timeline.publish_settled()
-        if self.source_identity.plan is None or self.visual_transport.paused:
+        if self.source_identity.plan is None or self.transport.paused:
             return 250
-        if (self.playback_session.running
-                or self.visual_transport.preview_loop_pending
-                or self.visual_transport.preparation_pending
+        if (self.transport.running
+                or self.transport.preview_loop_pending
+                or self.transport.preparation_pending
                 or self.attempt_settlement.pending_result is not None
-                or self.visual_transport.pending_rewind is not None
-                or self.playback_session.mode == "listen"):
+                or self.transport.pending_rewind is not None
+                or self.transport.mode == "listen"):
             return 20
         return 100

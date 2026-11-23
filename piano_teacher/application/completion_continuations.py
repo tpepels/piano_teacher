@@ -16,14 +16,14 @@ from .teaching_continuation import (
 
 class CompletionContinuations:
     def __init__(self, *, source_identity, notices, teaching_continuation,
-                 attempt_settlement, playback_session, visual_transport,
+                 attempt_settlement, transport, 
                  attempt, flow_session, lesson_execution, transport_timing,
                  score_read, recovery_workflows, timed_playback,
                  lesson_cursor, teaching_decisions, clock, library,
                  score_artifact_registry, assessment, feedback_seconds):
         self.source_identity, self.notices = source_identity, notices
         self.teaching_continuation, self.attempt_settlement = teaching_continuation, attempt_settlement
-        self.playback_session, self.visual_transport = playback_session, visual_transport
+        self.transport = transport
         self.attempt, self.flow_session = attempt, flow_session
         self.lesson_execution, self.transport_timing = lesson_execution, transport_timing
         self.score_read, self.recovery_workflows = score_read, recovery_workflows
@@ -41,11 +41,11 @@ class CompletionContinuations:
         # Worker ticks must not spin on a failed committed effect after
         # automatic playback was stopped. Only the user-facing Retry route
         # may re-enter that already-selected feedback transaction.
-        if not self.playback_session.auto and not explicit_retry:
+        if not self.transport.auto and not explicit_retry:
             return
         transaction = self.teaching_continuation.begin_feedback(
             self.attempt_settlement.pending, now=now,
-            automatic=self.playback_session.auto or explicit_retry,
+            automatic=self.transport.auto or explicit_retry,
             force_early=force_early, revision=self.source_identity.revision,
             fingerprint=self.source_identity.fingerprint)
         if isinstance(transaction,FeedbackWaiting):
@@ -57,7 +57,7 @@ class CompletionContinuations:
             return
         try:
             self.commit_pending(finish_publication=False)
-            self.visual_transport.note_tempo(
+            self.transport.note_tempo(
             stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
             pending = self.attempt_settlement.pending
@@ -89,7 +89,7 @@ class CompletionContinuations:
                 # automatic course intent; a failed effect below stops it
                 # again. The committed decision, not current UI mode, owns
                 # whether this continuation should run automatically.
-                self.playback_session.continue_course()
+                self.transport.continue_course()
             with self.attempt_settlement.publishing(transaction.pending):
                 self.dispatch_effect(publication.effect, now)
                 # Visible marks are retained until the exact physical/source
@@ -103,7 +103,7 @@ class CompletionContinuations:
             # explicit Retry re-enter this selected transaction; do not
             # silently select a new source or grade a second attempt.
             self.attempt.publication_failed()
-            self.playback_session.stop_automatic()
+            self.transport.stop_automatic()
             self.notices.feedback = "Progress saved, but the next step could not start"
             self.notices.next_action = "Press Play to continue from the same saved result."
             print("CONTINUATION_EFFECT_FAILED:", type(exc).__name__, str(exc), flush=True)
@@ -121,7 +121,7 @@ class CompletionContinuations:
         return pending.receipt.message
 
     def publish_feedback_fault(self, fault: FeedbackFault, now: float) -> None:
-        self.playback_session.apply_feedback_fault(fault,now=now)
+        self.transport.apply_feedback_fault(fault,now=now)
         self.notices.feedback,self.notices.next_action = fault.feedback,fault.next_action
 
     def apply_focused(self, effect, *, phrase, result, now: float,
@@ -139,9 +139,9 @@ class CompletionContinuations:
         elif effect.action == "section_review":
             self.finish_section_review(result)
         elif effect.action == "stop_review":
-            self.playback_session.stop_automatic()
-            self.visual_transport.cancel_preparation()
-            self.visual_transport.cancel_continuation()
+            self.transport.stop_automatic()
+            self.transport.cancel_preparation()
+            self.transport.cancel_continuation()
             self.notices.next_action = "Review this section before starting another take."
         elif effect.action == "exposure":
             self.lesson_execution.enter_selected_exposure(effect.exposure)
@@ -185,12 +185,12 @@ class CompletionContinuations:
                 exposure=effect.exposure)
         else:
             if isinstance(effect,ContinueSelectedScore):
-                applied = self.playback_session.apply_continuation(effect,
+                applied = self.transport.apply_continuation(effect,
                     measurement=self.transport_timing.collect_continuation_measurement(
                         effect.deadline,effect.exposure.from_beat),
                     source_stride_beats=self.score_read.source_model()["practice_timeline"]["stride_beats"])
             else:
-                applied = self.playback_session.apply_continuation(effect)
+                applied = self.transport.apply_continuation(effect)
             if applied.feedback is not None:
                 self.notices.feedback = applied.feedback
             if applied.start is not None:
@@ -218,7 +218,7 @@ class CompletionContinuations:
                 continuation=self.teaching_continuation,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]),
                 score_revision=self.source_identity.revision,
-                visual_offset=self.visual_transport.visual_offset_beats)
+                visual_offset=self.transport.visual_offset_beats)
             outcome = committed.receipt
             self.attempt.apply_settlement(committed,plan=self.source_identity.plan)
             if decision.verdict is not None and decision.verdict.clears_trouble:
@@ -226,19 +226,19 @@ class CompletionContinuations:
             if outcome.stage_changed:
                 self.lesson_cursor.select_opening(0.0)
                 self.source_identity.publish_revision(committed.selection.revision)
-                self.playback_session.wait_for_player()
+                self.transport.wait_for_player()
                 prebuilt = self.teaching_continuation.consume_committed_asset(
-                    committed.prepared,changed=True,auto=self.playback_session.auto,
+                    committed.prepared,changed=True,auto=self.transport.auto,
                     selection=committed.selection)
                 if prebuilt is not None:
                     self.score_artifact_registry.adopt(prebuilt)
                 else:
                     self.score_artifact_registry.current.invalidate()
-                self.visual_transport.adopt_committed_stage(
+                self.transport.adopt_committed_stage(
                     committed,preserved=prebuilt is not None)
             else:
                 self.teaching_continuation.consume_committed_asset(
-                    None,changed=False,auto=self.playback_session.auto,selection=None)
+                    None,changed=False,auto=self.transport.auto,selection=None)
         except BaseException:
             self.attempt.publication_failed()
             raise
@@ -252,26 +252,26 @@ class CompletionContinuations:
         """Retained engine API; assessment service owns report construction."""
         tempo = self.transport_timing.active_tempo_map()
         elapsed_to_beat = (None if tempo is None else
-            lambda seconds: tempo.beat_at(tempo.seconds_at(self.visual_transport.play_from_beat)+seconds))
+            lambda seconds: tempo.beat_at(tempo.seconds_at(self.transport.play_from_beat)+seconds))
         return self.assessment.review(
             phrase, result, bar_boundaries=self.source_identity.plan.piece.bar_boundaries,
-            played_from_beat=self.visual_transport.play_from_beat, bpm=self.source_identity.plan.bpm,
+            played_from_beat=self.transport.play_from_beat, bpm=self.source_identity.plan.bpm,
             elapsed_to_beat=elapsed_to_beat)
 
     def finish_performance_review(self, phrase: Phrase, result):
         """Publish review only after its evidence and source feedback commit."""
         self.notices.next_action = performance_next_action(
             warmup=self.source_identity.warmup,summary=self.attempt.performance_summary)
-        self.playback_session.stop_automatic()
+        self.transport.stop_automatic()
 
     def finish_section_review(self, result):
         """Complete finish section review after a scored take."""
         # Section reviews are deliberate, bounded practice. Stop at the
         # selected boundary, preserve detailed feedback, and never
         # auto-advance to a different passage.
-        self.playback_session.stop_automatic()
+        self.transport.stop_automatic()
         self.attempt.finish_section_review()
-        self.visual_transport.finish_rewind()
+        self.transport.finish_rewind()
         self.lesson_cursor.select_opening(0.0)
         self.notices.feedback = "Section review finished · " + result.summary
         self.notices.next_action = "Review the notes or press Start for the whole passage."
@@ -283,8 +283,8 @@ class CompletionContinuations:
         self.attempt.prepare_full_retry()
         self.lesson_cursor.select_opening(exposure.from_beat if exposure is not None else 0.0)
         self.transport_timing.schedule_preparation(self.lesson_cursor.opening_beat, now=now,
-            from_visual=self.visual_transport.visual_offset_beats + self.visual_transport.play_from_beat
-                + self.transport_timing.elapsed_beat(now-self.visual_transport.run_at),
+            from_visual=self.transport.visual_offset_beats + self.transport.play_from_beat
+                + self.transport_timing.elapsed_beat(now-self.transport.run_at),
             reverse_seconds=self.feedback_seconds)
         self.notices.feedback = "Selected section finished · " + result.summary
         self.notices.next_action = "Next: play the whole passage from its beginning to earn mastery."

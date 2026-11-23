@@ -9,7 +9,7 @@ from __future__ import annotations
 
 class DeviceWorkflows:
     def __init__(self, *, midi, shortcuts, live_input, lifecycle,
-                 guided_session, notices, playback_session, calibration,
+                 guided_session, notices, transport, calibration,
                  library, clock):
         self.midi = midi
         self.shortcuts = shortcuts
@@ -17,7 +17,7 @@ class DeviceWorkflows:
         self.lifecycle = lifecycle
         self.guided_session = guided_session
         self.notices = notices
-        self.playback_session = playback_session
+        self.transport = transport
         self.calibration = calibration
         self.library = library
         self.clock = clock
@@ -69,7 +69,7 @@ class DeviceWorkflows:
 
     def hardware_action(self, action: str) -> dict:
         return self.midi.diagnostics_action(
-            action, running=self.playback_session.running)
+            action, running=self.transport.running)
 
     def calibrate(self, action: str, *, stop_reason: str) -> dict | None:
         if action == "calibration_start":

@@ -23,7 +23,7 @@ def _subject():
             receipt=object(), phase="effects_applied"),
         publishing=lambda pending: nullcontext())
     owner._applied_continuation_effect = None
-    owner.playback_session = SimpleNamespace(
+    owner.transport = SimpleNamespace(
         apply_continuation=lambda effect: (
             applied.append(effect),
             SimpleNamespace(feedback=None, start=None))[1])
@@ -107,23 +107,22 @@ def test_retry_of_committed_effect_retains_original_assessment_receipt():
         finish_feedback=lambda *args, **kwargs: SettledPublication(
             effect, None, "Original assessed result"))
     owner.commit_pending = lambda **kwargs: "Original assessed result"
-    owner.visual_transport = SimpleNamespace(
-        note_tempo=lambda **kwargs: None)
+    owner.transport.note_tempo = lambda **kwargs: None
     owner.source_identity.plan.bpm = 72
     owner.transport_timing = SimpleNamespace(
         presentation_bpm=lambda: 72,
         next_count_in_beats=lambda: 4)
     owner.lesson_execution = SimpleNamespace(flow_active=lambda: False)
     owner.clock = lambda: 110.0
-    owner.playback_session.auto = False
-    owner.playback_session.stop_automatic = lambda: None
-    owner.playback_session.continue_course = lambda: setattr(
-        owner.playback_session, "auto", True)
+    owner.transport.auto = False
+    owner.transport.stop_automatic = lambda: None
+    owner.transport.continue_course = lambda: setattr(
+        owner.transport, "auto", True)
 
     assert owner.retry_failed_publication(now=110.0) == "Original assessed result"
     assert pending.phase == "published"
     assert applied == [effect]
-    assert owner.playback_session.auto is True
+    assert owner.transport.auto is True
 
 
 def test_failed_committed_effect_does_not_publish_or_clear_feedback():
@@ -139,16 +138,15 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
         finish_feedback=lambda *args, **kwargs: SettledPublication(
             effect, None, "Original assessed result"))
     owner.commit_pending = lambda **kwargs: "Original assessed result"
-    owner.visual_transport = SimpleNamespace(
-        note_tempo=lambda **kwargs: None)
+    owner.transport.note_tempo = lambda **kwargs: None
     owner.source_identity.plan.bpm = 72
     owner.transport_timing = SimpleNamespace(
         presentation_bpm=lambda: 72, next_count_in_beats=lambda: 4)
     owner.lesson_execution = SimpleNamespace(flow_active=lambda: False)
-    owner.playback_session.auto = True
+    owner.transport.auto = True
     stopped = []
-    owner.playback_session.stop_automatic = lambda: stopped.append(True)
-    owner.playback_session.continue_course = lambda: None
+    owner.transport.stop_automatic = lambda: stopped.append(True)
+    owner.transport.continue_course = lambda: None
     state = []
     owner.attempt = SimpleNamespace(
         clear_feedback=lambda: state.append("cleared"),
@@ -167,7 +165,7 @@ def test_failed_committed_effect_does_not_publish_or_clear_feedback():
 
 def test_stopped_auto_worker_does_not_spin_on_failed_effect():
     owner, _effect, _applied = _subject()
-    owner.playback_session.auto = False
+    owner.transport.auto = False
     owner.teaching_continuation = SimpleNamespace(
         begin_feedback=lambda *args, **kwargs: pytest.fail(
             "Stopped playback must require explicit user Retry"))

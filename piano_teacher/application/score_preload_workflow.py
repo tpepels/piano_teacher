@@ -10,22 +10,23 @@ from .playback_facts import PreloadedFeedbackSource
 
 
 class ScorePreloadWorkflow:
-    def __init__(self, *, source_identity, lock, playback_session,
+    def __init__(self, *, source_identity, lock, transport,
                  teaching_continuation, attempt_settlement,
                  transport_timing, completion_continuations):
         self.source_identity, self.lock = source_identity, lock
-        self.playback_session, self.teaching_continuation = playback_session, teaching_continuation
+        self.teaching_continuation = teaching_continuation
+        self.transport = transport
         self.attempt_settlement, self.transport_timing = attempt_settlement, transport_timing
         self.completion_continuations = completion_continuations
 
     def decided_selection(self):
-        if not self.playback_session.auto:
+        if not self.transport.auto:
             return None
         return self.teaching_continuation.selection(self.attempt_settlement.pending,
             revision=self.source_identity.revision,fingerprint=self.source_identity.fingerprint)
 
     def next_selection(self, *, offset: int = 1) -> tuple[ScoreSelection, int] | None:
-        if self.source_identity.plan is None or self.source_identity.warmup or self.playback_session.mode != "practice":
+        if self.source_identity.plan is None or self.source_identity.warmup or self.transport.mode != "practice":
             return None
         decided = self.decided_selection() if offset == 1 else None
         return self.teaching_continuation.choose_ahead(
@@ -52,7 +53,7 @@ class ScorePreloadWorkflow:
             source = (PreloadedFeedbackSource(
                 self.source_identity.plan.active_phrase.sounding_end-self.source_identity.plan.active_phrase.start,
                 self.source_identity.plan.bpm,self.transport_timing.active_tempo_map()) if self.source_identity.plan is not None else None)
-            released_at = self.playback_session.activate_preloaded_feedback(source,
+            released_at = self.transport.activate_preloaded_feedback(source,
                 revision=self.source_identity.revision,fingerprint=self.source_identity.fingerprint)
             if released_at is not None:
                 self.completion_continuations.advance_pending_feedback(released_at)

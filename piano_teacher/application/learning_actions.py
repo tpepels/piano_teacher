@@ -11,7 +11,7 @@ class LearningActions:
     def __init__(self, *,
                  attempt, attempt_settlement, clock, exposure_workflows,
                  flow_session, guided_session, lesson_cursor, lesson_execution,
-                 lifecycle, measurement, notices, playback_session,
+                 lifecycle, measurement, notices, transport,
                  progress, source_identity, teaching_decisions):
         self.attempt = attempt
         self.attempt_settlement = attempt_settlement
@@ -24,7 +24,7 @@ class LearningActions:
         self.lifecycle = lifecycle
         self.measurement = measurement
         self.notices = notices
-        self.playback_session = playback_session
+        self.transport = transport
         self.progress = progress
         self.source_identity = source_identity
         self.teaching_decisions = teaching_decisions
@@ -33,7 +33,7 @@ class LearningActions:
         if action == "listen":
             if (self.lesson_execution.flow_active() and self.flow_session.state is not None
                     and self.flow_session.state.stage_key == self.source_identity.plan.identity
-                    and self.playback_session.mode != "listen"):
+                    and self.transport.mode != "listen"):
                 # Listen again: the state machine plays it, then Free.
                 self.lesson_execution.flow_execute(self.flow_session.listen_again(),reason=action)
             else:
@@ -52,7 +52,7 @@ class LearningActions:
 
     def control_learning(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "learn_next":
-            if (self.playback_session.mode != "learn" or self.guided_session.controller is None
+            if (self.transport.mode != "learn" or self.guided_session.controller is None
                     or not self.guided_session.controller.snapshot(now=self.clock())["completed"]):
                 raise ValueError("Find the current notes before continuing to the next idea")
             self.lesson_execution.save_guided_preparation()
@@ -107,7 +107,7 @@ class LearningActions:
                 from_beat=selected.from_beat,exposure=selected,reason="open_at")
         else:
             self.exposure_workflows.prepare_practice(exposure=selected,reason="open_at")
-            self.playback_session.wait_for_player()
+            self.transport.wait_for_player()
             self.notices.feedback = f"Ready to practise from measure {kwargs.get('bar')}"
             self.notices.next_action = "Press Start to play from the selected measure."
 
@@ -122,7 +122,7 @@ class LearningActions:
                   and queued.event.manual is not None
                   else prepare_stage_change(
                       p, action, kwargs, warmup=self.source_identity.warmup))
-        was_guided = self.playback_session.mode == "learn"
+        was_guided = self.transport.mode == "learn"
         guided_return = self.guided_session.return_context
         guided_retry_range = self.attempt.retry_range
         self.lifecycle.stop(reason=action)

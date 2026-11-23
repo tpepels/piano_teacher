@@ -15,17 +15,18 @@ from .mistake_responses import resolve_mistake_policy
 class LessonExecution:
     def __init__(self, *, source_identity, lesson_cursor, notices, teaching_decisions,
                  exposure_workflows, flow_session,
-                 playback_session, guided_session, attempt, learner_progress,
-                 progress, lifecycle, recovery_streak, visual_transport,
+                 transport, guided_session, attempt, learner_progress,
+                 progress, lifecycle, recovery_streak, 
                  attempt_settlement, measurement, library, clock):
         self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
         self.notices, self.teaching_decisions = notices, teaching_decisions
         self.exposure_workflows = exposure_workflows
-        self.flow_session, self.playback_session = flow_session, playback_session
+        self.flow_session = flow_session
+        self.transport = transport
         self.guided_session, self.attempt = guided_session, attempt
         self.learner_progress, self.progress = learner_progress, progress
         self.lifecycle, self.recovery_streak = lifecycle, recovery_streak
-        self.visual_transport, self.attempt_settlement = visual_transport, attempt_settlement
+        self.attempt_settlement = attempt_settlement
         self.measurement, self.library = measurement, library
         self.clock = clock
 
@@ -38,10 +39,10 @@ class LessonExecution:
 
     def guided_unit(self) -> dict | None:
         return self.learner_progress.guided_unit(
-            self.source_identity.plan, mode=self.playback_session.mode, guided_range=self.guided_session.beat_range)
+            self.source_identity.plan, mode=self.transport.mode, guided_range=self.guided_session.beat_range)
 
     def save_guided_preparation(self):
-        guidance = (self.guided_session.controller.snapshot(now=self.clock()) if self.playback_session.mode == "learn" and self.guided_session.controller else None)
+        guidance = (self.guided_session.controller.snapshot(now=self.clock()) if self.transport.mode == "learn" and self.guided_session.controller else None)
         if not guidance or self.measurement.attempt_id is None:
             return
         if not guidance["completed"]:
@@ -58,7 +59,7 @@ class LessonExecution:
                 policy=resolve_mistake_policy(
                     self.library.settings["mistake_response_strategy"]))
         except Exception:
-            self.playback_session.freeze_after_fault(self.clock())
+            self.transport.freeze_after_fault(self.clock())
             self.notices.fault("Could not save the guided preparation",
                 "Check storage, then Resume to save this same exposure.")
             raise
@@ -70,12 +71,12 @@ class LessonExecution:
 
     def learner_snapshot(self) -> dict:
         return self.learner_progress.snapshot(
-            self.source_identity.plan, fingerprint=self.source_identity.fingerprint, mode=self.playback_session.mode,
+            self.source_identity.plan, fingerprint=self.source_identity.fingerprint, mode=self.transport.mode,
             guided_range=self.guided_session.beat_range, course_guided=self.lesson_cursor.course_guided)
 
     def enter_selected_exposure(self, selected, *, bump_revision: bool = True, reason=None):
         if selected is None:
-            self.playback_session.stop_automatic()
+            self.transport.stop_automatic()
             return
         if selected.mode == "learn":
             self.begin_learn(from_beat=selected.from_beat,
@@ -105,7 +106,7 @@ class LessonExecution:
     def flow_open(self, *, resumed: bool = False) -> None:
         """Open: a fresh piece starts with Listen, a resumed one in Free."""
         self.lesson_cursor.set_course_guided(True)
-        self.playback_session.continue_course()
+        self.transport.continue_course()
         # Even an opening Listen is a selected window. Closing before the
         # first Free note must still reopen that saved location in Free.
         self._save()
@@ -115,7 +116,7 @@ class LessonExecution:
         self.flow_session.say(text)
 
     def flow_state(self) -> dict:
-        return self.flow_session.status(self.source_identity.plan,self.playback_session.mode)
+        return self.flow_session.status(self.source_identity.plan,self.transport.mode)
 
     def begin_course_stage(self, *, bump_revision: bool = True,
                            explicit_learn: bool = False, effect=None,
@@ -180,7 +181,7 @@ class LessonExecution:
             raise ValueError("Open a piece first")
         return self.guided_session.display_phrase(
             self.source_identity.plan.active_phrase,self.source_identity.plan.piece.bar_boundaries,
-            active=self.playback_session.mode == "learn")
+            active=self.transport.mode == "learn")
 
     def begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
                      recovery: bool = False,
@@ -210,7 +211,7 @@ class LessonExecution:
         self.attempt.prepare_section(start=self.lesson_cursor.opening_beat,
             end=selected.end_beat or self.source_identity.plan.active_phrase.end-self.source_identity.plan.active_phrase.start,
             first_bar=first_bar,last_bar=last_bar)
-        self.playback_session.prepare_section_review()
+        self.transport.prepare_section_review()
         self.notices.feedback = f"Ready to repeat measures {first_bar}-{last_bar}"
         self.notices.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
 
@@ -221,11 +222,11 @@ class LessonExecution:
         self.lesson_cursor.select_opening(selected.from_beat)
         self.attempt.prepare_section(start=self.lesson_cursor.opening_beat,
             end=selected.end_beat or self.source_identity.plan.active_phrase.end-self.source_identity.plan.active_phrase.start)
-        self.playback_session.prepare_section_review()
+        self.transport.prepare_section_review()
         self.notices.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
 
     def seek_grid(self) -> tuple[float, ...] | None:
-        if (self.source_identity.plan is None or self.playback_session.mode not in ("learn", "practice", "perform")
+        if (self.source_identity.plan is None or self.transport.mode not in ("learn", "practice", "perform")
                 or not self.source_identity.plan.piece.bar_boundaries):
             return None
         try:
@@ -246,7 +247,7 @@ class LessonExecution:
             self.begin_learn(from_beat=selected.from_beat,exposure=selected,reason="seek")
         else:
             self.exposure_workflows.prepare_practice(exposure=selected,reason="seek")
-            self.visual_transport.prepare_rewind(selected.from_beat)
+            self.transport.prepare_rewind(selected.from_beat)
             self.attempt.prepare_section(start=selected.from_beat,
                 end=self.source_identity.plan.active_phrase.end-self.source_identity.plan.active_phrase.start,
                 first_bar=bar,last_bar=self.source_identity.plan.active_phrase.last_bar)

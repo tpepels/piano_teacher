@@ -18,7 +18,7 @@ from . import practice_flow
 
 class PracticeTimeline:
     def __init__(self, *, source_identity, notices,
-                 visual_transport, playback_session, playback,
+                 transport, 
                  attempt_settlement, attempt, transport_timing, timed_playback,
                  score_read, lesson_execution,
                  recovery_workflows, completion_continuations,
@@ -29,7 +29,7 @@ class PracticeTimeline:
                  teaching_continuation, exposure_workflows,
                  clock, poll_midi, feedback_seconds):
         self.source_identity, self.notices = source_identity, notices
-        self.visual_transport, self.playback_session, self.playback = visual_transport, playback_session, playback
+        self.transport = transport
         self.attempt_settlement, self.attempt = attempt_settlement, attempt
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
         self.score_read = score_read
@@ -53,26 +53,26 @@ class PracticeTimeline:
         and grading occur only after a completed non-preview take.
         Returns whether another same-tick transition must be queued.
         """
-        self.visual_transport.record_take_end(
-            at=self.visual_transport.run_at + duration,
+        self.transport.record_take_end(
+            at=self.transport.run_at + duration,
             bpm=self.source_identity.plan.bpm)
-        if self.playback_session.preview_only:
+        if self.transport.preview_only:
             # Disconnected MIDI: repeat as an ungraded preview, never create
             # fake notes, misses, accepted passes or mastery.
             self.attempt_settlement.finish_preview()
-            self.playback_session.finish_take()
-            self.visual_transport.schedule_preview_repeat(
+            self.transport.finish_take()
+            self.transport.schedule_preview_repeat(
                 source_seconds=duration,source_bpm=self.source_identity.plan.bpm,
                 presentation_bpm=self.transport_timing.presentation_bpm(),
                 rest_measurement=self.transport_timing.collect_rest_measurement(
                     from_beat=0.0,
-                    source_end=self.visual_transport.run_at+duration),
-                now=now,reading_horizon_beats=self.visual_transport.continuous_horizon_beats)
+                    source_end=self.transport.run_at+duration),
+                now=now,reading_horizon_beats=self.transport.continuous_horizon_beats)
             self.notices.feedback = "Timing preview - repeating after one empty measure"
             self.notices.next_action = "Connect your MIDI piano to earn progress."
             # The next preview must be admitted during the rest, not at
             # the previous retry deadline after its count-in is over.
-            self.timed_playback.continue_at(self.visual_transport.next_at,
+            self.timed_playback.continue_at(self.transport.next_at,
                 from_beat=0.0)
             return False
         completed_visual = self.transport_timing.visual_motion(now)[0]
@@ -80,10 +80,10 @@ class PracticeTimeline:
             phrase=phrase,hand=self.source_identity.plan.hand,bpm=self.source_identity.plan.bpm,
             played=(self.attempt.recorder.presses
                     if self.attempt.recorder else ()),
-            from_beat=self.visual_transport.play_from_beat,end_beat=ending,
+            from_beat=self.transport.play_from_beat,end_beat=ending,
             tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
             layout_for_feedback=self.score_read.completed_take_layout,
-            mode=self.playback_session.mode,review_end_beat=self.attempt.review_end_beat,
+            mode=self.transport.mode,review_end_beat=self.attempt.review_end_beat,
             automatic_remedial_review=self.attempt.automatic_remedial_review,
             performance_review=self.completion_continuations.performance_review,
             prepare_decision=self.teaching_decisions.prepare,
@@ -94,7 +94,7 @@ class PracticeTimeline:
         assessed = completed.assessed
         result,summary = assessed.result,completed.summary
         if completed.settled:
-            self.visual_transport.note_tempo(
+            self.transport.note_tempo(
             stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         self.attempt.publish_completion(
             marks=assessed.marks,unmapped=assessed.unmapped)
@@ -103,7 +103,7 @@ class PracticeTimeline:
         self.live_assessment.publish(self.attempt.feedback_marks, self.live_feedback_workflows.feedback_take(),
                                      final=True)
         self.notices.feedback = assessed.feedback
-        self.playback_session.finish_take()
+        self.transport.finish_take()
         self.attempt.finish_review(summary,self.source_identity.plan.identity)
         self.measurement.phase_changed("feedback", now)
         if not self.completion_continuations.apply_focused(
@@ -118,22 +118,22 @@ class PracticeTimeline:
         pending = publication.pending
         total_beats,duration = publication.total_beats,publication.duration
         self.attempt_settlement.checkpoint_failed_streak(pending,plan=self.source_identity.plan,now=now)
-        self.visual_transport.note_tempo(
+        self.transport.note_tempo(
             stage=self.source_identity.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         exposure = pending.decision.next_exposure
-        target = exposure.from_beat if exposure is not None else self.visual_transport.play_from_beat
-        completion = self.playback_session.finish_full_passage(FullPassageFacts(
+        target = exposure.from_beat if exposure is not None else self.transport.play_from_beat
+        completion = self.transport.finish_full_passage(FullPassageFacts(
             pending=pending,stage_key=self.source_identity.plan.identity,bpm=self.source_identity.plan.bpm,
             target_bpm=self.source_identity.plan.target_bpm,
             assessed_bpm=self.attempt_settlement.pending_assessed_bpm,
             total_beats=total_beats,duration=duration,now=now,
             visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=self.feedback_seconds,
             source_model=self.score_read.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
-            horizon_beats=self.visual_transport.continuous_horizon_beats,warmup=self.source_identity.warmup,
-            short_rest_enabled=self.visual_transport.short_rest is not None,
+            horizon_beats=self.transport.continuous_horizon_beats,warmup=self.source_identity.warmup,
+            short_rest_enabled=self.transport.short_rest is not None,
             retry_rest=self.transport_timing.collect_rest_measurement(from_beat=target),
             repeat_rest=self.transport_timing.collect_rest_measurement(from_beat=0.0,
-                source_end=self.visual_transport.run_at+duration),
+                source_end=self.transport.run_at+duration),
             assets_ready=self.teaching_continuation.decision_assets_ready(pending,
                 revision=self.source_identity.revision,fingerprint=self.source_identity.fingerprint),
             exact_repeats=self.lesson_execution.flow_active()))
@@ -149,30 +149,30 @@ class PracticeTimeline:
 
     def run_pre_assessment_transition(self, now: float) -> tuple[bool, bool]:
         """Apply a non-grading transition; return consumed and follow-up flags."""
-        if self.playback.intent is not None:
+        if self.transport.intent is not None:
             return True, False
         context = TransitionContext(
             has_plan=self.source_identity.plan is not None,
-            learning=self.playback_session.mode == "learn" and self.guided_session.controller is not None,
-            paused=self.visual_transport.paused, listening=self.playback_session.mode == "listen",
-            preview_pending=self.visual_transport.preview_loop_pending,
-            preparation_pending=self.visual_transport.preparation_pending,
+            learning=self.transport.mode == "learn" and self.guided_session.controller is not None,
+            paused=self.transport.paused, listening=self.transport.mode == "listen",
+            preview_pending=self.transport.preview_loop_pending,
+            preparation_pending=self.transport.preparation_pending,
             feedback_pending=self.attempt_settlement.feedback_pending,
-            awaiting_score=self.playback_session.awaiting_score_revision is not None,
-            rewind_pending=self.visual_transport.pending_rewind is not None,
-            running=self.playback_session.running, run_at=self.visual_transport.run_at)
+            awaiting_score=self.transport.awaiting_score_revision is not None,
+            rewind_pending=self.transport.pending_rewind is not None,
+            running=self.transport.running, run_at=self.transport.run_at)
         decision = decide_transition(
-            context, now=now, next_at=self.visual_transport.next_at,
-            preparation_at=self.visual_transport.preparation_deadline)
+            context, now=now, next_at=self.transport.next_at,
+            preparation_at=self.transport.preparation_deadline)
         followup = False
         if decision.preparation_phase is not None:
-            self.visual_transport.enter_preparation_phase(decision.preparation_phase)
+            self.transport.enter_preparation_phase(decision.preparation_phase)
         if decision.action == "learning":
             self.guided_session.advance(connected=self.midi.connected, now=now)
             self.lesson_execution.save_guided_preparation()
         elif decision.action == "listening":
-            if self.playback_session.running and self.listen.finished(now=now, run_at=self.visual_transport.run_at):
-                self.playback_session.finish_take()
+            if self.transport.running and self.listen.finished(now=now, run_at=self.transport.run_at):
+                self.transport.finish_take()
                 self.notices.feedback = "Example complete"
                 self.notices.next_action = (
                     "Choose Learn to find the notes, or Practice to play the rhythm.")
@@ -180,8 +180,8 @@ class PracticeTimeline:
                         and self.flow_session.state.step is practice_flow.Step.LISTEN):
                     self.lesson_execution.flow_execute(self.flow_session.listen_finished())
         elif decision.action == "preview_due":
-            deadline = self.visual_transport.next_at
-            self.visual_transport.advance_source_stride(self.score_read.source_model()[
+            deadline = self.transport.next_at
+            self.transport.advance_source_stride(self.score_read.source_model()[
                 "practice_timeline"]["stride_beats"])
             self.timed_playback.continue_at(SCHEDULER.continuation(
                     self.transport_timing.collect_continuation_measurement(deadline, 0.0),
@@ -195,13 +195,13 @@ class PracticeTimeline:
                 self.completion_continuations.advance_pending_feedback(now)
         elif decision.action == "rewind_due":
             if self.attempt.guided_recovery_pending:
-                self.lesson_execution.begin_learn(from_beat=self.visual_transport.pending_rewind, recovery=True,
+                self.lesson_execution.begin_learn(from_beat=self.transport.pending_rewind, recovery=True,
                     exposure=self.attempt_settlement.pending.decision.next_exposure)
             else:
-                target = self.visual_transport.pending_rewind
+                target = self.transport.pending_rewind
                 self.timed_playback.continue_at(
                     SCHEDULER.continuation(
-                    self.transport_timing.collect_continuation_measurement(self.visual_transport.next_at, target),
+                    self.transport_timing.collect_continuation_measurement(self.transport.next_at, target),
                     now=self.clock(),bpm=self.transport_timing.presentation_bpm()),
                     from_beat=target)
         return decision.consumed, followup
@@ -213,7 +213,7 @@ class PracticeTimeline:
         idempotent recovery effect. Never rerun it merely to bring the
         physical authorization ledger into agreement with the paused clock.
         """
-        self.playback.advance(self.transport_timing.playback_facts())
+        self.transport.advance(self.transport_timing.playback_facts())
 
     def publish_settled(self) -> None:
         """Publish one accepted outcome after transitions and deferred MIDI.
@@ -221,7 +221,7 @@ class PracticeTimeline:
         Replaying deferred hardware events before this publication makes
         controls, live feedback and transport describe the same final source.
         """
-        self.playback.advance(self.transport_timing.playback_facts())
+        self.transport.advance(self.transport_timing.playback_facts())
         self.read_models.prepare_score_presentation()
         try:
             self.live_feedback_workflows.publish_live()
@@ -235,20 +235,20 @@ class PracticeTimeline:
         self.midi_calibration.advance(self.clock())
         self.exposure_workflows.apply_listen_failure()
         now = self.clock()
-        learning = self.playback_session.mode == "learn"
+        learning = self.transport.mode == "learn"
         guided_completed = bool(
             learning and self.guided_session.controller is not None
             and self.guided_session.controller.snapshot(now=now)["completed"])
         self.measurement.observe_phase(CapturePhaseFacts(
-            paused=self.visual_transport.paused,learning=learning,
-            awaiting_score=self.playback_session.awaiting_score_revision is not None,
-            guided_completed=guided_completed,running=self.playback_session.running,
+            paused=self.transport.paused,learning=learning,
+            awaiting_score=self.transport.awaiting_score_revision is not None,
+            guided_completed=guided_completed,running=self.transport.running,
             count_in_activation=max(
-                self.visual_transport.run_at,
+                self.transport.run_at,
                 self.midi_ingress.resume_grading_after),
-            mode=self.playback_session.mode,preview=self.playback_session.preview_only,
+            mode=self.transport.mode,preview=self.transport.preview_only,
             pending_result=self.attempt_settlement.pending_result is not None,
-            preparation_pending=self.visual_transport.preparation_pending,
+            preparation_pending=self.transport.preparation_pending,
             performance_complete=self.attempt.performance_summary is not None),now)
         # A rolling boundary is admitted once. A failed presentation must
         # replay the original receipt before any rewind/next-boundary branch
@@ -257,10 +257,10 @@ class PracticeTimeline:
         # disturbed by a duplicate transport effect.
         rolling = self.attempt_settlement.rolling_record
         if (rolling is not None and rolling.transition is not None
-                and self.playback_session.mode == "practice"
-                and self.playback_session.running
-                and not self.visual_transport.paused
-                and self.playback.intent is None):
+                and self.transport.mode == "practice"
+                and self.transport.running
+                and not self.transport.paused
+                and self.transport.intent is None):
             self.recovery_workflows.apply_rolling_recovery(
                 rolling.decision, rolling.phrase, rolling.grid,
                 rolling.score_beat, now)
@@ -268,7 +268,7 @@ class PracticeTimeline:
         consumed, followup = self.run_pre_assessment_transition(now)
         if consumed or followup:
             return followup
-        if (self.playback_session.running and self.visual_transport.grading_is_frozen(
+        if (self.transport.running and self.transport.grading_is_frozen(
                     now,grading_after=self.midi_ingress.resume_grading_after)):
             # The canonical recorder and live-assessment clock stand at the
             # paused source position. Do not inspect rolling checkpoints,
@@ -276,19 +276,19 @@ class PracticeTimeline:
             # continuation's reading/count-in lead.
             return False
         phrase = self.source_identity.plan.active_phrase
-        score_beat = self.visual_transport.play_from_beat + max(
-            0.0, self.transport_timing.elapsed_beat(now-self.visual_transport.run_at))
+        score_beat = self.transport.play_from_beat + max(
+            0.0, self.transport_timing.elapsed_beat(now-self.transport.run_at))
 
         step = self.attempt_progression.inspect(AttemptTick(
             phrase=phrase, boundaries=self.source_identity.plan.piece.bar_boundaries,
-            now=now, score_beat=score_beat, from_beat=self.visual_transport.play_from_beat,
-            run_at=self.visual_transport.run_at, next_boundary=self.visual_transport.next_boundary_beat,
-            review_end=self.attempt.review_end_beat, preview=self.playback_session.preview_only,
-            auto=self.playback_session.auto, mode=self.playback_session.mode,
-            bpm=self.source_identity.plan.bpm, gap_beats=self.visual_transport.visual_gap_beats),
+            now=now, score_beat=score_beat, from_beat=self.transport.play_from_beat,
+            run_at=self.transport.run_at, next_boundary=self.transport.next_boundary_beat,
+            review_end=self.attempt.review_end_beat, preview=self.transport.preview_only,
+            auto=self.transport.auto, mode=self.transport.mode,
+            bpm=self.source_identity.plan.bpm, gap_beats=self.transport.visual_gap_beats),
             self.recovery_workflows.assess_rolling_boundary, self.transport_timing.elapsed_seconds,
             exact_repeats=self.lesson_execution.flow_active())
-        self.visual_transport.advance_boundary(step.next_boundary)
+        self.transport.advance_boundary(step.next_boundary)
         followup = False
         if step.action == "recovery":
             self.recovery_workflows.apply_rolling_recovery(
@@ -296,10 +296,10 @@ class PracticeTimeline:
         elif step.action == "complete":
             followup = self.complete_attempt(phrase, step.ending,
                 phrase.sounding_end-phrase.start, step.duration, now)
-            self.playback_session.refloor_fresh_announcement(TimedTakeSource(
+            self.transport.refloor_fresh_announcement(TimedTakeSource(
                 self.source_identity.plan.active_phrase,self.source_identity.plan.piece.bar_boundaries,
                 self.source_identity.plan.piece.time_signatures,self.source_identity.plan.bpm,
-                self.visual_transport.visual_gap_beats),
-                physical_rest_enabled=self.visual_transport.short_rest is not None)
+                self.transport.visual_gap_beats),
+                physical_rest_enabled=self.transport.short_rest is not None)
         return followup
 

@@ -13,8 +13,8 @@ from ..importing.pieces import import_piece
 
 class SourceWorkflows:
     def __init__(self, *, source_identity, lesson_cursor, notices, lifecycle,
-                 recovery_streak, visual_transport, source_preparation,
-                 playback_session, guided_session, score_artifact_registry,
+                 recovery_streak, transport, source_preparation,
+                 guided_session, score_artifact_registry,
                  attempt, listen, preprocessing, fingering, progress,
                  fukuda_mistakes, library, library_health, flow_session,
                  lock):
@@ -23,9 +23,8 @@ class SourceWorkflows:
         self.notices = notices
         self.lifecycle = lifecycle
         self.recovery_streak = recovery_streak
-        self.visual_transport = visual_transport
+        self.transport = transport
         self.source_preparation = source_preparation
-        self.playback_session = playback_session
         self.guided_session = guided_session
         self.score_artifact_registry = score_artifact_registry
         self.attempt = attempt
@@ -50,7 +49,7 @@ class SourceWorkflows:
 
     def install(self, prepared, *, warmup: bool) -> bool | None:
         """Called with application lock and source-mutation guard held."""
-        self.visual_transport.clear_take_end()
+        self.transport.clear_take_end()
         self.lifecycle.stop(reason="source_changed")
         self.recovery_streak.clear()
         self.lesson_cursor.set_course_guided(False)
@@ -60,7 +59,7 @@ class SourceWorkflows:
         self.lesson_cursor.select_opening(0.0)
         self.score_artifact_registry.invalidate()
         self.source_preparation.source_installed()
-        self.playback_session.select_source()
+        self.transport.select_source()
         self.guided_session.clear_selection()
         self.notices.publish("Press Start to practice", "Press Start to practice.")
         self.source_identity.advance_revision()
@@ -72,7 +71,7 @@ class SourceWorkflows:
     def _apply_listen_failure(self) -> None:
         failure = self.listen.take_failure()
         if failure is not None:
-            self.playback_session.wait_for_player()
+            self.transport.wait_for_player()
             self.notices.publish(failure, failure)
 
     def correction_identity(self, *, fingerprint: str | None = None):
@@ -107,7 +106,7 @@ class SourceWorkflows:
         selected.piece = installed.piece
         self.score_artifact_registry.invalidate()
         self.source_identity.publish_revision(installed.score_revision)
-        if self.playback_session.source_revised(self.source_identity.revision):
+        if self.transport.source_revised(self.source_identity.revision):
             self.listen.retarget_score(self.source_identity.revision)
 
     def library_listing(self) -> dict:
@@ -124,7 +123,7 @@ class SourceWorkflows:
 
     def mark_library_opened(self, identifier: str, *, warmup: bool) -> None:
         if warmup:
-            self.playback_session.select_source()
+            self.transport.select_source()
             self.lesson_cursor.set_course_guided(False)
             self.notices.publish(
                 "Warm-up ready - left, right, then both hands",

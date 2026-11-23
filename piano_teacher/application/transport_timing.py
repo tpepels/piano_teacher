@@ -11,14 +11,14 @@ from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasureme
 
 class TransportTiming:
     def __init__(self, *, source_identity, lesson_cursor,
-                 playback_session, visual_transport, tempo_map_cache,
+                 transport, tempo_map_cache,
                  attempt_progression, attempt_settlement, score_read,
-                 midi_ingress, playback, clock):
+                 midi_ingress, clock):
         self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
-        self.playback_session, self.visual_transport = playback_session, visual_transport
+        self.transport = transport
         self.tempo_map_cache, self.attempt_progression = tempo_map_cache, attempt_progression
         self.attempt_settlement, self.score_read = attempt_settlement, score_read
-        self.midi_ingress, self.playback, self.clock = midi_ingress, playback, clock
+        self.midi_ingress, self.clock = midi_ingress, clock
 
     def presentation_bpm(self) -> float:
         pending = self.attempt_settlement.pending
@@ -32,7 +32,7 @@ class TransportTiming:
         source = None
         if self.source_identity.plan is not None:
             plan = self.source_identity.plan
-            bar, meter = self.playback_session.count_in_bar_beats, tuple(self.playback_session.count_in_meter)
+            bar, meter = self.transport.count_in_bar_beats, tuple(self.transport.count_in_meter)
             if from_beat is not None:
                 _, bar, meter = self.attempt_progression.count_in_bar(
                     phrase=plan.active_phrase,boundaries=plan.piece.bar_boundaries,
@@ -47,11 +47,11 @@ class TransportTiming:
                 end_beat=plan.active_phrase.sounding_end-plan.active_phrase.start,
                 count_in_bar_beats=float(bar),count_in_meter=tuple(meter),
                 tempo_segments=segments)
-        return self.playback_session.facts(source)
+        return self.transport.facts(source)
 
     def request_playback(self, *, from_beat: float, **kwargs):
         facts = self.playback_facts(from_beat=from_beat)
-        if self.playback.automatic_request_blocked(
+        if self.transport.automatic_request_blocked(
                 facts, action=str(kwargs.get("action", "")),
                 mode=str(kwargs.get("mode", "")), from_beat=from_beat):
             # Repeated renderer/audio readiness callbacks are events, not
@@ -59,7 +59,7 @@ class TransportTiming:
             # score. Keep the prior terminal failure visible and await
             # an explicit user selection rather than raising in every tick.
             return None
-        return self.playback.request(facts, from_beat=from_beat, **kwargs)
+        return self.transport.request(facts, from_beat=from_beat, **kwargs)
 
     def active_tempo_map(self):
         """Reuse an immutable authored tempo map until stage or BPM changes.
@@ -68,13 +68,13 @@ class TransportTiming:
         ExerciseStage.tempo_map() may transform every note, so rebuilding it
         for every clock read creates work proportional to the full passage.
         """
-        if self.source_identity.plan is None or self.playback_session.mode not in ("practice", "listen"):
+        if self.source_identity.plan is None or self.transport.mode not in ("practice", "listen"):
             return None
         return self.tempo_map_cache.get(self.source_identity.plan.active_stage, self.source_identity.plan.bpm)
 
     def elapsed_beat(self, elapsed_seconds: float) -> float:
         return SCHEDULER.elapsed_beats(
-            self.active_tempo_map(),self.visual_transport.play_from_beat,
+            self.active_tempo_map(),self.transport.play_from_beat,
             elapsed_seconds,self.source_identity.plan.bpm)
 
     def elapsed_seconds(self, beat: float) -> float:
@@ -89,9 +89,9 @@ class TransportTiming:
             time_signatures=plan.piece.time_signatures if plan is not None else (),
             bpm=float(plan.bpm) if plan is not None else 0.0,
             start_from=self.lesson_cursor.opening_beat,
-            already_active=self.playback_session.running or self.visual_transport.paused,
-            current_bar_beats=self.playback_session.count_in_bar_beats,
-            current_meter=tuple(self.playback_session.count_in_meter))
+            already_active=self.transport.running or self.transport.paused,
+            current_bar_beats=self.transport.count_in_bar_beats,
+            current_meter=tuple(self.transport.count_in_meter))
 
     def next_count_in_beats(self) -> float:
         return self.next_count_in()[0]
@@ -105,17 +105,17 @@ class TransportTiming:
         """Sample queue and engraving facts; deadline calculus lives in SCHEDULER."""
         return ContinuationMeasurement(
             deadline=deadline,
-            announced_at=self.visual_transport.announced_deadline(from_beat),
-            rest_beats=self.visual_transport.visual_gap_beats,
-            horizon_beats=self.visual_transport.continuous_horizon_beats,
+            announced_at=self.transport.announced_deadline(from_beat),
+            rest_beats=self.transport.visual_gap_beats,
+            horizon_beats=self.transport.continuous_horizon_beats,
             rest=self.collect_rest_measurement(
                 from_beat=from_beat,
-                source_end=deadline if self.visual_transport.rest_take_end is None else None),
-            automatic=self.source_identity.plan is not None and self.playback_session.auto)
+                source_end=deadline if self.transport.rest_take_end is None else None),
+            automatic=self.source_identity.plan is not None and self.transport.auto)
 
     def start_rate_bpm(self, from_beat: float, bpm: float) -> float:
         """Authored tempo-map rate at a take's first beat, at this BPM."""
-        if self.source_identity.plan is None or bpm <= 0 or self.playback_session.mode not in ("practice", "listen"):
+        if self.source_identity.plan is None or bpm <= 0 or self.transport.mode not in ("practice", "listen"):
             return float(bpm)
         tempo = self.tempo_map_cache.get(self.source_identity.plan.active_stage, bpm)
         return float(tempo.bpm_at(from_beat)) if tempo is not None else float(bpm)
@@ -125,18 +125,18 @@ class TransportTiming:
                               reading_lead_included: bool = False,
                               announce: bool = True,
                               short_deadline: float | None = None):
-        self.playback_session.schedule_preparation(PreparationRequest(
+        self.transport.schedule_preparation(PreparationRequest(
             self.score_read.source_model(),target,now,from_visual,reverse_seconds,
-            self.presentation_bpm(),self.visual_transport.continuous_horizon_beats,
+            self.presentation_bpm(),self.transport.continuous_horizon_beats,
             reading_lead_included,announce,short_deadline))
 
     def visual_motion(self, now: float) -> tuple[float, float, float]:
         """Read the one transport projection, including authored tempo and silence."""
         phrase = self.source_identity.plan.active_phrase
-        return self.visual_transport.position(
+        return self.transport.position(
             now, phrase_length=phrase.sounding_end-phrase.start, bpm=self.source_identity.plan.bpm,
-            running=self.playback_session.running,
-            pending_auto_result=(self.attempt_settlement.pending_result is not None and self.playback_session.auto),
+            running=self.transport.running,
+            pending_auto_result=(self.attempt_settlement.pending_result is not None and self.transport.auto),
             tempo_map=self.active_tempo_map())
 
     def update_short_rest(self, kwargs: dict) -> None:
@@ -152,7 +152,7 @@ class TransportTiming:
         header = kwargs.get("continuation_header_beats")
         if clear is None or header is None:
             return
-        self.visual_transport.report_rest_geometry(clear, header)
+        self.transport.report_rest_geometry(clear, header)
 
     def collect_rest_measurement(self, *,
                                   from_beat: float = 0.0,
@@ -163,14 +163,14 @@ class TransportTiming:
         This routine has no timing arithmetic. The musical scheduler owns
         the outgoing/incoming tempo conversion, count-in and deadline.
         """
-        if self.visual_transport.short_rest is None or self.source_identity.plan is None or self.presentation_bpm() <= 0:
+        if self.transport.short_rest is None or self.source_identity.plan is None or self.presentation_bpm() <= 0:
             return None
-        clear, header = self.visual_transport.short_rest
+        clear, header = self.transport.short_rest
         outgoing_bpm = self.presentation_bpm()
         if source_end is None:
-            if self.visual_transport.rest_take_end is None:
+            if self.transport.rest_take_end is None:
                 return None
-            source_end,outgoing_bpm = self.visual_transport.rest_take_end
+            source_end,outgoing_bpm = self.transport.rest_take_end
         _, bar, _ = self.attempt_progression.count_in_bar(
             phrase=self.source_identity.plan.active_phrase,
             boundaries=self.source_identity.plan.piece.bar_boundaries,
@@ -179,12 +179,12 @@ class TransportTiming:
         return RestMeasurement(
             source_end=source_end,outgoing_bpm=outgoing_bpm,
             clear_beats=clear,header_beats=header,
-            count_in_beats=bar,tempo_epoch=self.visual_transport.tempo_epoch)
+            count_in_beats=bar,tempo_epoch=self.transport.tempo_epoch)
 
     def update_continuous_horizon(self, value) -> None:
         if value is None:
             return
-        self.visual_transport.configure_reading_horizon(value)
+        self.transport.configure_reading_horizon(value)
 
     def musical_seconds(self, at: float) -> float:
         """Graded musical time of wall instant ``at``, in seconds since run_at.
@@ -195,6 +195,6 @@ class TransportTiming:
         lead): a key held across the pause excludes the paused interval, and
         a key-up while paused or in the lead counts at the pause moment.
         """
-        return self.visual_transport.musical_seconds(
+        return self.transport.musical_seconds(
             at,grading_after=self.midi_ingress.resume_grading_after)
 

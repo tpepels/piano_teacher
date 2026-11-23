@@ -10,16 +10,15 @@ from .learning_capture import identifier
 
 class SettingsWorkflows:
     def __init__(self, *, library, measurement, lifecycle, notices,
-                 policy_registry, midi_key_shortcuts, playback_session,
-                 visual_transport, progress, library_health, source_identity):
+                 policy_registry, midi_key_shortcuts, transport,
+                 progress, library_health, source_identity):
         self.library = library
         self.measurement = measurement
         self.lifecycle = lifecycle
         self.notices = notices
         self.policy_registry = policy_registry
         self.midi_key_shortcuts = midi_key_shortcuts
-        self.playback_session = playback_session
-        self.visual_transport = visual_transport
+        self.transport = transport
         self.progress = progress
         self.library_health = library_health
         self.source_identity = source_identity
@@ -62,7 +61,7 @@ class SettingsWorkflows:
             # source. Preserve those exposures; new Tempo takes use the
             # newly installed rule. Invalidate any graded attempt/continuation
             # so an existing recorder cannot mix two grading policies.
-            if self.playback_session.mode in ("practice", "perform"):
+            if self.transport.mode in ("practice", "perform"):
                 self.lifecycle.stop(reason="grading_rule_changed")
                 self.notices.publish(
                     "Note-hold grading changed",
@@ -73,7 +72,7 @@ class SettingsWorkflows:
         self.measurement.event("settings_applied", {
             "intent_id": intent, "changes": changes})
         if {"evidence_retention_days", "evidence_budget_mib"} & changes.keys():
-            if self.playback_session.running and not self.visual_transport.paused:
+            if self.transport.running and not self.transport.paused:
                 pause_current()
             self.progress.ledger.prune(
                 days=proposed["evidence_retention_days"],

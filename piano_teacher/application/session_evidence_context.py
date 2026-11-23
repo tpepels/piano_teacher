@@ -7,10 +7,10 @@ from __future__ import annotations
 
 
 class SessionEvidenceContext:
-    def __init__(self, *, source_identity, playback_session, guided_session,
+    def __init__(self, *, source_identity, transport, guided_session,
                  learning_evidence):
         self.source_identity = source_identity
-        self.playback_session = playback_session
+        self.transport = transport
         self.guided_session = guided_session
         self.learning_evidence = learning_evidence
 
@@ -22,10 +22,10 @@ class SessionEvidenceContext:
             fingerprint=self.source_identity.fingerprint,
             scope=scope, start=start, end=end, run_at=run_at,
             tempo_map=tempo_map,
-            transport_id=self.playback_session.transport_id,
+            transport_id=self.transport.transport_id,
             score_revision=self.source_identity.revision,
-            count_in_beats=self.playback_session.count_in_beats,
-            count_in_meter=self.playback_session.count_in_meter,
+            count_in_beats=self.transport.count_in_beats,
+            count_in_meter=self.transport.count_in_meter,
             guided_config=teaching.config if teaching is not None else None,
             persistent_hints=self.guided_session.persistent_hints,
             variant=(self.guided_session.fragment.variant

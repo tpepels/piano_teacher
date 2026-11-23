@@ -181,13 +181,11 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
     worker.poll_midi = lambda: None
     worker.midi_calibration = SimpleNamespace(advance=lambda now: None)
     worker.exposure_workflows = SimpleNamespace(apply_listen_failure=lambda: None)
-    worker.playback_session = SimpleNamespace(
+    worker.transport = SimpleNamespace(
         mode="practice", running=True, preview_only=False,
-        awaiting_score_revision=None)
-    worker.playback = SimpleNamespace(intent=None)
-    worker.guided_session = SimpleNamespace(controller=None)
-    worker.visual_transport = SimpleNamespace(
+        awaiting_score_revision=None, intent=None,
         paused=False, run_at=100.0, preparation_pending=False)
+    worker.guided_session = SimpleNamespace(controller=None)
     worker.midi_ingress = SimpleNamespace(resume_grading_after=0.0)
     worker.attempt_settlement = owner
     worker.attempt = SimpleNamespace(performance_summary=None)
@@ -204,7 +202,7 @@ def test_worker_replays_pending_rolling_result_before_grading_next_boundary():
     assert worker.update_transition() is False
     assert applied == [(frozen.decision, frozen.phrase, frozen.grid,
                         frozen.score_beat, 110.0)]
-    worker.playback.intent = object()
+    worker.transport.intent = object()
     worker.run_pre_assessment_transition = lambda now: (True, False)
     assert worker.update_transition() is False
     assert len(applied) == 1  # External admission is still authoritative.

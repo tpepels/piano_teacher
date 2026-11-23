@@ -13,7 +13,7 @@ from ..learning import LearningPlan
 class HistoryManagement:
     def __init__(self, *, source_identity, lesson_cursor, notices, progress,
                  measurement, recovery_streak, lifecycle, attempt_settlement,
-                 attempt, playback_session, guided_session, score_artifact_registry,
+                 attempt, transport, guided_session, score_artifact_registry,
                  learning_evidence, clock, data_dir):
         self.source_identity = source_identity
         self.lesson_cursor = lesson_cursor
@@ -24,7 +24,7 @@ class HistoryManagement:
         self.lifecycle = lifecycle
         self.attempt_settlement = attempt_settlement
         self.attempt = attempt
-        self.playback_session = playback_session
+        self.transport = transport
         self.guided_session = guided_session
         self.score_artifact_registry = score_artifact_registry
         self.learning_evidence = learning_evidence
@@ -60,7 +60,7 @@ class HistoryManagement:
         self.source_identity.replace_plan(replacement)
         self.recovery_streak.clear()
         self.lesson_cursor.select_opening(0.0)
-        self.playback_session.select_source()
+        self.transport.select_source()
         self.guided_session.clear_selection()
         self.score_artifact_registry.invalidate()
         self.source_identity.advance_revision()
@@ -110,11 +110,11 @@ class HistoryManagement:
         self.source_identity.replace_plan(replacement)
         self.lesson_cursor.select_opening(0.0)
         self.lesson_cursor.set_course_guided(False)
-        self.playback_session.select_source()
+        self.transport.select_source()
         self.guided_session.clear_selection()
         self.score_artifact_registry.invalidate()
         self.source_identity.advance_revision()
-        self.playback_session.wait_for_player()
+        self.transport.wait_for_player()
         self.notices.publish(
             "Lesson path reset to its first step",
             "Press Play when you are ready.")

@@ -26,8 +26,8 @@ class CommandEffect:
 
 class TeachingDecisions:
     def __init__(self, *, source_identity, lesson_cursor, attempt,
-                 attempt_settlement, measurement, playback_session,
-                 visual_transport, guided_session, recovery_streak,
+                 attempt_settlement, measurement, transport,
+                 guided_session, recovery_streak,
                  policy_registry, library, fukuda_mistakes, learner_progress,
                  learning_evidence, clock):
         self.source_identity = source_identity
@@ -35,8 +35,7 @@ class TeachingDecisions:
         self.attempt = attempt
         self.attempt_settlement = attempt_settlement
         self.measurement = measurement
-        self.playback_session = playback_session
-        self.visual_transport = visual_transport
+        self.transport = transport
         self.guided_session = guided_session
         self.recovery_streak = recovery_streak
         self.policy_registry = policy_registry
@@ -50,7 +49,7 @@ class TeachingDecisions:
     def retry_context(self, result, *, end_beat=None):
         return self.learning_evidence.adaptive_context(
             result, plan=self.source_identity.plan, fingerprint=self.source_identity.fingerprint,
-            from_beat=self.visual_transport.play_from_beat,
+            from_beat=self.transport.play_from_beat,
             end_beat=end_beat)
 
     def valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
@@ -61,7 +60,7 @@ class TeachingDecisions:
         owner = self.attempt_settlement
         return TeachingBinding(self.measurement.run_id, self.measurement.session_id,
             self.source_identity.fingerprint, self.source_identity.plan.identity, owner.course_revision,
-            owner.authority_revision, self.playback_session.transport_id, owner.cancellation_generation)
+            owner.authority_revision, self.transport.transport_id, owner.cancellation_generation)
 
     def prepare(self, kind, result=None, *, rolling=None, manual=None, action=None,
                           from_beat=None, end_beat=None, store=True, values=None, completed=False, assisted_count=0):
@@ -72,8 +71,8 @@ class TeachingDecisions:
             assisted_count=assisted_count, completed=completed, reason=values.get("reason"),
             bar=values.get("bar"), first_bar=values.get("first_bar"), last_bar=values.get("last_bar"),
             scope=values.get("scope"), requested_stage=values.get("stage_key"), requested_mode=values.get("mode"))
-        scope = completion_route(self.playback_session.mode, self.attempt.review_end_beat,
-            self.visual_transport.play_from_beat,
+        scope = completion_route(self.transport.mode, self.attempt.review_end_beat,
+            self.transport.play_from_beat,
             full_from_beat=p.active_phrase.first_attack_beat)
         if self.attempt.automatic_remedial_review and scope == "section_review":
             scope = "partial_recovery"
@@ -83,10 +82,10 @@ class TeachingDecisions:
         state = TeachingState(1, self.binding(), p.course_state(), policy,
             tuple(sorted(self.fukuda_mistakes.evidence(self.source_identity.fingerprint).items())) if self.source_identity.fingerprint else (),
             history, self.retry_context(result, end_beat=end_beat) if result is not None and (policy.whole_handler is not None or policy.rolling_handler is not None) else None,
-            TeachingRouteFacts(mode=self.playback_session.mode, automatic=self.playback_session.auto, warmup=self.source_identity.warmup,
-                preview_only=self.playback_session.preview_only, assistance_used=self.measurement.assistance_used,
+            TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto, warmup=self.source_identity.warmup,
+                preview_only=self.transport.preview_only, assistance_used=self.measurement.assistance_used,
                 scope=scope, performed_bpm=self.attempt_settlement.pending_assessed_bpm or p.bpm,
-                from_beat=self.visual_transport.play_from_beat,
+                from_beat=self.transport.play_from_beat,
                 end_beat=end_beat if end_beat is not None else p.active_phrase.sounding_end-p.active_phrase.start,
                 course_guided=self.lesson_cursor.course_guided, guided_return=self.guided_session.return_context,
                 guided_range=self.guided_session.beat_range, review_end_beat=self.attempt.review_end_beat,
@@ -101,9 +100,9 @@ class TeachingDecisions:
                 review=tuple((u["first_bar"],u["last_bar"],u["start_beat"],u["end_beat"],u["errors"])
                     for u in (self.attempt.performance_summary or {}).get("sections",())),
                 review_current=self.attempt.review_stage_identity == p.identity,
-                paused=self.visual_transport.paused,
+                paused=self.transport.paused,
                 guidance_completed=bool(self.guided_session.controller is not None and self.guided_session.controller.snapshot(now=self.clock())["completed"]),
-                open_from_beat=self.lesson_cursor.opening_beat,pending_rewind=self.visual_transport.pending_rewind))
+                open_from_beat=self.lesson_cursor.opening_beat,pending_rewind=self.transport.pending_rewind))
         if not store:
             decision = p.lesson_generator.decide_teaching(event, state)
             validate_teaching_decision(decision, event=event, state=state)

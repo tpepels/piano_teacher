@@ -9,15 +9,16 @@ from .midi_ingress import MidiInputFacts, InputTransportFacts
 
 
 class MidiApplicationInput:
-    def __init__(self, *, source_identity, visual_transport, playback_session,
-                 attempt_settlement, attempt, playback, midi, lock,
+    def __init__(self, *, source_identity, transport, 
+                 attempt_settlement, attempt, midi, lock,
                  runtime_timings, device_workflows, teaching_decisions,
                  settings_workflows, library, midi_ingress, transport_timing,
                  live_feedback_workflows, guided_session,
                  timed_playback, clock):
-        self.source_identity, self.visual_transport = source_identity, visual_transport
-        self.playback_session, self.attempt_settlement, self.attempt = playback_session, attempt_settlement, attempt
-        self.playback, self.midi, self.lock = playback, midi, lock
+        self.source_identity = source_identity
+        self.transport = transport
+        self.attempt_settlement, self.attempt = attempt_settlement, attempt
+        self.midi, self.lock = midi, lock
         self.runtime_timings, self.device_workflows = runtime_timings, device_workflows
         self.teaching_decisions, self.settings_workflows = teaching_decisions, settings_workflows
         self.library, self.midi_ingress = library, midi_ingress
@@ -76,17 +77,17 @@ class MidiApplicationInput:
     def midi_transport_facts(self) -> InputTransportFacts:
         """Snapshot only the transport gates needed by the one MIDI router."""
         return InputTransportFacts(
-            next_at=self.visual_transport.next_at,
-            preview_loop_pending=self.visual_transport.preview_loop_pending,
+            next_at=self.transport.next_at,
+            preview_loop_pending=self.transport.preview_loop_pending,
             pending_teaching_result=self.attempt_settlement.pending_result is not None,
-            pending_rewind=self.visual_transport.pending_rewind is not None,
-            automatic=self.playback_session.auto,preview_only=self.playback_session.preview_only,
-            visual_gap_beats=self.visual_transport.visual_gap_beats,
-            awaiting_score=self.playback_session.awaiting_score_revision is not None,
+            pending_rewind=self.transport.pending_rewind is not None,
+            automatic=self.transport.auto,preview_only=self.transport.preview_only,
+            visual_gap_beats=self.transport.visual_gap_beats,
+            awaiting_score=self.transport.awaiting_score_revision is not None,
             exercise_kind=(self.source_identity.plan.exercise.kind if self.source_identity.plan else ""),
             review_end_beat=self.attempt.review_end_beat,
-            successor_action=(self.playback.intent.action
-                if self.playback.intent is not None else None))
+            successor_action=(self.transport.intent.action
+                if self.transport.intent is not None else None))
 
     def apply_midi_shortcut(self, effect) -> None:
         # The input adapter cannot change settings or select a lesson action.
@@ -106,9 +107,9 @@ class MidiApplicationInput:
         facts = MidiInputFacts(self.source_identity.fingerprint,self.source_identity.revision,
             self.source_identity.plan.identity if self.source_identity.plan else "",self.source_identity.plan.active_phrase if self.source_identity.plan else None,
             self.source_identity.plan.hand if self.source_identity.plan else "both",self.source_identity.plan.bpm if self.source_identity.plan else 60.,
-            self.playback_session.mode,self.playback_session.running,self.visual_transport.paused,self.playback_session.preview_only,
-            self.visual_transport.play_from_beat,self.visual_transport.run_at,self.playback_session.transport_id,
-            self.transport_timing.active_tempo_map(),self.playback_session.running or (self.playback_session.mode == "learn" and self.guided_session.controller is not None),
+            self.transport.mode,self.transport.running,self.transport.paused,self.transport.preview_only,
+            self.transport.play_from_beat,self.transport.run_at,self.transport.transport_id,
+            self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.guided_session.controller is not None),
             self.attempt_settlement.cancellation_generation,
             self.midi.device)
         self.midi_ingress.dispatch(

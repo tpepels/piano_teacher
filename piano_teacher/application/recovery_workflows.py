@@ -15,14 +15,14 @@ from .musical_scheduler import SCHEDULER
 
 class RecoveryWorkflows:
     def __init__(self, *, source_identity, lesson_cursor, notices, attempt,
-                 playback_session, visual_transport, transport_timing,
+                 transport, transport_timing,
                  timed_playback, lesson_execution, exposure_workflows,
                  attempt_settlement, policy_registry, library, recovery_streak,
                  live_feedback_workflows, live_assessment, teaching_decisions,
                  clock, feedback_seconds):
         self.source_identity, self.lesson_cursor = source_identity, lesson_cursor
         self.notices, self.attempt = notices, attempt
-        self.playback_session, self.visual_transport = playback_session, visual_transport
+        self.transport = transport
         self.transport_timing, self.timed_playback = transport_timing, timed_playback
         self.lesson_execution, self.exposure_workflows = lesson_execution, exposure_workflows
         self.attempt_settlement, self.policy_registry = attempt_settlement, policy_registry
@@ -55,13 +55,13 @@ class RecoveryWorkflows:
         else:
             if prepared.action == "prepare" and prepared.assignment is not None:
                 self.exposure_workflows.prepare_practice(exposure=exposure)
-                self.playback_session.wait_for_player()
+                self.transport.wait_for_player()
             self.lesson_cursor.select_opening(prepared.start)
             self.attempt.prepare_recovery(prepared)
             if prepared.action == "pause":
-                self.playback_session.stop_automatic()
-                self.visual_transport.cancel_preparation()
-                self.visual_transport.cancel_continuation()
+                self.transport.stop_automatic()
+                self.transport.cancel_preparation()
+                self.transport.cancel_continuation()
             elif prepared.action == "guided":
                 self.lesson_execution.begin_learn(
                     from_beat=prepared.start, recovery=True,
@@ -105,7 +105,7 @@ class RecoveryWorkflows:
         prepared = prepare_remedial(
             self.exposure_workflows.source(), assignment, exposure,
             has_deadline=deadline is not None,
-            automatic=self.playback_session.auto)
+            automatic=self.transport.auto)
         if prepared is None:
             raise ValueError("Remediation belongs to a superseded source stage")
         self._apply_prepared_recovery(
@@ -123,17 +123,17 @@ class RecoveryWorkflows:
             # not recompute them from a new BPM or paused source clock.
             self.attempt.publish_live_marks(
                 self.live_feedback_workflows.live_feedback(
-                    now-self.visual_transport.run_at))
+                    now-self.transport.run_at))
             self.live_assessment.publish(
                 self.attempt.feedback_marks,
                 self.live_feedback_workflows.feedback_take())
         outgoing_bpm = self.source_identity.plan.bpm
-        scored_end = self.visual_transport.run_at + (
+        scored_end = self.transport.run_at + (
             self.transport_timing.elapsed_seconds(decision.end_beat) -
-            self.transport_timing.elapsed_seconds(self.visual_transport.play_from_beat))
+            self.transport_timing.elapsed_seconds(self.transport.play_from_beat))
         hand = self.source_identity.plan.hand
         notes = self.attempt.recorder.presses if self.attempt.recorder else ()
-        from_beat = self.visual_transport.play_from_beat
+        from_beat = self.transport.play_from_beat
         score_revision = self.source_identity.revision
         if saved is not None:
             if self.source_identity.revision != saved.take.score_revision:
@@ -158,16 +158,16 @@ class RecoveryWorkflows:
                 score_revision=score_revision,
                 policy=resolve_mistake_policy(self.library.settings["mistake_response_strategy"]))
         except Exception:
-            self.playback_session.finish_take()
-            self.playback_session.stop_automatic()
-            self.playback_session.freeze_after_fault(now)
+            self.transport.finish_take()
+            self.transport.stop_automatic()
+            self.transport.freeze_after_fault(now)
             self.notices.fault("Could not save the retry evidence",
                 "Check storage, then Resume to save this same attempt.")
             raise
         if completed.transition is None:
             from ..measure_grid import next_chunk_end
             following = next_chunk_end(grid, decision.end_beat)
-            self.visual_transport.advance_boundary(following if following > decision.end_beat+1e-7 else 0.)
+            self.transport.advance_boundary(following if following > decision.end_beat+1e-7 else 0.)
             return
         try:
             self._install_rolling_recovery(completed, score_beat=score_beat, now=now)
@@ -175,9 +175,9 @@ class RecoveryWorkflows:
             # A durable receipt may already have installed some source
             # effects. Stop the old graded clock and keep its pending receipt.
             # Explicit Retry replays only unacknowledged effect names.
-            self.playback_session.finish_take()
-            self.playback_session.stop_automatic()
-            self.playback_session.freeze_after_fault(now)
+            self.transport.finish_take()
+            self.transport.stop_automatic()
+            self.transport.freeze_after_fault(now)
             self.notices.fault("Could not apply the saved recovery",
                 "Press Resume to finish this same saved recovery.")
             raise
@@ -188,12 +188,12 @@ class RecoveryWorkflows:
         transition = completed.transition
         outgoing_bpm,scored_end = completed.outgoing_bpm,completed.scored_end
         apply = self.attempt_settlement.rolling_effect
-        apply(completed, "tempo", lambda: self.visual_transport.note_tempo(
+        apply(completed, "tempo", lambda: self.transport.note_tempo(
             stage=self.source_identity.plan.identity,
             bpm=self.transport_timing.presentation_bpm(), now=now))
         short_deadline = None
         if transition.uses_completed_rest:
-            apply(completed, "take_end", lambda: self.visual_transport.record_take_end(
+            apply(completed, "take_end", lambda: self.transport.record_take_end(
                 at=scored_end, bpm=outgoing_bpm))
             short_deadline = SCHEDULER.measured_rest(
                 self.transport_timing.collect_rest_measurement(
@@ -201,7 +201,7 @@ class RecoveryWorkflows:
                 now=now, bpm=self.transport_timing.presentation_bpm())
         apply(completed, "prepare", lambda: self.transport_timing.schedule_preparation(
             transition.restart_beat, now=now,
-            from_visual=self.visual_transport.visual_offset_beats + score_beat,
+            from_visual=self.transport.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds, short_deadline=short_deadline))
         apply(completed, "streak", lambda: self.recovery_streak.record(
             transition.trouble_key, transition.trouble_count))
@@ -209,17 +209,17 @@ class RecoveryWorkflows:
         if transition.guided:
             # Guided recovery must never re-withdraw an already processed
             # immutable future announcement during a publication retry.
-            apply(completed, "withdraw", self.visual_transport.withdraw_announcement)
+            apply(completed, "withdraw", self.transport.withdraw_announcement)
         def publish_notices():
             self.notices.feedback = transition.feedback
             self.notices.next_action = transition.next_action
         apply(completed, "notices", publish_notices)
         if transition.action == "pause":
-            apply(completed, "stop_auto", self.playback_session.stop_automatic)
+            apply(completed, "stop_auto", self.transport.stop_automatic)
             apply(completed, "cancel_preparation",
-                  self.visual_transport.cancel_preparation)
+                  self.transport.cancel_preparation)
             apply(completed, "cancel_continuation",
-                  self.visual_transport.cancel_continuation)
+                  self.transport.cancel_continuation)
         self.attempt_settlement.finish_rolling_publication(completed)
 
     def assess_rolling_boundary(self, boundary: float,
@@ -230,7 +230,7 @@ class RecoveryWorkflows:
                 self.attempt.recorder.presses if self.attempt.recorder else (),
                 boundary=boundary)
         except Exception:
-            self.playback_session.freeze_after_fault(self.clock())
+            self.transport.freeze_after_fault(self.clock())
             self.notices.fault("Could not save the recording checkpoint",
                 "Check storage, then Resume to retry this boundary.")
             raise
@@ -242,7 +242,7 @@ class RecoveryWorkflows:
         return self.policy_registry.grading.select(tempo_map).recover(
             self.source_identity.plan.active_phrase, hand=self.source_identity.plan.hand, bpm=self.source_identity.plan.bpm,
             played=self.attempt.recorder.presses if self.attempt.recorder else [],
-            from_beat=self.visual_transport.play_from_beat, end_beat=boundary, grid=grid,
+            from_beat=self.transport.play_from_beat, end_beat=boundary, grid=grid,
             threshold=course_rules(
                 self.source_identity.plan.lesson_definition.generator_name,
                 warmup=self.source_identity.warmup).recovery_errors_in_window,

@@ -37,7 +37,7 @@ class PracticeEngine:
 
     def playback_status(self) -> dict:
         with self.lock:
-            return self.playback.status(self.transport_timing.playback_facts())
+            return self.transport.status(self.transport_timing.playback_facts())
 
     def reserve_playback(self, **values) -> dict:
         return self.practice_session.apply(PlaybackReserved(values))
