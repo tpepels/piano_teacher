@@ -156,11 +156,8 @@ class SessionReadModels:
             feedback_unmapped=self.take.feedback_unmapped,
             fingerprint=self.lesson.fingerprint,
             guided_range=self.lesson.guided_beat_range,
-            guided_open_at=(self.score.guided_open_at((
-                self.lesson.fingerprint,
-                self.lesson.plan.identity if self.lesson.plan else "",
-                self.lesson.revision, self.transport.transport_id))
-                if self.transport.mode == "learn" else None),
+            guided_open_at=self.score.free_target_arrival(
+                self.lesson, self.transport),
             is_builtin_warmup=self.lesson.warmup,
             metronome=self.library.settings["metronome"],
             midi_input_count=self.midi_input.input_count,

@@ -53,7 +53,8 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
     }
 
 
-def event_handlers(*, commands, tick, epoch, midi_input, midi_application_input,
+def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
+                   midi_device, midi_callback,
                    settings_workflows, timed_playback, transport_commands,
                    source_installation, library_opening, lesson, lesson_execution, score_preload,
                    device_workflows, history_management, lifecycle):
@@ -69,7 +70,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_application_input,
                 midi_input.discard_stale_release(event.message)
                 midi_input.observe_midi(event.message, now=event.received_at)
             return None
-        return midi_application_input.deliver(
+        return midi_delivery.deliver(
             event.message, received_at=event.received_at,
             corrected_at=event.corrected_at, deferred=event.deferred)
 
@@ -105,8 +106,8 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_application_input,
             source_installation.install_fingering_correction(e.corrected),
         SettingsChanged: lambda e: settings_workflows.update(
             e.changes, pause_current=timed_playback.pause),
-        MidiPortsRequested: lambda e: midi_application_input.ports(),
-        DeviceSelected: lambda e: midi_application_input.connect(e.name),
+        MidiPortsRequested: lambda e: midi_device.ports(),
+        DeviceSelected: lambda e: midi_device.connect(e.name),
         PreloadReady: lambda e: score_preload.acknowledge_preloaded_stage(
             stage_key=e.stage_key, revision=e.revision),
         PreloadFailed: lambda e: score_preload.report_preload_failure(
@@ -120,5 +121,5 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_application_input,
         LearnerHistoryDeleted: lambda e: history_management.delete_learner(
             confirm=e.confirm),
         SessionClosed: lambda e: lifecycle.shutdown(
-            receive=midi_application_input.receive),
+            receive=midi_callback.receive),
     }

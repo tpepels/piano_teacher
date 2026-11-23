@@ -126,8 +126,13 @@ class Score:
     def publish_score_state(self, *args, **kwargs):
         return self._publisher.publish(*args, **kwargs)
 
-    def guided_open_at(self, *args, **kwargs):
-        return self._publisher.guided_open_at(*args, **kwargs)
+    def free_target_arrival(self, lesson, transport) -> float | None:
+        """When the current Free target reaches the playhead (None outside Free)."""
+        if transport.mode != "learn":
+            return None
+        return self._publisher.guided_open_at((
+            lesson.fingerprint, lesson.plan.identity if lesson.plan else "",
+            lesson.revision, transport.transport_id))
 
     def reset_guided_score(self, *args, **kwargs):
         return self._publisher.reset_guided(*args, **kwargs)

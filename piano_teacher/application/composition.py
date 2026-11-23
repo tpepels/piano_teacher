@@ -48,7 +48,7 @@ from .lesson_cursor import LessonCursor
 from .lesson_execution import LessonExecution
 from .listen_session import ListenSession
 from .live_feedback_workflows import LiveFeedbackWorkflows
-from .midi_application_input import MidiApplicationInput
+from .midi_application_input import MidiCallback, MidiDelivery, MidiDeviceConnection
 from .midi_connection import MidiConnection
 from .midi_ingress import MidiIngress
 from .midi_key_shortcuts import MidiKeyShortcuts
@@ -364,21 +364,27 @@ def _event_boundary(r) -> None:
         recovery_workflows=r.recovery_workflows, score=r.score,
         timed_playback=r.timed_playback, transport_timing=r.transport_timing)
 
-    r.midi_application_input = MidiApplicationInput(
+    r.midi_callback = MidiCallback(
+        runtime_timings=r.runtime_timings, clock=r.now)
+    r.midi_delivery = MidiDelivery(
         lesson=r.lesson, transport=r.transport, take=r.take,
-        midi_input=r.midi_input, score=r.score, lock=r.lock,
-        runtime_timings=r.runtime_timings, device_workflows=r.device_workflows,
-        settings_workflows=r.settings_workflows, library=r.library,
+        midi_input=r.midi_input, score=r.score, library=r.library,
         transport_timing=r.transport_timing,
         live_feedback_workflows=r.live_feedback_workflows,
-        timed_playback=r.timed_playback, notices=r.notices, clock=r.now)
+        notices=r.notices, apply_shortcut=r.midi_callback.apply_shortcut)
+    r.midi_device = MidiDeviceConnection(
+        lesson=r.lesson, midi_input=r.midi_input,
+        device_workflows=r.device_workflows,
+        settings_workflows=r.settings_workflows,
+        timed_playback=r.timed_playback,
+        receive=r.midi_callback.receive, lock=r.lock)
 
     r.practice_timeline = PracticeTimeline(
         observations=TickObservations(
             lesson=r.lesson, transport=r.transport, take=r.take,
             midi_input=r.midi_input, listen_outcomes=r.listen_outcomes,
             measurement=r.measurement,
-            poll_midi=r.midi_application_input.poll_midi_connection,
+            poll_midi=r.midi_device.poll_midi_connection,
             clock=r.now),
         transitions=PreAssessmentTransitions(
             lesson=r.lesson, transport=r.transport, take=r.take,
@@ -399,7 +405,7 @@ def _event_boundary(r) -> None:
     r.midi_epoch = MidiEpoch(
         lesson=r.lesson, transport=r.transport, take=r.take,
         midi_input=r.midi_input,
-        corrected_time=r.midi_application_input.corrected_time)
+        corrected_time=r.midi_delivery.corrected_time)
     r.command_router = CommandRouter(
         lesson=r.lesson, transport=r.transport, take=r.take,
         read_models=r.read_models, measurement=r.measurement,
@@ -415,7 +421,7 @@ def _event_boundary(r) -> None:
         timeline=r.practice_timeline, publisher=r.tick_publisher,
         transport=r.transport, take=r.take,
         lesson=r.lesson, midi_input=r.midi_input, epoch=r.midi_epoch,
-        deliver=r.midi_application_input.deliver, notices=r.notices,
+        deliver=r.midi_delivery.deliver, notices=r.notices,
         clock=r.now)
     r.practice_session = PracticeSession(
         lock=r.lock, epoch=r.midi_epoch,
@@ -423,7 +429,8 @@ def _event_boundary(r) -> None:
     r.practice_session.bind_handlers(event_handlers(
         commands=r.command_router, tick=r.tick_worker, epoch=r.midi_epoch,
         midi_input=r.midi_input,
-        midi_application_input=r.midi_application_input,
+        midi_delivery=r.midi_delivery, midi_device=r.midi_device,
+        midi_callback=r.midi_callback,
         settings_workflows=r.settings_workflows,
         timed_playback=r.timed_playback,
         transport_commands=r.transport_commands,
@@ -433,4 +440,4 @@ def _event_boundary(r) -> None:
         device_workflows=r.device_workflows,
         history_management=r.history_management,
         lifecycle=r.session_lifecycle))
-    r.midi_application_input.bind_session(r.practice_session)
+    r.midi_callback.bind_session(r.practice_session)
