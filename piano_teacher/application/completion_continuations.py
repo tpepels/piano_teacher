@@ -14,14 +14,14 @@ from .passage_outcome_presenter import performance_next_action
 
 class TakeCompletion:
     def __init__(self, *, lesson, notices, take, transport, transport_timing,
-                 timed_playback, selected_recovery, lesson_execution,
+                 continuation, selected_recovery, lesson_execution,
                  grading, settlement):
         self.lesson = lesson
         self.notices = notices
         self.take = take
         self.transport = transport
         self.transport_timing = transport_timing
-        self.timed_playback = timed_playback
+        self.continuation = continuation
         self.selected_recovery = selected_recovery
         self.lesson_execution = lesson_execution
         self.grading = grading
@@ -54,7 +54,7 @@ class TakeCompletion:
             self.notices.next_action = "Connect your MIDI piano to earn progress."
             # The next preview must be admitted during the rest, not at
             # the previous retry deadline after its count-in is over.
-            self.timed_playback.continue_at(self.transport.next_at,
+            self.continuation.continue_at(self.transport.next_at,
                 from_beat=0.0)
             return False
         completed_visual = self.transport_timing.visual_motion(now)[0]

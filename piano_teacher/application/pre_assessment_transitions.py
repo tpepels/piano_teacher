@@ -10,7 +10,7 @@ from . import practice_flow
 
 class PreAssessmentTransitions:
     def __init__(self, *, lesson, transport, take, midi_input,
-                 lesson_execution, listen_outcomes, timed_playback,
+                 lesson_execution, listen_outcomes, continuation,
                  settlement):
         self.lesson = lesson
         self.transport = transport
@@ -18,7 +18,7 @@ class PreAssessmentTransitions:
         self.midi_input = midi_input
         self.lesson_execution = lesson_execution
         self.listen_outcomes = listen_outcomes
-        self.timed_playback = timed_playback
+        self.continuation = continuation
         self.settlement = settlement
 
     def run(self, now: float) -> tuple[bool, bool]:
@@ -50,7 +50,7 @@ class PreAssessmentTransitions:
                         and self.lesson.flow_state.step is practice_flow.Step.LISTEN):
                     self.lesson_execution.flow_execute(self.lesson.flow_listen_finished())
         elif decision.action == "preview_due":
-            self.timed_playback.continue_preview()
+            self.continuation.continue_preview()
         elif decision.action == "feedback":
             followup = self.settlement.feedback_due(now)
         elif decision.action == "rewind_due":
@@ -58,6 +58,6 @@ class PreAssessmentTransitions:
                 self.lesson_execution.begin_learn(from_beat=self.transport.pending_rewind, recovery=True,
                     exposure=self.take.pending.decision.next_exposure)
             else:
-                self.timed_playback.continue_measured(
+                self.continuation.continue_measured(
                     self.transport.next_at, from_beat=self.transport.pending_rewind)
         return decision.consumed, followup

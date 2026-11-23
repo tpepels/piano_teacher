@@ -1,30 +1,29 @@
-"""Apply authorized timed take starts, Listen readiness and transport pauses.
+"""Timed playback in three owners: start, continuation, pause/resume.
 
-All timed starts require PlaybackCoordinator's physical receipt in desktop
-mode. The approved lesson and source identity are consumed, never reselected.
+TimedStart opens the one take a physical receipt authorized; the approved
+lesson and source identity are consumed, never reselected.
+PlaybackContinuation requests the next admission at a deadline.
+PauseResume freezes and resumes the timeline and Free, and starts Listen
+once its score and audio are ready.
 """
 from __future__ import annotations
 from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest, RestResumeFacts
 from .musical_scheduler import SCHEDULER
 
 
-class TimedPlayback:
+class TimedStart:
     def __init__(self, *, lesson, notices, transport, take, exposure_workflows,
-                          listen_outcomes,
-                          midi_input, score, evidence_context,
-                          transport_timing, lesson_execution, clock, lock,
-                          phase):
+                 midi_input, score, evidence_context, transport_timing, lock):
         self.lesson = lesson
         self.notices = notices
         self.transport = transport
         self.take = take
         self.exposure_workflows = exposure_workflows
-        self.listen_outcomes = listen_outcomes
         self.midi_input = midi_input
-        self.evidence_context = evidence_context
         self.score = score
-        self.transport_timing, self.lesson_execution = transport_timing, lesson_execution
-        self.clock, self.lock, self.phase = clock, lock, phase
+        self.evidence_context = evidence_context
+        self.transport_timing = transport_timing
+        self.lock = lock
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
               loop_continuation: bool = False, scheduled_deadline: float,
@@ -73,6 +72,17 @@ class TimedPlayback:
             self.notices.feedback = "Count in, then play"
             self.notices.next_action = started.next_action
 
+
+class PlaybackContinuation:
+    def __init__(self, *, lesson_execution, transport, transport_timing, score,
+                 notices, clock):
+        self.lesson_execution = lesson_execution
+        self.transport = transport
+        self.transport_timing = transport_timing
+        self.score = score
+        self.notices = notices
+        self.clock = clock
+
     def continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Continue only through the unified score-admission gate."""
         # Check the canonical terminal admission latch BEFORE changing
@@ -106,6 +116,19 @@ class TimedPlayback:
         self.transport.advance_source_stride(
             self.score.source_model()["practice_timeline"]["stride_beats"])
         self.continue_measured(deadline)
+
+
+class PauseResume:
+    def __init__(self, *, lesson, transport, transport_timing, midi_input,
+                 listen_outcomes, notices, phase, clock):
+        self.lesson = lesson
+        self.transport = transport
+        self.transport_timing = transport_timing
+        self.midi_input = midi_input
+        self.listen_outcomes = listen_outcomes
+        self.notices = notices
+        self.phase = phase
+        self.clock = clock
 
     def begin_listen_if_ready(self):
         self.listen_outcomes.apply_failure()
@@ -147,4 +170,3 @@ class TimedPlayback:
         if completion.feedback is not None:
             self.notices.feedback = completion.feedback
         return completion
-

@@ -119,12 +119,12 @@ class MidiDeviceConnection:
     """Scan, select, restore and lose the physical MIDI device."""
 
     def __init__(self, *, lesson, midi_input, device_workflows,
-                 settings_workflows, timed_playback, receive, lock):
+                 settings_workflows, pause_resume, receive, lock):
         self.lesson = lesson
         self.midi_input = midi_input
         self.device_workflows = device_workflows
         self.settings_workflows = settings_workflows
-        self.timed_playback = timed_playback
+        self.pause_resume = pause_resume
         self.receive = receive
         self.lock = lock
 
@@ -149,7 +149,7 @@ class MidiDeviceConnection:
         with self.lock:
             self.device_workflows.select(name, callback=self.receive)
             self.settings_workflows.update(
-                {"midi_device": name},pause_current=self.timed_playback.pause)
+                {"midi_device": name},pause_current=self.pause_resume.pause)
 
     def poll_midi_connection(self):
         if self.midi_input.device_closed:

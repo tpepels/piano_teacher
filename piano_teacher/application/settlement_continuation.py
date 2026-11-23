@@ -18,7 +18,7 @@ from .teaching_continuation import (
 class SettlementContinuation:
     def __init__(self, *, lesson, notices, score, take, transport,
                  lesson_execution, transport_timing, selected_recovery,
-                 timed_playback, mistake_policy):
+                 continuation, mistake_policy):
         self.lesson = lesson
         self.notices = notices
         self.score = score
@@ -27,7 +27,7 @@ class SettlementContinuation:
         self.lesson_execution = lesson_execution
         self.transport_timing = transport_timing
         self.selected_recovery = selected_recovery
-        self.timed_playback = timed_playback
+        self.continuation = continuation
         self.mistake_policy = mistake_policy
         # Successful effects are consumed by their exact durable identity.
         # A continuation dispatch error leaves the receipt retryable.
@@ -206,7 +206,7 @@ class SettlementContinuation:
             if applied.feedback is not None:
                 self.notices.feedback = applied.feedback
             if applied.start is not None:
-                self.timed_playback.continue_at(applied.start.deadline,from_beat=applied.start.from_beat)
+                self.continuation.continue_at(applied.start.deadline,from_beat=applied.start.from_beat)
         # Record success after every domain and physical start effect.
         # If any action raises, the same settlement receipt can replay it.
         self._applied_continuation_effect = effect

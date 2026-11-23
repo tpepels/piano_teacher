@@ -17,14 +17,14 @@ from .session_events import (
 
 
 def command_routes(*, device_workflows, settings_workflows, midi_input,
-                   transport, timed_playback, history_management,
+                   transport, pause_resume, history_management,
                    transport_commands, playback_authorization,
                    learning_commands):
     """Route family -> handler(action, kwargs, effect)."""
     def calibration(action, kwargs, effect):
         changes = device_workflows.calibrate(action, stop_reason=action)
         if changes is not None:
-            settings_workflows.update(changes, pause_current=timed_playback.pause)
+            settings_workflows.update(changes, pause_current=pause_resume.pause)
 
     def device_range(action, kwargs, effect):
         if action == "midi_range_cancel":
@@ -33,7 +33,7 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
         if not midi_input.connected:
             raise ValueError("Connect a MIDI piano before setting its key range")
         if transport.running and not transport.paused:
-            timed_playback.pause()
+            pause_resume.pause()
         midi_input.begin_key_range_capture(midi_input.device)
 
     return {
@@ -56,7 +56,7 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
 
 def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
                    midi_device, midi_callback,
-                   settings_workflows, timed_playback, playback_authorization,
+                   settings_workflows, pause_resume, playback_authorization,
                    source_installation, library_opening, lesson, lesson_execution, score_preload,
                    device_workflows, history_management, lifecycle):
     """Event type -> handler(event)."""
@@ -80,7 +80,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
         if effect.completed_range is not None:
             settings_workflows.record_midi_key_range(
                 midi_input.device, effect.completed_range,
-                pause_current=timed_playback.pause)
+                pause_current=pause_resume.pause)
         return commands.apply(effect.action) if effect.action else None
 
     def source(event):
@@ -106,7 +106,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
         FingeringCorrectionCommitted: lambda e:
             source_installation.install_fingering_correction(e.corrected),
         SettingsChanged: lambda e: settings_workflows.update(
-            e.changes, pause_current=timed_playback.pause),
+            e.changes, pause_current=pause_resume.pause),
         MidiPortsRequested: lambda e: midi_device.ports(),
         DeviceSelected: lambda e: midi_device.connect(e.name),
         PreloadReady: lambda e: score_preload.acknowledge_preloaded_stage(

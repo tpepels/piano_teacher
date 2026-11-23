@@ -15,13 +15,13 @@ from .musical_scheduler import SCHEDULER
 
 class SelectedRecovery:
     def __init__(self, *, lesson, notices, take, transport, transport_timing,
-                 timed_playback, lesson_execution, exposure_workflows, clock):
+                 continuation, lesson_execution, exposure_workflows, clock):
         self.lesson = lesson
         self.notices = notices
         self.take = take
         self.transport = transport
         self.transport_timing = transport_timing
-        self.timed_playback = timed_playback
+        self.continuation = continuation
         self.lesson_execution = lesson_execution
         self.exposure_workflows = exposure_workflows
         self.clock = clock
@@ -60,7 +60,7 @@ class SelectedRecovery:
                     from_beat=prepared.start, recovery=True,
                     exposure=self.take.pending.decision.next_exposure)
             elif prepared.action == "continue":
-                self.timed_playback.continue_measured(
+                self.continuation.continue_measured(
                     deadline, from_beat=prepared.start)
             elif prepared.action == "prepare":
                 if prepared.assignment is None:

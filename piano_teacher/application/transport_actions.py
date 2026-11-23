@@ -13,12 +13,14 @@ from .playback_transitions import PlaybackTransition
 
 
 class PlaybackAuthorization:
-    def __init__(self, *, lesson, transport, transport_timing, timed_playback,
+    def __init__(self, *, lesson, transport, transport_timing, timed_start,
+                 pause_resume,
                  lifecycle, listen, presentation, notices, clock):
         self.lesson = lesson
         self.transport = transport
         self.transport_timing = transport_timing
-        self.timed_playback = timed_playback
+        self.timed_start = timed_start
+        self.pause_resume = pause_resume
         self.lifecycle = lifecycle
         self.listen = listen
         self.presentation = presentation
@@ -60,7 +62,7 @@ class PlaybackAuthorization:
                 # TimedPlayback installs this exact decision ONCE as part of
                 # the authorized start. Do not preinstall its lesson mutation
                 # in a second transport command adapter.
-                self.timed_playback.start(mode=selected.mode,from_beat=selected.from_beat,
+                self.timed_start.start(mode=selected.mode,from_beat=selected.from_beat,
                     scheduled_deadline=authorized.deadline,count_in_plan=intent.count_in,
                     effect=authorized.transition.effect,reason=authorized.action)
             elif authorized.action == "resume":
@@ -68,7 +70,7 @@ class PlaybackAuthorization:
                     presentation_lead_seconds=max(0.0,authorized.deadline-self.clock()),
                     scheduled_deadline=authorized.deadline)
             elif authorized.action in ("auto","score_ready"):
-                self.timed_playback.start(from_beat=intent.from_beat,mode=intent.mode,
+                self.timed_start.start(from_beat=intent.from_beat,mode=intent.mode,
                     loop_continuation=authorized.action == "auto",
                     scheduled_deadline=authorized.deadline,
                     count_in_plan=intent.count_in,reason=authorized.action)
@@ -93,7 +95,7 @@ class PlaybackAuthorization:
             decision = self.transport.score_acknowledged(revision,
                 current_revision=self.lesson.revision,teaching_bound=self.lesson.guided_controller is not None)
             if decision == "listen":
-                self.timed_playback.begin_listen_if_ready()
+                self.pause_resume.begin_listen_if_ready()
             elif decision == "learn":
                 self.lesson.guided_controller.start(now=self.clock())
             elif decision == "practice":
@@ -102,11 +104,11 @@ class PlaybackAuthorization:
                 mode = "perform" if self.transport.mode == "perform" else "practice"
                 self.transport_timing.request_playback(action="score_ready",mode=mode,from_beat=position)
         elif self.transport.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
-            self.timed_playback.begin_listen_if_ready()
+            self.pause_resume.begin_listen_if_ready()
 
     def resume_current_session(self, *, presentation_lead_seconds=0.0,
                                 scheduled_deadline=None):
-        completed = self.timed_playback.resume(
+        completed = self.pause_resume.resume(
             presentation_lead_seconds=presentation_lead_seconds,
             scheduled_deadline=scheduled_deadline)
         if completed.deferred_score_revision is not None:
@@ -117,7 +119,7 @@ class PlaybackAuthorization:
                 "score_ready", {"revision": completed.deferred_score_revision},
                 reason="score_ready")
             self.presentation.prepare_score_presentation()
-        self.timed_playback.begin_listen_if_ready()
+        self.pause_resume.begin_listen_if_ready()
 
 
 
@@ -202,12 +204,12 @@ class RouteCommands:
 
 
 class TransportCommands:
-    def __init__(self, *, lesson, transport, transport_timing, timed_playback,
+    def __init__(self, *, lesson, transport, transport_timing, pause_resume,
                  score, routes, replay, authorization):
         self.lesson = lesson
         self.transport = transport
         self.transport_timing = transport_timing
-        self.timed_playback = timed_playback
+        self.pause_resume = pause_resume
         self.score = score
         self.routes = routes
         self.replay = replay
@@ -241,7 +243,7 @@ class TransportCommands:
                     mode=selected.mode, from_beat=selected.from_beat,
                     transition=transition)
         elif action == "pause":
-            self.timed_playback.pause(
+            self.pause_resume.pause(
                 pending_admission=self.transport.suspend_pending(
                     self.transport_timing.playback_facts()))
         elif action == "resume":

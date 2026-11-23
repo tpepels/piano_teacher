@@ -90,7 +90,7 @@ from .listen_outcomes import ListenOutcomes
 from .teaching_continuation import TeachingContinuation
 from .teaching_workflows import TeachingDecisions
 from .tempo_map_cache import TempoMapCache
-from .timed_playback import TimedPlayback
+from .timed_playback import TimedStart, PlaybackContinuation, PauseResume
 from .lesson import Lesson
 from .midi_input import MidiInput
 from .score import Score
@@ -289,14 +289,20 @@ def _lesson_source_and_settings_workflows(r) -> None:
 
 def _transport_and_completion(r) -> None:
     """Timed playback, live feedback, recovery, completion and read models."""
-    r.timed_playback = TimedPlayback(
+    r.timed_start = TimedStart(
         lesson=r.lesson, notices=r.notices, transport=r.transport, take=r.take,
-        exposure_workflows=r.exposure_workflows,
-        listen_outcomes=r.listen_outcomes, midi_input=r.midi_input,
+        exposure_workflows=r.exposure_workflows, midi_input=r.midi_input,
         score=r.score, evidence_context=r.evidence_context,
-        transport_timing=r.transport_timing,
-        lesson_execution=r.lesson_execution, clock=r.now, lock=r.lock,
-        phase=r.session_phase.at)
+        transport_timing=r.transport_timing, lock=r.lock)
+    r.continuation = PlaybackContinuation(
+        lesson_execution=r.lesson_execution, transport=r.transport,
+        transport_timing=r.transport_timing, score=r.score,
+        notices=r.notices, clock=r.now)
+    r.pause_resume = PauseResume(
+        lesson=r.lesson, transport=r.transport,
+        transport_timing=r.transport_timing, midi_input=r.midi_input,
+        listen_outcomes=r.listen_outcomes, notices=r.notices,
+        phase=r.session_phase.at, clock=r.now)
 
     r.live_feedback_workflows = LiveFeedbackWorkflows(
         lesson=r.lesson, transport=r.transport, score=r.score,
@@ -313,7 +319,7 @@ def _transport_and_completion(r) -> None:
         measurement=r.measurement)
     r.selected_recovery = SelectedRecovery(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
-        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
+        transport_timing=r.transport_timing, continuation=r.continuation,
         lesson_execution=r.lesson_execution,
         exposure_workflows=r.exposure_workflows, clock=r.now)
     r.rolling_recovery = RollingRecovery(
@@ -328,11 +334,11 @@ def _transport_and_completion(r) -> None:
         transport=r.transport, lesson_execution=r.lesson_execution,
         transport_timing=r.transport_timing,
         selected_recovery=r.selected_recovery,
-        timed_playback=r.timed_playback,
+        continuation=r.continuation,
         mistake_policy=r.take_grading.mistake_policy)
     r.completion_continuations = TakeCompletion(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
-        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
+        transport_timing=r.transport_timing, continuation=r.continuation,
         selected_recovery=r.selected_recovery,
         lesson_execution=r.lesson_execution, grading=r.take_grading,
         settlement=r.settlement)
@@ -386,7 +392,8 @@ def _event_boundary(r) -> None:
         notices=r.notices, transport=r.transport, progress=r.progress)
     r.playback_authorization = PlaybackAuthorization(
         lesson=r.lesson, transport=r.transport,
-        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
+        transport_timing=r.transport_timing, timed_start=r.timed_start,
+        pause_resume=r.pause_resume,
         lifecycle=r.session_lifecycle, listen=r.listen,
         presentation=r.score_presentation, notices=r.notices, clock=r.now)
     r.retained_replay = RetainedResultReplay(
@@ -400,7 +407,7 @@ def _event_boundary(r) -> None:
         notices=r.notices)
     r.transport_commands = TransportCommands(
         lesson=r.lesson, transport=r.transport,
-        transport_timing=r.transport_timing, timed_playback=r.timed_playback,
+        transport_timing=r.transport_timing, pause_resume=r.pause_resume,
         score=r.score, routes=r.route_commands, replay=r.retained_replay,
         authorization=r.playback_authorization)
 
@@ -416,7 +423,7 @@ def _event_boundary(r) -> None:
         lesson=r.lesson, midi_input=r.midi_input,
         device_workflows=r.device_workflows,
         settings_workflows=r.settings_workflows,
-        timed_playback=r.timed_playback,
+        pause_resume=r.pause_resume,
         receive=r.midi_callback.receive, lock=r.lock)
 
     r.practice_timeline = PracticeTimeline(
@@ -430,7 +437,7 @@ def _event_boundary(r) -> None:
             lesson=r.lesson, transport=r.transport, take=r.take,
             midi_input=r.midi_input, lesson_execution=r.lesson_execution,
             listen_outcomes=r.listen_outcomes,
-            timed_playback=r.timed_playback, settlement=r.settlement),
+            continuation=r.continuation, settlement=r.settlement),
         progression=TakeProgression(
             lesson=r.lesson, transport=r.transport, take=r.take,
             midi_input=r.midi_input, transport_timing=r.transport_timing,
@@ -454,7 +461,7 @@ def _event_boundary(r) -> None:
         routes=command_routes(
             device_workflows=r.device_workflows,
             settings_workflows=r.settings_workflows, midi_input=r.midi_input,
-            transport=r.transport, timed_playback=r.timed_playback,
+            transport=r.transport, pause_resume=r.pause_resume,
             history_management=r.history_management,
             transport_commands=r.transport_commands,
             playback_authorization=r.playback_authorization,
@@ -474,7 +481,7 @@ def _event_boundary(r) -> None:
         midi_delivery=r.midi_delivery, midi_device=r.midi_device,
         midi_callback=r.midi_callback,
         settings_workflows=r.settings_workflows,
-        timed_playback=r.timed_playback,
+        pause_resume=r.pause_resume,
         playback_authorization=r.playback_authorization,
         source_installation=r.source_installation,
         library_opening=r.library_opening, lesson=r.lesson,
