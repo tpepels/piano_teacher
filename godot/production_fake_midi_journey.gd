@@ -158,7 +158,7 @@ func _process(_delta: float) -> bool:
             # this authorized initial travel as progress from wrong MIDI.
             var free_owner = app.presentation_session.guided
             var source_flow = app.presentation_session.score_flow
-            var now_ms: int = Time.get_ticks_msec()
+            now_ms = Time.get_ticks_msec()
             if (not is_finite(free_owner.world) or
                     not is_finite(source_flow.hold_world) or
                     absf(source_flow.project(now_ms)-source_flow.hold_world) > .02):
