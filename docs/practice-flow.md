@@ -109,7 +109,9 @@ saved final-test progress: reopen at whole-piece Free, then restart Tempo at
 Every fourth measure (1, 5, 9, …) is a checkpoint. The pause menu shows them
 as measure numbers: marked where you are, highlighted when every window that
 ends in those measures is mastered for every hand. Choosing one starts that
-measure's window from Listen; saved progress elsewhere is kept.
+measure's window from Listen; saved progress elsewhere is kept. After a
+window is mastered, the next step is the next one not yet mastered, so a
+jump back is a targeted review and the course then returns to where you were.
 
 ## Simplified exercises (Coda / Fukuda)
 

@@ -100,8 +100,9 @@ Pure policy and services outside these domains:
 
 | Concern | Owner | Owns |
 | --- | --- | --- |
+| Course model | `teaching_course` | the course as a list of steps (window × hand, built once per piece) with a cursor, and a small progress record: current tempo, failures, clean takes, mastered steps, Free returns; after mastery the cursor goes to the next step not yet mastered |
 | Practice Flow course | `practice_flow_course` | the window/hand structure and **every "what happens next" rule**: `decide(event, state)` maps a graded take, a completed Free or a learner command to the next exposure, tempo and progress; `graded_progress` maps the ladder onto saved progress |
-| Practice Flow ladder | `practice_flow.take_graded` (pure) | repeat / faster (+10%, or +20% after a secure clean take) / slower / Free / done |
+| Practice Flow phases | `practice_flow` (pure) + `PracticeFlowCourseSession` | Listen → Free → (Aid → Free) → Tempo → Done within one step; `take_graded`: repeat / faster (+10%, or +20% after a secure clean take) / slower / Free / done. The aid is a phase, held by the flow session |
 | Assessment | `practice.py`, `AssessmentService`, `practice_assessment` | original-note matching, onset/release evidence, verdict, `secure` timing |
 | Scheduling | `MusicalScheduler` (`SCHEDULER`), `CountInPlan` | every deadline/count-in/rest calculation; count-in pulse (subdivided when a click would exceed 1.5 s) |
 | Persistence | `ProgressRepository`, `LearningLedger`, `LearnerProgress` on one SQLite connection | progress, evidence, history; migrations at the load boundary only |
