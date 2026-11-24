@@ -6,9 +6,7 @@ mastery choices live here, before any announcement or durable mutation.
 from __future__ import annotations
 from dataclasses import dataclass, replace
 from math import isfinite
-from .teaching_course import (
-    PlanProgress, CourseState, steps, preserve_mastered,
-)
+from .teaching_course import PlanProgress, CourseState
 from .lesson_contracts import LessonPlanDefinition
 from .practice import Assessment
 from .remediation import RemedialAssignment
@@ -158,13 +156,12 @@ def validate_teaching_decision(decision, *, event, state):
         raise ValueError("Unknown teaching source/course")
     p = decision.progress_after
     lower_bpm = 1
-    if (type(p.cursor) is not tuple or len(p.cursor) != 3
-            or any(type(value) is not tuple for value in (p.mastered,p.stage_tempos,p.transferable_tempos,p.free_returns))):
+    if any(type(value) is not tuple for value in (p.mastered, p.free_returns)):
         raise ValueError("Mutable teaching progress")
     for value in (p.bpm, p.target_bpm):
         if type(value) not in (int, float) or not isfinite(value) or not lower_bpm <= value <= SETTINGS.maximum_bpm:
             raise ValueError("Invalid teaching BPM")
-    if any(type(value) is not int or value < 0 for value in (*p.cursor, p.streak, p.failures)):
+    if any(type(value) is not int or value < 0 for value in (p.position, p.streak, p.failures)):
         raise ValueError("Invalid teaching progress")
     if any(type(key) is not str or type(count) is not int or count < 0
            for key,count in p.free_returns):
@@ -174,11 +171,11 @@ def validate_teaching_decision(decision, *, event, state):
         key, hand, phrase = chosen.key, chosen.hand, chosen.stage.variant.phrase
     except (IndexError, KeyError):
         raise ValueError("Unavailable teaching stage/hand") from None
-    available = {s[3] for s in steps(chosen)}
+    if decision.definition_after is not state.definition:
+        raise ValueError("A teaching decision cannot replace the course")
+    available = {step.key for step in chosen.steps}
     if not set(dict(p.mastered)) <= available:
         raise ValueError("Unknown mastered teaching stage")
-    if preserve_mastered(state.course, decision.definition_after) != decision.definition_after:
-        raise ValueError("Teaching decision changed a mastered definition")
     earned = set(dict(p.mastered)) - set(dict(state.progress.mastered))
     # Practice flow (docs/practice-flow.md): timing fails only when clearly
     # off, and two clean takes in a row at the target tempo finish a step.
@@ -202,17 +199,16 @@ def validate_teaching_decision(decision, *, event, state):
         raise ValueError("Invalid teaching continuation")
     if event.kind == "manual" and event.action in ("pause", "stop") and decision.continuation != event.action:
         raise ValueError("Teaching decision violates explicit stop/pause")
-    for entries in (p.mastered,p.stage_tempos):
-        if any(type(entry) is not tuple or len(entry) != 2 or type(entry[0]) is not str
-                or type(entry[1]) not in (int,float) or not isfinite(entry[1])
-                or not lower_bpm <= entry[1] <= SETTINGS.maximum_bpm for entry in entries):
-            raise ValueError("Invalid recorded teaching tempo")
+    if any(type(entry) is not tuple or len(entry) != 2 or type(entry[0]) is not str
+            or type(entry[1]) not in (int,float) or not isfinite(entry[1])
+            or not lower_bpm <= entry[1] <= SETTINGS.maximum_bpm for entry in p.mastered):
+        raise ValueError("Invalid recorded teaching tempo")
     exposure = decision.next_exposure
     if (decision.continuation in ("stop","pause")) != (exposure is None):
         raise ValueError("Teaching continuation/exposure mismatch")
     if event.kind == "manual" and event.manual is not None:
         manual = event.manual
-        if manual.action == "select_step" and p.cursor != steps(state.course)[manual.number-1][:3]:
+        if manual.action == "select_step" and p.position != manual.number-1:
             raise ValueError("Teaching decision violates selected stage")
         if manual.action == "hand" and hand != manual.hand:
             raise ValueError("Teaching decision violates selected hand")

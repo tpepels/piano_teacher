@@ -3,8 +3,8 @@
 This collaborator owns mechanical continuation. It never calls a generator,
 LearningPlan navigation, or the engine; mode/session owners execute its effects.
 """
-from dataclasses import dataclass, replace
-from ..teaching_course import steps, manual_progress
+from dataclasses import dataclass
+from ..teaching_course import manual_progress
 from .score_artifacts import ScoreSelection
 
 
@@ -263,15 +263,9 @@ class TeachingContinuation:
         exposure = decision.next_exposure
         if exposure is None or exposure.stage_key == pending.state.binding.stage_key:
             return None
-        if pending.state.definition.generator_name == "practice-flow":
-            # Practice flow: a new step opens with its own Listen/Free or a
-            # fresh count-in and engraves its own score; nothing to prebuild.
-            return None
-        course = replace(pending.state.course,definition=decision.definition_after,progress=decision.progress_after)
-        number = next(i+1 for i, step in enumerate(steps(course)) if step[3] == course.key)
-        return ScoreSelection(piece=course.piece,phrase=course.stage.variant.phrase,hand=course.hand,
-            stage_key=course.key,revision=revision+1,fingerprint=fingerprint,
-            transformed_rhythm=course.stage.transformed_rhythm,display_name=str(course.stage.display_name or "")),number
+        # A new step opens with its own Listen/Free or a fresh count-in and
+        # engraves its own score; nothing to prebuild.
+        return None
 
     def prepare(self, pending, *, revision, fingerprint):
         selected = self.selection(pending,revision=revision,fingerprint=fingerprint)

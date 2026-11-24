@@ -26,7 +26,7 @@ from .lesson_generators import CodaAid, FukudaAid
 from .teaching_decisions import (
     TeachingDecision, TeachingExposure, full_target_take,
 )
-from .teaching_course import select_cursor
+from .teaching_course import at_position, next_unmastered
 from .teaching_manual import choose_manual, next_guided_range
 from .application.assessment_verdict import AssessmentVerdict
 from .application.practice_flow import (
@@ -85,7 +85,7 @@ def _entry_tempo(event, state, decision):
         return decision
     if exposure.mode in ("listen","learn"):
         return _at_tempo(decision,int(decision.progress_after.target_bpm))
-    exercise = decision.definition_after.exercises[decision.progress_after.cursor[0]]
+    exercise = replace(state.course, progress=decision.progress_after).exercise
     final_entry = (exercise.kind == "perform"
         and (exposure.stage_key != state.course.key
              or event.action in ("practice","perform","course_stage","open_at")))
@@ -124,15 +124,13 @@ def graded_progress(course, *, accepted, secure=False):
                                   mastered=tuple(sorted(mastered.items())))
     if t.outcome is Outcome.PIECE_DONE:
         return selected(course, t.message)
-    i, h, _ = p.cursor
-    if h + 1 < len(course.hands):
-        course = course.with_progress(cursor=(i, h + 1, 0))
-    elif i + 1 < len(course.definition.exercises):
-        course = select_cursor(course, (i + 1, 0, 0))
-    else:
+    # The next step not yet mastered (after a jump back, mastered windows
+    # are skipped).
+    following = next_unmastered(course)
+    if following is None:
         return selected(course, "Piece mastered")
-    return selected(course.with_progress(bpm=floor_bpm(int(p.target_bpm)),
-                                failures=0, streak=0), t.message)
+    course = at_position(course, following)
+    return selected(course.with_progress(bpm=floor_bpm(int(p.target_bpm))), t.message)
 
 
 def _base_decision(event, state):
@@ -246,10 +244,10 @@ def decide(event, state, *, aid) -> TeachingDecision:
             replace(decision,next_exposure=exposure,continuation="guided",
                 remediation=simplified,
                 message=simplified.focus if simplified is not None else decision.message))
+    after = replace(course, progress=decision.progress_after)
     if (exposure is not None and exposure.mode != "learn"
             and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
-            and decision.definition_after.exercises[
-                decision.progress_after.cursor[0]].kind != "perform"):
+            and after.step.kind != "perform"):
         # A new hand or window starts at Listen -> Free, never
         # directly in tempo. The engine plays Listen before Free.
         exposure = replace(exposure, from_beat=0.0, end_beat=None,
@@ -262,9 +260,7 @@ def decide(event, state, *, aid) -> TeachingDecision:
     exposure = decision.next_exposure
     if (exposure is not None and exposure.mode == "practice"
             and exposure.from_beat == 0 and exposure.end_beat is None):
-        source = decision.definition_after.stages(
-            decision.definition_after.exercises[decision.progress_after.cursor[0]],
-            exposure.hand)[decision.progress_after.cursor[2]].variant.phrase
+        source = after.stage.variant.phrase
         decision = replace(decision,next_exposure=replace(exposure,
             from_beat=source.first_attack_beat))
     return decision
@@ -325,23 +321,17 @@ _checkpoint_keys: dict[int, tuple] = {}
 
 
 def _keys_by_checkpoint(course):
-    """Stage keys of every window, grouped by the checkpoint its last bar
-    falls in (cached per immutable definition: keys hash all window notes)."""
+    """Step keys grouped by the checkpoint their window's last bar falls in,
+    and one measure preview per checkpoint (cached per definition)."""
     definition = course.definition
     cached = _checkpoint_keys.get(id(definition))
     if cached is not None and cached[0] is definition:
         return cached[1]
-    from .lesson_contracts import lesson_hands
-    from .teaching_course import stage_key
-    groups: dict[int, list[str]] = {}
-    for exercise in definition.exercises:
-        if exercise.kind != "learn":
-            continue
-        first = 1 + (exercise.phrase.last_bar-1)//CHECKPOINT_BARS*CHECKPOINT_BARS
-        for hand in lesson_hands(exercise):
-            variant = definition.stages(exercise, hand)[0].variant
-            groups.setdefault(first, []).append(stage_key(
-                exercise, hand, variant, course.profile, course.course_version))
+    groups: dict[int, set[str]] = {}
+    for step in course.steps:
+        if step.kind == "learn":
+            first = 1 + (step.last_bar-1)//CHECKPOINT_BARS*CHECKPOINT_BARS
+            groups.setdefault(first, set()).add(step.key)
     keys = {bar: frozenset(group) for bar, group in groups.items()}
     previews = {bar: _measure_preview(course.piece, bar)
                 for bar in range(1, len(course.piece.bar_boundaries), CHECKPOINT_BARS)}

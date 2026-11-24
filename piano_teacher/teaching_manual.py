@@ -79,9 +79,9 @@ def choose_manual(event, state):
         if event.scope == "whole":
             index = next((i for i, ex in reversed(tuple(enumerate(c.definition.exercises))) if ex.kind == "perform"), 0)
             c = manual_progress(c, "select", number=index)
-            h = c.hands.index("both") if "both" in c.hands else 0
-            variants = c.definition.stages(c.exercise, c.hands[h])
-            c = c.with_progress(cursor=(index,h,len(variants)-1), bpm=state.progress.bpm)
+            if "both" in c.hands:
+                c = manual_progress(c, "hand", hand="both")
+            c = c.with_progress(bpm=state.progress.bpm)
         mode = "perform"
     elif action == "seek":
         if not facts.paused:

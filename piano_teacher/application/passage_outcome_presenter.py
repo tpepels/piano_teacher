@@ -11,13 +11,13 @@ from ..application import practice_flow
 
 def teaching_instruction(pending) -> str:
     decision,state = pending.decision,pending.state
-    if decision.progress_after.cursor == state.progress.cursor:
+    if decision.progress_after.position == state.progress.position:
         return ("passage mastered"
                 if decision.flow_outcome is practice_flow.Outcome.PIECE_DONE
                 else "play the passage again")
     chosen = replace(state.course,definition=decision.definition_after,
                      progress=decision.progress_after)
-    if chosen.progress.cursor[0] != state.progress.cursor[0]:
+    if chosen.step.exercise_index != state.course.step.exercise_index:
         return "now learn the next passage"
     if chosen.hand != state.course.hand:
         return ("now play both hands together" if chosen.hand == "both"

@@ -73,149 +73,58 @@ class ProgressRepository:
 
     def restore(self, plan: LearningPlan | None, fingerprint: str, *,
                 restore_session: bool = True) -> bool:
+        """Saved position, mastery and Free returns for this piece's steps.
+
+        Only keys of the current course count; unknown (older-version) rows
+        stay on disk but never award credit. A saved position whose key no
+        longer exists falls back to the single-measure window of its first bar.
+        """
         p = plan
         if p is None:
             return False
-        lower_bpm = 1 if p.profile == "practice-flow" else SETTINGS.minimum_bpm
-        # The piece-wide target is independent of the selected curriculum.
-        # The sessions table is the current per-piece target owner. Its old
-        # positional fields are never interpreted as lesson indices.
-        saved_target = self.db.execute(
-            "SELECT target_bpm FROM sessions WHERE fingerprint=?", (fingerprint,)
-        ).fetchone()
-        if p.profile != "practice-flow" and saved_target and saved_target[0] is not None:
-            p.target_bpm = max(SETTINGS.minimum_bpm, min(
-                SETTINGS.maximum_bpm, int(saved_target[0])))
-
-        # One source of session position: an explicitly saved strategy with a
-        # versioned, content-derived stage identity. Unknown historical course
-        # rows are retained on disk but never executed or awarded credit.
-        row = self.db.execute(
-            """SELECT step_key, first_bar, last_bar, hand, level, exercise_kind,
-                      bpm, streak FROM strategy_sessions
-               WHERE fingerprint=? AND strategy=?""",
-            (fingerprint, p.profile),
-        ).fetchone()
-        saved_mastery = dict(self.db.execute(
-            "SELECT exercise, bpm FROM mastery WHERE fingerprint=?", (fingerprint,)))
-        if p.profile == "practice-flow":
-            saved_mastery = {key:bpm for key,bpm in saved_mastery.items()
-                             if bpm >= p.piece.bpm}
-        # Feedback can omit mastered candidates from the initial selection.
-        # Recover exact catalog definitions before filtering durable credit;
-        # unknown versions/content never match the current course keys.
-        p.restore_mastered_stages(saved_mastery)
-        current = {step.key: step for step in p.lesson_steps}
-        p.free_returns = {key:int(count) for key,count in self.db.execute(
-            "SELECT stage_key,count FROM flow_returns WHERE fingerprint=?",(fingerprint,))
+        current = {step.key for step in p.lesson_steps}
+        p.mastered = {key: int(bpm) for key, bpm in self.db.execute(
+            "SELECT exercise, bpm FROM mastery WHERE fingerprint=?", (fingerprint,))
+            if key in current and int(bpm) >= p.piece.bpm}
+        p.free_returns = {key: int(count) for key, count in self.db.execute(
+            "SELECT stage_key,count FROM flow_returns WHERE fingerprint=?", (fingerprint,))
             if key in current}
+        row = self.db.execute(
+            """SELECT step_key, first_bar, hand, bpm, streak FROM strategy_sessions
+               WHERE fingerprint=? AND strategy=?""",
+            (fingerprint, p.profile)).fetchone()
         exact = False
-        if row and restore_session and isinstance(row[0], str):
-            selected = current.get(row[0])
-            if selected is not None:
-                p.restore_location(
-                    kind=selected.kind, first_bar=selected.first_bar,
-                    last_bar=selected.last_bar, hand=selected.hand,
-                    level=selected.level)
-                exact = p.identity == selected.key
-            elif row[1] is not None and row[2] is not None:
-                # After a generator version change, retain a navigable
-                # source-measure location, never old proficiency or tempo.
-                # Migrating a prior phrase/link curriculum must start
-                # at an individual authored bar. An old 1-4 phrase is NOT
-                # evidence that its four new moving-window exercises were
-                # learned. Retain source location, never carry old mastery.
-                old_first = int(row[1])
-                migrate_window = p.profile == "practice-flow"
-                p.restore_location(
-                    kind="learn" if migrate_window else row[5] or "learn",
-                    first_bar=old_first,
-                    last_bar=old_first if migrate_window else int(row[2]),
-                    hand=row[3] if row[3] in ("right", "left", "both") else "both",
-                    level=row[4] or "")
-
-        p.stage_tempos.clear()
-        p.transferable_tempos.clear()
-        p.mastered.clear()
-        for key, bpm in self.db.execute(
-            "SELECT stage_key, bpm FROM stage_tempos WHERE fingerprint=?",
-            (fingerprint,),
-        ):
-            if key in current:
-                # Learners may deliberately practise faster than the song's
-                # source tempo; preserve that manual choice per stage.
-                p.stage_tempos[key] = max(lower_bpm, min(
-                    SETTINGS.maximum_bpm, int(bpm)))
-        for (key,) in self.db.execute(
-            "SELECT stage_key FROM repeat_tempo_credit WHERE fingerprint=?",
-            (fingerprint,),
-        ):
-            if key in p.stage_tempos:
-                p.transferable_tempos.add(key)
-        for key, bpm in saved_mastery.items():
-            if key in current:
-                p.mastered[key] = bpm
-
+        if row and restore_session:
+            exact = p.restore_position(row[0] if isinstance(row[0], str) else None,
+                first_bar=int(row[1]) if row[1] is not None else None,
+                hand=row[2] if row[2] in ("right", "left", "both") else None)
+        p.bpm, p.streak, p.failures = p.target_bpm, 0, 0
         if exact:
-            # A matching, current-version source stage may safely restore its
-            # deliberate BPM and clean-pass streak; no other row may.
-            p.bpm = max(lower_bpm, min(
-                SETTINGS.maximum_bpm, int(row[6])))
-            # A restored streak can never already satisfy this course's
-            # own mastery rule (Practice Flow: two target passes).
-            p.streak = min(p.course_state().clean_runs_required - 1,
-                           max(0, int(row[7])))
-            p.stage_tempos[p.identity] = p.bpm
-        else:
-            p.bpm = p._tempo_for_current_stage()
-            p.streak = 0
+            # A restored streak can never already satisfy mastery.
+            p.bpm = max(1, min(SETTINGS.maximum_bpm, int(row[3])))
+            p.streak = min(p.course_state().clean_runs_required-1, max(0, int(row[4])))
         return bool(row and restore_session)
 
     def save(self, plan: LearningPlan | None, fingerprint: str) -> None:
-        p=plan
+        p = plan
         if p is None:
             return
         with sqlite_atomic(self.db):
-            prior = self.db.execute("SELECT target_bpm FROM sessions WHERE fingerprint=?",
-                                    (fingerprint,)).fetchone()
-            if prior and prior[0] is not None and int(prior[0]) != p.target_bpm:
-                # A new piece-wide target must not resurrect the former BPM
-                # ladders on later navigation or after restarting the app.
-                self.db.execute("DELETE FROM stage_tempos WHERE fingerprint=?",
-                                (fingerprint,))
-                self.db.execute("DELETE FROM repeat_tempo_credit WHERE fingerprint=?",
-                                (fingerprint,))
-                # Old per-strategy BPM/streak targets cannot be revived after
-                # changing the piece-wide target tempo.
-                self.db.execute("DELETE FROM strategy_sessions WHERE fingerprint=?",
-                                (fingerprint,))
-            self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                            (fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index,
-                             p.route_version,p.identity,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,
-                             p.active_variant.level,p.exercise.kind))
+            row = (p.index, p.hand, p.bpm, p.streak, p.target_bpm, p.variant_index,
+                   p.route_version, p.identity, p.exercise.phrase.first_bar,
+                   p.exercise.phrase.last_bar, p.active_variant.level, p.exercise.kind)
+            self.db.execute("""INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,
+                streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,
+                level,exercise_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""", (fingerprint, *row))
             self.db.execute("""INSERT OR REPLACE INTO strategy_sessions
                 (fingerprint,strategy,exercise,hand,bpm,streak,target_bpm,
                  variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                (fingerprint,p.profile,p.index,p.hand,p.bpm,p.streak,p.target_bpm,
-                 p.variant_index,p.route_version,p.identity,p.exercise.phrase.first_bar,
-                 p.exercise.phrase.last_bar,p.active_variant.level,p.exercise.kind))
-            # Persist the current stage's tempo for reopening without
-            # mutating the plan: its progress is the lesson decision's
-            # immutable result, and a committed receipt replays against it.
-            tempos = {**p.stage_tempos, p.identity: p.bpm}
-            for key, bpm in tempos.items():
-                self.db.execute("INSERT OR REPLACE INTO stage_tempos VALUES (?,?,?)",
-                                (fingerprint,key,bpm))
-            for key in p.transferable_tempos:
-                self.db.execute("INSERT OR REPLACE INTO repeat_tempo_credit VALUES (?,?)",
-                                (fingerprint,key))
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (fingerprint, p.profile, *row))
             for key, bpm in p.mastered.items():
                 self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (fingerprint,key,bpm))
             for key, count in p.free_returns.items():
                 self.db.execute("INSERT OR REPLACE INTO flow_returns VALUES (?,?,?)",
                                 (fingerprint,key,count))
-
 
     def reset_piece(self, fingerprint: str) -> None:
         """Reset saved progress while preserving the authoritative evidence ledger."""
