@@ -8,9 +8,6 @@ can still hold references to the active learner.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from ..remediation import RemedialAssignment
 from ..practice import Recorder
 
 
@@ -26,10 +23,6 @@ class AttemptRuntime:
     retry_range: dict | None = None
     recovery_notice: dict | None = None
     guided_recovery_pending: bool = False
-    remediation_active: RemedialAssignment | None = None
-
-    def assign_remediation(self, remediation: RemedialAssignment | None) -> None:
-        self.remediation_active = remediation
 
     def begin_timed_review(self) -> None:
         """Clear the previous review when a new graded take begins."""
@@ -119,4 +112,3 @@ class AttemptRuntime:
         self.retry_range = None
         self.recovery_notice = None
         self.guided_recovery_pending = False
-        self.remediation_active = None

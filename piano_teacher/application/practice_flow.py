@@ -18,6 +18,9 @@ FAILURES_BEFORE_SLOWER = 2
 class Step(str, Enum):
     LISTEN = "listen"
     FREE = "free"
+    # Free on the announced simplified notes (second return to Free); it
+    # earns no credit and returns to the original Free (docs/practice-flow.md).
+    AID = "aid"
     TEMPO = "tempo"
     DONE = "done"
 

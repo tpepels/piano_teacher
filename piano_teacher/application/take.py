@@ -24,9 +24,6 @@ class Take:
     def apply_settlement(self, *args, **kwargs):
         return self._runtime.apply_settlement(*args, **kwargs)
 
-    def assign_remediation(self, *args, **kwargs):
-        return self._runtime.assign_remediation(*args, **kwargs)
-
     def clear_feedback(self, *args, **kwargs):
         return self._runtime.clear_feedback(*args, **kwargs)
 
@@ -76,10 +73,6 @@ class Take:
     @property
     def recovery_notice(self):
         return self._runtime.recovery_notice
-
-    @property
-    def remediation_active(self):
-        return self._runtime.remediation_active
 
     def reset_for_stop(self, *args, **kwargs):
         return self._runtime.reset_for_stop(*args, **kwargs)

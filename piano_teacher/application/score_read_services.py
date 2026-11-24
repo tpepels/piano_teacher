@@ -23,7 +23,7 @@ class ScoreReadServices:
         plan = self.lesson.plan
         if plan is None:
             raise ValueError("No piece loaded")
-        remediation = self.take.remediation_active
+        remediation = self.lesson.flow_aid
         return ScoreSelection(
             piece=plan.piece, phrase=self.lesson.display_phrase(learning=self.transport.mode == "learn"),
             hand=plan.hand, stage_key=plan.identity,

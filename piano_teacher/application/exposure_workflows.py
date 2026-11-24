@@ -43,7 +43,10 @@ class GuidedExposureInstall:
             reason=prepared.stop_reason or reason,
             preserve_episode=prepared.recovery)
         self.score.reset_guided_score()
-        self.take.assign_remediation(prepared.remediation)
+        if prepared.remediation is not None:
+            self.lesson.enter_flow_aid(prepared.remediation)
+        else:
+            self.lesson.leave_flow_aid()
         if prepared.recovery:
             self.take.restore_retry(prepared.retry_range)
         self.transport.select_exposure(

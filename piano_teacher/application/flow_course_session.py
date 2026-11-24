@@ -31,6 +31,8 @@ class FlowPhase:
     stage_key: str
     final: bool
     step: practice_flow.Step
+    # The RemedialAssignment being practised while step is AID.
+    aid: object = None
 
 
 class PracticeFlowCourseSession:
@@ -120,6 +122,26 @@ class PracticeFlowCourseSession:
                 "Play the notes in order, at your own pace.")
         return FlowStepEffect(state.step)
 
+    @property
+    def aid(self):
+        """The aid being practised, or None: one owner for 'aid active'."""
+        phase = self._phase
+        if (phase is None or phase.step is not practice_flow.Step.AID
+                or phase.plan is not self._source_identity.plan):
+            return None
+        return phase.aid
+
+    def enter_aid(self, assignment) -> None:
+        plan = self._source_identity.plan
+        if plan is None or self._phase is None or self._phase.plan is not plan:
+            raise ValueError("The aid needs the current Practice Flow step")
+        self._phase = replace(self._phase, step=practice_flow.Step.AID, aid=assignment)
+
+    def leave_aid(self) -> None:
+        """Back to the original notes, still without tempo."""
+        if self.aid is not None:
+            self._phase = replace(self._phase, step=practice_flow.Step.FREE, aid=None)
+
     def apply(self, transition: practice_flow.Transition) -> practice_flow.FlowState:
         plan = self._source_identity.plan
         if plan is None:
@@ -197,6 +219,8 @@ class PracticeFlowCourseSession:
                 and self._phase.stage_key == plan.identity else
                 "listen" if mode == "listen" else
                 "free" if mode == "learn" else "tempo")
+        if step == "aid":
+            step = "free"  # the aid is Free on simplified notes
         if step == "done":
             step = "tempo"
         percent = round(100*plan.bpm/plan.target_bpm) if plan.target_bpm else 100

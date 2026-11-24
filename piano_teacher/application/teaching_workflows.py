@@ -24,8 +24,9 @@ class CommandEffect:
 
 class TeachingDecisions:
     def __init__(self, *, source_identity, lesson_cursor, take, measurement,
-                          transport, guided_session, learner_progress, clock):
+                          transport, guided_session, flow_session, learner_progress, clock):
         self.source_identity = source_identity
+        self.flow_session = flow_session
         self.lesson_cursor = lesson_cursor
         self.take = take
         self.measurement = measurement
@@ -61,7 +62,7 @@ class TeachingDecisions:
                 end_beat=end_beat if end_beat is not None else p.active_phrase.sounding_end-p.active_phrase.start,
                 course_guided=self.lesson_cursor.course_guided, guided_return=self.guided_session.return_context,
                 guided_range=self.guided_session.beat_range, review_end_beat=self.take.review_end_beat,
-                remediation_active=self.take.remediation_active is not None,
+                remediation_active=self.flow_session.aid is not None,
                 parent_decision_id=self.measurement.parent_decision),
             ManualFacts(credits=self.learner_progress.teaching_credits(self.source_identity.fingerprint),
                 paused=self.transport.paused,

@@ -247,7 +247,7 @@ def _lesson_source_and_settings_workflows(r) -> None:
     r.teaching_decisions = TeachingDecisions(
         source_identity=r.source_identity, lesson_cursor=r.lesson_cursor,
         take=r.take, measurement=r.measurement, transport=r.transport,
-        guided_session=r.guided_session,
+        guided_session=r.guided_session, flow_session=r.flow_session,
         learner_progress=r.learner_progress, clock=r.now)
     r.lesson.attach_decisions(r.teaching_decisions)
     r.evidence_context = SessionEvidenceContext(

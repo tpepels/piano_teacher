@@ -191,3 +191,14 @@ class Lesson:
 
     def settle_flow_decision(self, *args, **kwargs):
         return self._flow.settle_decided(*args, **kwargs)
+
+    @property
+    def flow_aid(self):
+        """The Practice Flow aid being practised, or None."""
+        return self._flow.aid
+
+    def enter_flow_aid(self, assignment) -> None:
+        self._flow.enter_aid(assignment)
+
+    def leave_flow_aid(self) -> None:
+        self._flow.leave_aid()

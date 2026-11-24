@@ -35,7 +35,7 @@ class SessionCapture:
         values = SnapshotValues(
             _guided_recovery_pending=self.take.guided_recovery_pending,
             _guided_return=self.lesson.guided_return_context,
-            _remediation_active=self.take.remediation_active,
+            _remediation_active=self.lesson.flow_aid,
             auto=self.transport.auto,
             awaiting_score_revision=self.transport.awaiting_score_revision,
             count_in_bar_beats=self.transport.count_in_bar_beats,
