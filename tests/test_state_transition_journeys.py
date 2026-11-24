@@ -205,69 +205,38 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
     assert not any(step["completed"] for step in session.ask("lesson.overview")["steps"])
 
 
-def test_fake_keyboard_presentation_failure_and_resume_never_grade_unpresented_music(practice_session):
+def test_fake_keyboard_count_in_pause_and_failure_never_grade_unplayed_music(practice_session):
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
-    session.ready_score(admit=False)
-    intent = state_at(session, step="tempo", mode="practice", running=False)["playback_intent"]
-    session.strike(72)
+    session.ready_score()
+    active = state_at(session, step="tempo", mode="practice", running=True)
+    current = active["playback_timeline"]["current"]
+    session.strike(72)  # During the count-in: nothing is graded yet.
     assert session.snapshot()["midi_notes"] == 0
-    values = {k: intent[k] for k in ("intent_id", "attempt", "take_id",
-                                    "fingerprint", "stage_key", "revision", "hand")}
-    sample = session.clock()*1000.0
-    values.update(source_from_beat=intent["from_beat"],
-                  source_end_beat=intent["end_beat"],
-                  sampled_at_ms=sample,
-                  travel_ms=intent["earliest_deadline_ms"]-sample,
-                  world_origin=100.0,queue_generation=1,
-                  renderer_generation=intent["revision"])
-    receipt = session.ask("playback.reserve", **values)
-    assert not session.snapshot()["running"] and session.snapshot()["midi_notes"] == 0
-    sampled = session.clock()*1000.0
-    session.ask("playback.present", intent_id=intent["intent_id"],
-                attempt=intent["attempt"],segment_id=receipt["segment_id"],
-                physical_world_origin=receipt["world_origin"],
-                physical_sampled_at_ms=sampled,
-                physical_travel_ms=receipt["deadline_ms"]-sampled,
-                physical_queue_generation=receipt["queue_generation"]+1,
-                physical_renderer_generation=intent["revision"])
-    active = state_at(session, running=True)
-    assert active["transport_id"] >= 1
+    session.clock.at = current["deadline_ms"]/1000+.5
     session.command("pause")
-    frozen = state_at(session, paused=True)
+    state_at(session, paused=True)
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0
-    resumed = session.command("resume")["playback_intent"]
-    assert resumed["take_id"] == intent["take_id"]
-    new_values = dict(values)
-    new_values.update(intent_id=resumed["intent_id"],attempt=resumed["attempt"],
-                      sampled_at_ms=session.clock()*1000.0,
-                      travel_ms=20000.0,
-                      renderer_generation=resumed["revision"],queue_generation=2,
-                      take_id=resumed["take_id"])
-    fresh = session.ask("playback.reserve", **new_values)
-    sampled = session.clock()*1000.0
-    session.ask("playback.present",intent_id=resumed["intent_id"],
-                attempt=resumed["attempt"],segment_id=fresh["segment_id"],
-                physical_world_origin=fresh["world_origin"],
-                physical_sampled_at_ms=sampled,
-                physical_travel_ms=fresh["deadline_ms"]-sampled,
-                physical_queue_generation=fresh["queue_generation"]+1,
-                physical_renderer_generation=resumed["revision"])
+    resumed = session.command("resume")
+    assert resumed["running"] and not resumed["paused"]
+    again = resumed["playback_timeline"]["current"]
+    assert again["take_id"] == current["take_id"]
+    # The take continues after its own count-in on the musical timeline.
+    assert again["deadline_ms"]/1000 > session.clock()
     session.strike(72)  # During the resumed count-in, still ungraded.
     assert session.snapshot()["midi_notes"] == 0
-    session.clock.at = fresh["deadline_ms"]/1000
+    session.clock.at = again["deadline_ms"]/1000
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 1
     # Real graphical failure stops assessment and cannot grant mastery.
-    session.ask("playback.failure",take_id=resumed["take_id"],
-                segment_id=fresh["segment_id"],reason="retained score lost")
+    session.ask("playback.failure",take_id=again["take_id"],
+                segment_id=again["segment_id"],reason="retained score lost")
     stopped = state_at(session, running=False)
     assert stopped["mastered"] == 0 and stopped["playback_timeline"]["failure"]
-    session.command("restart")
-    retry = session.snapshot()["playback_intent"]
-    assert retry and retry["take_id"] != resumed["take_id"]
+    retry = session.command("restart")["playback_timeline"]["current"]
+    assert retry and retry["take_id"] != again["take_id"]
 
 
 def test_fake_keyboard_disconnection_during_take_cannot_award_lesson_progress(practice_session):
@@ -313,17 +282,18 @@ def test_navigation_suspend_is_one_way_and_preserves_the_real_paused_take(practi
     assert repeated["mastered"] == first["mastered"]
 
 
-def test_stop_without_renderer_witness_cancels_unpresented_source(practice_session):
+def test_stop_during_count_in_without_renderer_fields_cancels_the_take(practice_session):
     """A damaged/unavailable native renderer may never disable emergency Stop."""
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
-    state = session.ready_score(admit=False)
-    assert state["playback_intent"] and not state["running"], state
+    state = session.ready_score()
+    assert state["running"] and state["phase"] == "count_in", state
     assert state["controls"]["stop"]["enabled"]
     stopped = session.command("ui_stop")  # Deliberately no score_* fields.
     assert not stopped["running"] and not stopped["paused"]
     assert stopped["playback_intent"] is None
+    assert stopped["musical_timeline"] is None
     assert stopped["mastered"] == 0
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0

@@ -182,7 +182,8 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         rest_pool: Array, first_source: Node2D, world: float,
         viewport_width: float, playhead_x: float,
         density: float, gap: float, source_duration: float,
-        empty_strip: bool = false, create_segment: Callable = Callable()) -> bool:
+        empty_strip: bool = false, create_segment: Callable = Callable(),
+        pop_in: bool = false) -> bool:
     # Validate the caller's ORIGINAL musical request before considering
     # an offline template. A malformed rest or overlapping source cannot be
     # silently repaired by a compatible archived passage.
@@ -211,10 +212,12 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         playhead_x + (opening_left-world)*density <= viewport_width
     if not is_finite(opening_left):
         return _reject_admission("nonfinite_first_printed_pixel")
-    if inside and not onto_empty_strip:
+    # A take the musical timeline placed may appear on the visible staff:
+    # its world start was chosen after all ink that was still ahead.
+    if inside and not onto_empty_strip and not pop_in:
         return _reject_admission("source_ink_inside_viewport_without_empty_strip")
     if not clears_prior_layers(opening_left,density,
-            viewport_width,playhead_x,inside and onto_empty_strip):
+            viewport_width,playhead_x,inside and (onto_empty_strip or pop_in)):
         return _reject_admission("source_ink_overlaps_previous_renderer_layer")
     var batch_left: float = opening_left
     for spec in specs:
@@ -300,14 +303,54 @@ func _is_safe_tail(passes: Array, owner_serial: int, world: float,
     # immutable full-passage owner that wrongly locks its invisible suffix.
     return found and not source.is_empty()
 
+## Number of tail strips that belong to takes whose first note never
+## reached the playhead: an exposure abandoned before it sounded.
+static func unplayed_tail_count(passes: Array, world: float) -> int:
+    var starts: Dictionary = {}
+    for item in passes:
+        if str(item.get("kind","source")) != "source":
+            continue
+        var take: int = int(item.get("take_owner",owner_id(item)))
+        var at: float = float(item["world_origin"])+float(item.get("source_floor",0.0))
+        starts[take] = minf(float(starts.get(take,INF)),at)
+    var count := 0
+    for index in range(passes.size()-1,-1,-1):
+        var take: int = int(passes[index].get("take_owner",owner_id(passes[index])))
+        if not starts.has(take) or float(starts[take]) <= world+.0001:
+            break
+        count += 1
+    return count
+
+## Withdraw unplayed takes at the tail, even when visible: a new run of
+## timed music replaces an exposure that never sounded.
+func abandon_unplayed(owner: Control, world: float, reason: String) -> Array[int]:
+    var removed: Array[int] = []
+    var count: int = unplayed_tail_count(online,world)
+    while count > 0 and not online.is_empty():
+        var serial: int = owner_id(online[-1])
+        var snapshot: Array = []
+        for i in range(online.size()-1,-1,-1):
+            if owner_id(online[i]) != serial:
+                break
+            snapshot.push_front(source_record(online[i]))
+        if not _archive.record("withdrawn",serial,snapshot,reason,0,_writer_id):
+            break
+        while count > 0 and not online.is_empty() and owner_id(online[-1]) == serial:
+            var item: Dictionary = online.pop_back()
+            removed.append(int(item.get("serial",0)))
+            Lifecycle.retire(owner,item)
+            count -= 1
+    return removed
+
 func preview_tail_withdrawal(world: float, density: float,
         gap: float, duration: float, viewport_width: float,
         playhead_x: float, protected_take: int = -1,
-        just_one_owner: bool = false, protected_strip: int = -1) -> Dictionary:
+        just_one_owner: bool = false, protected_strip: int = -1,
+        base: Variant = null) -> Dictionary:
     # Pure admission preview: the actual withdrawal and a preflight
     # reservation use IDENTICAL pixel-exposure and protected-owner rules.
     # No archive, scene tree, or live queue mutation occurs here.
-    var remaining: Array = online.duplicate()
+    var remaining: Array = (base as Array).duplicate() if base is Array else online.duplicate()
     var owners: Array[int] = []
     while not remaining.is_empty():
         var tail: Dictionary = remaining[-1]

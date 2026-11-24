@@ -27,6 +27,63 @@ class PlaybackAuthorization:
         self.notices = notices
         self.clock = clock
 
+    def start_pending(self) -> None:
+        """Place a requested take on the musical timeline and start it.
+
+        Python alone decides where it goes; Godot reads the timeline, draws
+        the take's notes at its world start and counts in from it.
+        """
+        intent = self.transport.intent
+        if intent is None or (self.transport.paused and intent.action != "resume"):
+            return
+        facts = self.transport_timing.playback_facts()
+        if facts.source is None:
+            return
+        timeline = self.transport.musical_timeline
+        now = self.clock()
+        take = self.transport_timing.timeline_take(
+            from_beat=intent.from_beat, mode=intent.mode,
+            take_id=self.transport.segment_id_for(intent))
+        plan = intent.count_in
+        placed = None
+        if intent.action == "auto" and timeline.open and timeline.segments[-1].kind == "take":
+            # A repeat follows the last take: rest to its barline, then one
+            # count-in bar easing to the new tempo (late: more rest bars).
+            placed = timeline.continue_after_take(
+                take, now=now, bar_beats=plan.bar_beats, meter=plan.meter,
+                bpm=intent.bpm)
+        elif intent.action == "resume" and timeline.segments:
+            placed = self._resume_placement(timeline, take, now)
+        if placed is None:
+            if intent.action in ("restart", "resume") and timeline.open:
+                timeline.cut_take(now)
+            else:
+                timeline.reset()
+            placed = timeline.start_after(
+                take, now=now, rest_beats=self.transport.ink_ahead_beats,
+                bar_beats=plan.bar_beats, meter=plan.meter, bpm=intent.bpm)
+        self.transport.authorize(
+            facts, deadline=timeline.take_start(placed),
+            world_origin=placed.world_start, segment_id=placed.take_id,
+            commit=self.commit_playback_intent,
+            capture=self.transport_timing.playback_facts,
+            abort=self.abort_playback)
+
+    @staticmethod
+    def _resume_placement(timeline, take, now):
+        """Resume: a pause in a rest or count-in only moves what follows;
+        a take paused while playing ends there and continues from the
+        paused beat after the visible ink and one count-in bar."""
+        paused_at = timeline.holds[-1][0] if timeline.paused else now
+        timeline.resume(now)
+        last = timeline.last_take()
+        if last is None:
+            return None
+        if timeline.musical(paused_at) <= last.start_at + 1e-9:
+            return last
+        timeline.cut_take(paused_at)
+        return None
+
     def reserve_physical(self, **values) -> dict:
         return self.transport.reserve(self.transport_timing.playback_facts(), **values)
 
@@ -83,7 +140,6 @@ class PlaybackAuthorization:
             elif authorized.action == "listen":
                 self.transport.start_listen(revision=self.lesson.revision,
                     count_in=intent.count_in,deadline=authorized.deadline)
-                self.transport_timing.record_timeline_take()
                 self.notices.feedback = "Count in, then listen"
 
     def control_acknowledgement(self, action: str, kwargs: dict, *, reason=None) -> None:

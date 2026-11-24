@@ -380,10 +380,32 @@ func reserve_continuation_at(world: float, opening: float,
         _stream_header_beats(opening),bpm,start_world)
 
 func short_rest_geometry() -> Dictionary:
-    return _stream_controller.rest_geometry(
+    var geometry: Dictionary = _stream_controller.rest_geometry(
         float(practice_timeline.get("gap",{}).get("duration_beats",0.0)),
         maxf(1.0,timeline.pixels_per_beat),staff_gap(),
         _stream_header_beats(0.0))
+    geometry["ink_ahead_beats"] = ink_ahead_beats()
+    return geometry
+
+## Beats of printed ink still ahead of the playhead that a new take must
+## follow (Python starts the next run's count-in after it).
+func ink_ahead_beats() -> float:
+    if not native_ready or not retained_ready():
+        return 0.0
+    var end: float = _stream_controller.ink_end(_stream_facts(stream_world_beat))
+    return clampf(end-stream_world_beat,0.0,256.0) if is_finite(end) else 0.0
+
+## Draw the take the musical timeline placed: its opening beat sits at
+## `start_world`. Only a take whose start already passed the playhead is
+## refused.
+func place_timeline_take(world: float, opening: float,
+        start_world: float, count_in_beats: float = 0.0) -> Dictionary:
+    stream_world_beat = maxf(stream_world_beat,world)
+    if not is_finite(start_world) or start_world <= stream_world_beat:
+        return {}
+    return _stream_controller.place_timeline_take(
+        _stream_facts(stream_world_beat),opening,start_world,
+        _stream_right_beats(),_stream_header_beats(opening),count_in_beats)
 
 func stream_owner_status() -> Dictionary:
     # Stable diagnostic snapshot; no external component may mutate the

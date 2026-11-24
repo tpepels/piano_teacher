@@ -1,9 +1,12 @@
 extends Node
-## Sole physical admission adapter for the authoritative Python PlaybackCoordinator.
-## All timed routes arrive as versioned engine intents. The only commit path is
-## preview -> arm immutable source -> backend reserve -> confirm presentation.
+## Draws each timed take where the musical timeline placed it.
+## Python places every take (count-in, rest, take) on one timeline and
+## starts it; this adapter only puts the take's notes at its world start on
+## the matching renderer, binds them to the take for feedback, and reserves
+## the count-in. Nothing is negotiated: a take whose start has already passed
+## the playhead, or whose renderer never becomes ready, is reported as a
+## display failure and Python stops it.
 const Request := preload("res://inprocess_request.gd")
-const TransportReservation := preload("res://score_transport_reservation.gd")
 
 signal admission_problem(message: String)
 
@@ -14,30 +17,19 @@ var runway
 var flow
 var musical_clock
 var metronome
-var reserve_request: Node
-var present_request: Node
-var withdraw_request: Node
 var failure_request: Node
-var current: Dictionary = {}
-var renderer
-var receipt: Dictionary = {}
-var admission_state: Dictionary = {}
-var last_activated_segment := ""
-var last_activated_intent := ""
-var last_activated_attempt := -1
+var placed_segment := ""
 var missing_score_frames := 0
+var unplaced_frames := 0
 var reported_failure_segment := ""
 var failure_report_in_flight := ""
 var _last_problem := ""
 var _last_problem_ms := -100000
-var last_rejected_fixed_intent := ""
-# Additional read-only physical clearance for a queued backend reservation.
-# The full 400 ms scheduling margin is already owned by MusicalScheduler;
-# adding another half-second delayed the first audible count-in pulse.
-const PHYSICAL_ARM_ROUNDTRIP_MS := 150
+# Frames a running take may wait for its renderer before it is reported.
+const MAX_UNPLACED_FRAMES := 240
 
 func last_problem() -> String:
-    """The most recent admission problem reported to the learner."""
+    """The most recent display problem reported to the learner."""
     return _last_problem
 
 func _report_problem(message: String) -> void:
@@ -57,50 +49,22 @@ func configure(host: Node, bridge: Node, practice_stage,
     flow = score_flow
     musical_clock = clock
     metronome = count_in
-    reserve_request = _request(host, Callable(self, "_reserved"))
-    present_request = _request(host, Callable(self, "_presented"))
-    withdraw_request = _request(host, Callable(self, "_withdrawn"))
-    failure_request = _request(host, Callable(self, "_failure_reported"))
-
-func _request(host: Node, callback: Callable) -> Node:
-    var call := Request.new()
-    call.timeout = 8.0
-    host.add_child(call)
-    call.configure(bus)
-    call.request_completed.connect(callback)
-    return call
+    flow.backend_clock = Callable(self,"_backend_ms")
+    failure_request = Request.new()
+    failure_request.timeout = 8.0
+    host.add_child(failure_request)
+    failure_request.configure(bus)
+    failure_request.request_completed.connect(_failure_reported)
 
 func _backend_ms() -> float:
     if bus == null or bus.native == null:
         return NAN
-    # Same std::chrono::steady_clock epoch as Python time.monotonic on
-    # supported Linux builds. No sampled UI/backend offset is used for the
-    # transaction's graded deadline.
+    # Same std::chrono::steady_clock epoch as Python time.monotonic.
     return float(bus.native.call("monotonic_milliseconds"))
-
-func _reject_fixed_intent(intent: Dictionary, reason: String) -> void:
-    # An announced automatic repeat has only one immutable deadline.
-    # If that slot has expired or physically overlaps ink, waiting for
-    # another frame or inventing a later slot is incorrect. Ask the
-    # authoritative backend to retire that exact pending attempt.
-    var key: String = str(intent.get("intent_id","")) + ":" + \
-        str(intent.get("attempt",-1))
-    if key == last_rejected_fixed_intent or withdraw_request.is_pending():
-        return
-    var payload := {
-        "intent_id":str(intent.get("intent_id","")),
-        "attempt":int(intent.get("attempt",-1)),
-        "reason":reason,
-    }
-    if withdraw_request.request("playback.withdraw",payload) == OK:
-        last_rejected_fixed_intent = key
-        _report_problem(reason)
-
 
 func _report_authorized_failure(take_id: String, segment_id: String,
         reason: String) -> void:
-    # This is a native physical-failure report. The Python coordinator
-    # alone decides whether a take must be stopped or graded.
+    # The Python coordinator alone decides to stop the take.
     if (segment_id.is_empty() or take_id.is_empty()
             or reported_failure_segment == segment_id
             or failure_request.is_pending()):
@@ -111,218 +75,50 @@ func _report_authorized_failure(take_id: String, segment_id: String,
         reported_failure_segment = segment_id
         failure_report_in_flight = segment_id
 
+static func _identity(state: Dictionary, current: Dictionary) -> Dictionary:
+    var source: Dictionary = current.get("source",{})
+    return {"fingerprint":str(source.get("fingerprint","")),
+        "revision":int(source.get("revision",-1)),
+        "stage_key":str(source.get("stage_key","")),
+        "hand":str(source.get("hand","")),
+        "mode":str(state.get("mode",""))}
 
-func _matching_renderer(intent: Dictionary):
-    if score_session != null and score_session.matches_ready_source(intent):
+func _matching_renderer(identity: Dictionary):
+    if score_session != null and score_session.matches_ready_source(identity):
         return stage.renderer
-    return runway.prepared_renderer(intent) if runway != null else null
+    return runway.prepared_renderer(identity) if runway != null else null
 
-
-static func _intent_matches_state(intent: Dictionary, state: Dictionary) -> bool:
-    """The intent belongs to the source, revision, stage, hand and mode shown."""
-    return (str(state.get("piece_fingerprint","")) == str(intent.get("fingerprint",""))
-            and int(state.get("revision",-1)) == int(intent.get("revision",-2))
-            and str(state.get("stage_key","")) == str(intent.get("stage_key",""))
-            and str(state.get("hand","")) == str(intent.get("hand",""))
-            and str(state.get("mode","")) == str(intent.get("mode","")))
-
-static func _assets_cover_window(view, intent: Dictionary, state: Dictionary) -> bool:
-    # The prepared assets must cover the full selected PracticeWindow,
-    # including a cross-bar key release. Never admit another window's
-    # notes merely because its initial source beat matches.
+static func _assets_cover_window(view, state: Dictionary) -> bool:
+    # The renderer must hold the selected window (including a cross-bar
+    # release), never another window that merely shares its opening beat.
     var source_timing: Dictionary = state.get("practice_timeline",{})
     return (absf(view.timeline.duration_beats -
             float(source_timing.get("source_duration_beats",-1.0))) <= 0.0001
             and absf(view.timeline.sounding_duration_beats -
-                float(source_timing.get("sounding_duration_beats",-1.0))) <= 0.0001
-            and absf(float(intent.get("end_beat",-1.0)) -
-                view.timeline.sounding_duration_beats) <= 0.0001)
+                float(source_timing.get("sounding_duration_beats",-1.0))) <= 0.0001)
 
+static func _timeline_take(state: Dictionary, segment_id: String) -> Dictionary:
+    var published: Variant = state.get("musical_timeline")
+    if not published is Dictionary:
+        return {}
+    for segment in published.get("segments",[]):
+        if str(segment.get("kind","")) == "take" and \
+                str(segment.get("take_id","")) == segment_id:
+            return segment
+    return {}
 
-func _admit(intent: Dictionary, state: Dictionary, _accepted_frame_ms: int) -> void:
-    var view = _matching_renderer(intent)
-    if view == null or not is_instance_valid(view):
-        var fixed: Variant = intent.get("fixed_deadline_ms")
-        if fixed != null:
-            var now: float = _backend_ms()
-            if is_finite(now) and is_finite(float(fixed)) and now >= float(fixed):
-                _reject_fixed_intent(intent,
-                    "Direct repeat expired while its score was not ready")
-        return
-    if not _intent_matches_state(intent,state) or \
-            not _assets_cover_window(view,intent,state):
-        return
-    # Capture the two physical-clock coordinates together at admission,
-    # not at a possibly old state-reply timestamp. All projection queries
-    # below use this exact local sample and the witness carries the
-    # corresponding native/Python monotonic timestamp.
-    var frame_ms: int = Time.get_ticks_msec()
-    var backend_now: float = _backend_ms()
-    if not is_finite(backend_now):
-        return
-    # This is a cross-language epoch consistency check, not a clock
-    # estimator. If the native and Python monotonic sources disagree, fail
-    # closed rather than silently admitting a take at the wrong time.
-    if state.has("clock_sampled_at_ms") and \
-            absf(backend_now-float(state["clock_sampled_at_ms"])) > 1800.0:
-        _report_problem("Playback clocks disagree; refusing score admission")
-        return
-    var world: float = flow.project(frame_ms)
-    var backend_floor: float = float(intent.get("earliest_deadline_ms", NAN))
-    if not is_finite(world) or not is_finite(backend_floor):
-        return
-    # Physical travel follows the *already authorized* source epochs
-    # until the successor is presented. A new intent may belong to
-    # another stage/BPM, and a paused active source still has its authored
-    # tempo map. Never infer the map from a UI phase or future intent.
-    var ledger: Variant = state.get("playback_timeline")
-    var committed: Variant = ledger.get("current") if ledger is Dictionary else null
-    var tempo: float = maxf(1.0,float(
-        committed.get("bpm",intent.get("bpm",40.0))
-        if committed is Dictionary else intent.get("bpm",40.0)))
-    var authored: Array = (
-        committed.get("tempo_segments",[])
-        if committed is Dictionary else [])
-    var delay_ms: float = maxf(0.0, backend_floor-backend_now)+420.0
-    var floor_world: float = flow.project_authored_future(
-        frame_ms+roundi(delay_ms),frame_ms,
-        float(state.get("clock_beat",0.0)),tempo,authored)
-    var count_in: float = float(intent.get("count_in_beats", 0.0))
-    var required_slot: float = maxf(count_in, floor_world-world)
-    var action: String = str(intent.get("action", "start"))
-    # Resume with no reusable paused count-in admits a new full-bar
-    # source but still protects the preceding paused take's immutable ink.
-    # This is one physical queue action used identically by both preflight
-    # and commit. Python continues to own the semantic Resume transition.
-    var physical_action: String = (
-        "resume_fresh" if action == "resume" else
-        "restart" if action == "restart" else "start")
-    var opening: float = float(intent.get("from_beat",0.0))
-    var planned: Dictionary = {}
-    var fixed: Variant = intent.get("fixed_deadline_ms")
-    if fixed != null:
-        if action != "auto" or not is_finite(float(fixed)) or float(fixed) <= backend_now:
-            _reject_fixed_intent(intent,
-                "Direct repeat deadline expired before score admission")
-            return
-        var exact_world: float = flow.project_authored_future(
-            frame_ms+roundi(float(fixed)-backend_now),frame_ms,
-            float(state.get("clock_beat",0.0)),tempo,authored)
-        planned = TransportReservation.plan(view,"auto",world,opening,
-            count_in,exact_world)
-        if not bool(planned.get("ok",false)):
-            _reject_fixed_intent(intent,
-                "Cannot admit direct repeat: " + str(planned.get("reason","physical_clearance_refused")))
-            return
-    # A frozen Pause cannot make an earlier printed source's absolute
-    # downbeat future again. Its travel measurement is taken before the
-    # asynchronous backend reservation; while held, that travel stays
-    # constant as real time advances. Reusing the old physical origin
-    # therefore always invalidates the deadline by the reserve round trip.
-    # Resume instead creates a fresh backend-owned full-bar countdown and
-    # retains the paused predecessor's unexpired immutable ink. The
-    # semantic transport ID and lesson progress are unchanged.
-    if planned.is_empty():
-        planned = TransportReservation.plan(
-            view,physical_action,world,opening,required_slot,NAN,
-            str(intent.get("mode","")) == "listen")
-    if not bool(planned.get("ok",false)):
-        _report_problem("Cannot preflight score: " +
-            str(planned.get("reason","physical_clearance_refused")))
-        return
-    if fixed == null and str(planned.get("mode","")) == "append":
-        # A read-only preflight is sampled BEFORE the Python reservation
-        # round trip. A minimally clear offscreen slot becomes too close
-        # by the time we arm it, because the immutable ledger advances
-        # while the worker chooses its deadline. Offer enough additional
-        # *physical* runway for that transaction, without inventing a
-        # second musical deadline or moving any already-admitted ink.
-        # Auto repeats have an immutable slot and must never be extended.
-        var arm_budget_world: float = flow.project_authored_future(
-            frame_ms+PHYSICAL_ARM_ROUNDTRIP_MS,frame_ms,
-            float(state.get("clock_beat",0.0)),
-            tempo,authored)-world
-        if not is_finite(arm_budget_world) or arm_budget_world <= 0.0:
-            return
-        planned = TransportReservation.plan(
-            view,physical_action,world,opening,required_slot,
-            float(planned["start_world"])+arm_budget_world,
-            str(intent.get("mode","")) == "listen")
-        if not bool(planned.get("ok",false)):
-            _report_problem("Cannot reserve a safe physical arm window: " +
-                str(planned.get("reason","physical_clearance_refused")))
-            return
-    # No physical strip is armed yet. Python chooses the exact musical
-    # deadline from this read-only earliest-feasible renderer witness.
-    # Only its accepted reply may authorize the native queue to arm ink.
-    renderer = view
-    admission_state = state.duplicate(true)
-    current = intent.duplicate(true)
-    var start_world: float = float(planned.get("start_world", NAN))
-    var physical_travel_ms: float = flow.physical_travel_ms_to(
-        start_world,frame_ms,float(state.get("clock_beat",0.0)),
-        tempo,authored)
-    if not is_finite(physical_travel_ms):
-        _cancel_provisional()
-        return
-    current["world_origin"] = start_world
-    # Preserve the same physical action selected by read-only
-    # preflight. Python's semantic Resume stays unchanged; a new full
-    # count-in still retains the paused source through its unexpired ink.
-    current["reservation_action"] = (
-        "auto" if fixed != null else physical_action)
-    current["projection_bpm"] = tempo
-    current["projection_segments"] = authored.duplicate(true)
-    current["projection_source_beat"] = float(state.get("clock_beat",0.0))
-    var payload: Dictionary = {
-        "intent_id": str(intent["intent_id"]),
-        "attempt": int(intent["attempt"]),
-        "take_id": str(intent["take_id"]),
-        "fingerprint": str(intent["fingerprint"]),
-        "stage_key": str(intent["stage_key"]),
-        "revision": int(intent["revision"]),
-        "hand": str(intent["hand"]),
-        "source_from_beat": opening,
-        "source_end_beat": float(intent["end_beat"]),
-        "sampled_at_ms": backend_now,
-        "travel_ms": physical_travel_ms,
-        "world_origin": start_world,
-        "queue_generation": view.admission_queue_generation(),
-        "renderer_generation": int(intent["revision"]),
-    }
-    current["physical_offer"] = payload.duplicate(true)
-    if reserve_request.request("playback.reserve",payload) != OK:
-        _cancel_provisional()
-
-func observe(state: Dictionary, frame_ms: int) -> void:
-    var intent: Variant = state.get("playback_intent")
+func observe(state: Dictionary, _frame_ms: int) -> void:
     var timeline: Variant = state.get("playback_timeline")
-    var pending_segment: String = str(receipt.get("segment_id",""))
-    var active_segment: String = (
-        str(timeline.get("segment_id",""))
-        if timeline is Dictionary else "")
-    # A worker can authorize a take before its in-process reply is delivered.
-    # The resulting running-state poll is AUTHORITATIVE; never roll back the
-    # source just because this poll no longer contains the pending intent.
-    if (not pending_segment.is_empty() and active_segment == pending_segment
-            and bool(state.get("running",false))
-            and str(timeline.get("state","")) in [
-                "authorized","count_in","playing","paused"]
-            and _matches_authorized_source(timeline.get("current"))):
-        # The published active timeline intentionally has no request ID
-        # or attempt. The segment matched our previously verified receipt,
-        # so confirm with that immutable receipt, never with the reduced
-        # read model as though it were a reserve/present reply.
-        _confirm_authorized(receipt)
+    var current: Variant = timeline.get("current") if timeline is Dictionary else null
+    var running: bool = bool(state.get("running",false))
     if timeline is Dictionary:
         var segment: String = str(timeline.get("segment_id",""))
-        if (bool(state.get("running",false))
-                and str(state.get("phase","")) == "playing"
+        if (running and str(state.get("phase","")) == "playing"
                 and not segment.is_empty()
                 and (stage.renderer == null or not is_instance_valid(stage.renderer)
                     or stage.renderer.bound_segment_id() != segment)):
-            # An absent renderer must fail closed too, not bypass the
-            # watchdog's wrong-bound-segment check.
+            # A take sounding without its own notes on the staff is a
+            # display failure, never an empty staff shown silently.
             missing_score_frames += 1
             if missing_score_frames >= 4:
                 _report_authorized_failure(
@@ -330,319 +126,69 @@ func observe(state: Dictionary, frame_ms: int) -> void:
                     "running_take_without_admitted_source")
         else:
             missing_score_frames = 0
-    var suspended: bool = (bool(state.get("paused",false)) and
-        (not intent is Dictionary or
-        str(intent.get("action","")) != "resume"))
-    if not intent is Dictionary or suspended:
-        if not current.is_empty():
-            # An outstanding reserve or present command finishes first.
-            # Otherwise the backend no longer holds this intent: drop it.
-            if reserve_request.is_pending() or \
-                    present_request.is_pending():
-                return
-            _cancel_provisional(receipt.is_empty())
+    if not running or bool(state.get("paused",false)) or not current is Dictionary:
+        unplaced_frames = 0
         return
-    var identifier: String = str(intent.get("intent_id",""))
-    var attempt: int = int(intent.get("attempt",-1))
-    if identifier == last_activated_intent and attempt == last_activated_attempt:
+    var segment_id: String = str(current.get("segment_id",""))
+    if segment_id.is_empty() or segment_id == placed_segment:
         return
-    if not current.is_empty():
-        if str(current.get("intent_id","")) == identifier and \
-                int(current.get("attempt",-2)) == attempt:
-            return
-        # A NEW intent supersedes the former reservation once its
-        # outstanding reply has arrived.
-        if reserve_request.is_pending() or present_request.is_pending():
-            return
-        _cancel_provisional(receipt.is_empty())
-    if reserve_request.is_pending() or present_request.is_pending():
+    if _place(state,current,segment_id):
+        placed_segment = segment_id
+        unplaced_frames = 0
         return
-    _admit(intent,state,frame_ms)
+    unplaced_frames += 1
+    if unplaced_frames >= MAX_UNPLACED_FRAMES:
+        _report_problem("The score for this take could not be drawn")
+        _report_authorized_failure(str(current.get("take_id","")),segment_id,
+            "timeline_take_not_drawn")
 
-func _matches_intent(reply: Dictionary, expected: Dictionary) -> bool:
-    return (str(reply.get("intent_id","")) == str(expected.get("intent_id",""))
-        and int(reply.get("attempt",-1)) == int(expected.get("attempt",-2))
-        and str(reply.get("take_id","")) == str(expected.get("take_id","")))
-
-func _matches_authorized_source(active: Variant) -> bool:
-    # Status queries and frame polls must prove the selected musical source,
-    # rate map and original deadline. A segment label alone is not authority.
-    if not active is Dictionary or current.is_empty() or receipt.is_empty():
+func _place(state: Dictionary, current: Dictionary, segment_id: String) -> bool:
+    var take: Dictionary = _timeline_take(state,segment_id)
+    if take.is_empty() or not flow.following:
         return false
-    var source: Variant = active.get("source")
-    if not source is Dictionary:
+    var identity: Dictionary = _identity(state,current)
+    var view = _matching_renderer(identity)
+    if view == null or not is_instance_valid(view) or \
+            not _assets_cover_window(view,state):
         return false
-    return (str(active.get("segment_id","")) == str(receipt.get("segment_id",""))
-        and str(active.get("take_id","")) == str(receipt.get("take_id",""))
-        and str(active.get("mode","")) == str(current.get("mode",""))
-        and str(source.get("fingerprint","")) == str(current.get("fingerprint",""))
-        and str(source.get("stage_key","")) == str(current.get("stage_key",""))
-        and int(source.get("revision",-1)) == int(current.get("revision",-2))
-        and str(source.get("hand","")) == str(current.get("hand",""))
-        and absf(float(source.get("from_beat",-1.0)) -
-            float(current.get("from_beat",-2.0))) <= 0.000001
-        and absf(float(source.get("end_beat",-1.0)) -
-            float(current.get("end_beat",-2.0))) <= 0.000001
-        and absf(float(active.get("bpm",-1.0)) -
-            float(current.get("bpm",-2.0))) <= 0.000001
-        and absf(float(active.get("deadline_ms",-1.0)) -
-            float(receipt.get("deadline_ms",-2.0))) <= 0.001
-        and active.get("tempo_segments",[]) == current.get("tempo_segments",[]))
-
-
-func _matches_reservation(reply: Dictionary) -> bool:
-    if current.is_empty() or not _matches_intent(reply,current) or \
-            not bool(reply.get("reserved",false)):
-        return false
-    var offer: Variant = current.get("physical_offer")
-    if not offer is Dictionary:
-        return false
-    # A segment name or take ID alone cannot attest ownership: an earlier
-    # arm for the same intent could have been withdrawn and replaced.
-    # The ledger receipt must describe this exact immutable stream arm.
-    return (not str(reply.get("segment_id","")).is_empty()
-        and is_finite(float(reply.get("deadline_ms",NAN)))
-        and float(reply.get("deadline_ms",NAN)) > 0.0
-        and is_finite(float(reply.get("world_origin",NAN)))
-        and absf(float(reply.get("world_origin",NAN)) -
-            float(offer.get("world_origin",NAN))) <= .00001
-        and int(reply.get("queue_generation",-1)) ==
-            int(offer.get("queue_generation",-2))
-        and int(reply.get("renderer_generation",-1)) ==
-            int(offer.get("renderer_generation",-2))
-        and absf(float(reply.get("sampled_at_ms",NAN)) -
-            float(offer.get("sampled_at_ms",NAN))) <= .001
-        and absf(float(reply.get("travel_ms",NAN)) -
-            float(offer.get("travel_ms",NAN))) <= .001)
-
-
-func _bind_backend_reservation(authorized_offer: Dictionary) -> void:
-    if not _matches_reservation(authorized_offer):
-        _report_problem("Backend reserved different source feasibility witness")
-        _cancel_provisional()
-        return
-    if renderer == null or not is_instance_valid(renderer):
-        _cancel_provisional()
-        return
-    # This is the ONLY physical-arm boundary. The backend has already
-    # selected its downbeat; the native projector merely maps that
-    # absolute time to an exact future world location, then the sole
-    # immutable queue owner verifies the final geometry and commits it.
-    var at_ms: int = Time.get_ticks_msec()
-    var backend_now: float = _backend_ms()
-    var deadline: float = float(authorized_offer.get("deadline_ms",NAN))
-    if not is_finite(backend_now) or not is_finite(deadline) or deadline <= backend_now:
-        _cancel_provisional()
-        return
-    var at_world: float = flow.project(at_ms)
-    var nominal: float = float(current.get("projection_bpm",NAN))
-    var segments: Array = current.get("projection_segments",[])
-    var source_beat: float = float(current.get("projection_source_beat",NAN))
-    var exact_world: float = flow.project_authored_future(
-        at_ms+roundi(deadline-backend_now),at_ms,source_beat,nominal,segments)
-    if not is_finite(exact_world) or exact_world <= at_world:
-        _cancel_provisional()
-        return
-    var opening: float = float(current.get("from_beat",0.0))
-    var count_in: float = float(current.get("count_in_beats",0.0))
-    var exact_action: String = str(current.get("reservation_action","start"))
-    var committed: Dictionary
-    if exact_action == "auto":
-        committed = renderer.reserve_continuation_at(
-            at_world,opening,exact_world,count_in)
-    else:
-        committed = renderer.reserve_transport_action(
-            exact_action,at_world,opening,count_in,
-            str(current.get("mode","")) == "listen",exact_world)
-    if committed.is_empty() or not is_finite(float(committed.get("start_world",NAN))) or \
-            absf(float(committed["start_world"])-exact_world) > .0001:
-        _cancel_provisional()
-        return
-    var physical_world: float = float(committed["start_world"])
-    var physical_travel: float = flow.physical_travel_ms_to(
-        physical_world,at_ms,source_beat,nominal,segments)
-    if not is_finite(physical_travel) or \
-            absf(backend_now+physical_travel-deadline) > 5.0:
-        _cancel_provisional()
-        return
-    current["physical_attestation"] = {
-        "physical_world_origin": physical_world,
-        "physical_sampled_at_ms": backend_now,
-        "physical_travel_ms": physical_travel,
-        "physical_queue_generation": renderer.admission_queue_generation(),
-        "physical_renderer_generation": int(current.get("revision",-1)),
-    }
-    receipt = authorized_offer.duplicate(true)
-    if not renderer.bind_stream_segment(str(receipt["segment_id"])) or \
-            not renderer.acknowledge_stream_arm():
-        _cancel_provisional()
-        return
-    # Reservation and arm are complete, but no grading or sound exists
-    # until the backend validates this exact physical attestation.
-    _send_presentation()
-
-
-func _reserved(code: int, body: PackedByteArray) -> void:
-    if current.is_empty():
-        return
-    var data: Variant = JSON.parse_string(body.get_string_from_utf8())
-    if code == 0 and data is Dictionary and _matches_reservation(data):
-        _bind_backend_reservation(data)
-        return
-    _report_problem("Score reservation failed")
-    _cancel_provisional()
-
-
-func _send_presentation() -> void:
-    if receipt.is_empty():
-        return
-    # Refresh only the PHYSICAL witness on the original world/queue;
-    # never choose a new downbeat.
-    if (renderer == null or not is_instance_valid(renderer) or
-            not renderer.owns_authorized_segment(str(receipt["segment_id"]))):
-        _cancel_provisional()
-        return
-    var attestation: Variant = current.get("physical_attestation")
-    if not attestation is Dictionary:
-        _cancel_provisional()
-        return
-    var at_ms: int = Time.get_ticks_msec()
-    var backend_now: float = _backend_ms()
-    var target_world: float = float(attestation.get("physical_world_origin",NAN))
-    var travel: float = flow.physical_travel_ms_to(
-        target_world,at_ms,
-        float(current.get("projection_source_beat",NAN)),
-        float(current.get("projection_bpm",NAN)),
-        current.get("projection_segments",[]))
-    if (not is_finite(backend_now) or not is_finite(travel) or
-            absf(backend_now+travel-float(receipt["deadline_ms"])) > 5.0):
-        _cancel_provisional()
-        return
-    attestation["physical_sampled_at_ms"] = backend_now
-    attestation["physical_travel_ms"] = travel
-    attestation["physical_queue_generation"] = renderer.admission_queue_generation()
-    current["physical_attestation"] = attestation
-    var payload: Dictionary = {
-        "intent_id":str(receipt["intent_id"]),
-        "attempt":int(receipt["attempt"]),
-        "segment_id":str(receipt["segment_id"])}
-    payload.merge(attestation,true)
-    if present_request.request("playback.present",payload) != OK:
-        _cancel_provisional()
-
-func _presented(code: int, body: PackedByteArray) -> void:
-    if current.is_empty() or receipt.is_empty():
-        # A newer state frame already confirmed and cleared this exact
-        # presentation; a delayed reply must not touch the next lesson.
-        return
-    var data: Variant = JSON.parse_string(body.get_string_from_utf8())
-    if code == 0 and data is Dictionary and \
-            bool(data.get("authorized",false)) and \
-            _matches_intent(data,receipt) and \
-            str(data.get("segment_id","")) == str(receipt.get("segment_id","")):
-        _confirm_authorized(receipt)
-        return
-    _report_problem("Score presentation failed")
-    _cancel_provisional()
-
-
-func _confirm_authorized(data: Dictionary) -> void:
-    if receipt.is_empty() or current.is_empty():
-        return
-    var expected: String = str(receipt.get("segment_id",""))
-    if str(data.get("segment_id","")) != expected or \
-            not _matches_intent(data,receipt):
-        _cancel_provisional()
-        return
-    if (renderer == null or not is_instance_valid(renderer)
-            or not renderer.owns_authorized_segment(expected)):
-        # The backend may already be grading this exact take, but native
-        # physical source ownership was lost across a resize/withdrawal.
-        # Stop that take instead of starting count-in sound over blank ink.
-        _report_authorized_failure(
-            str(receipt.get("take_id","")),expected,
-            "authorized_source_missing_from_physical_queue")
-        _report_problem("Authorized score source disappeared before presentation")
-        if renderer != null and is_instance_valid(renderer):
-            renderer.cancel_stream_arm()
-        _clear_provisional()
-        return
-    if runway != null and renderer != null and \
-            is_instance_valid(renderer) and runway.owns_prepared_renderer(renderer):
-        if not runway.promote_reserved(admission_state):
-            _report_authorized_failure(
-                str(receipt.get("take_id","")),expected,
-                "prepared_stage_promotion_failed")
-            _report_problem("Authorized stage could not be presented")
-            if renderer != null and is_instance_valid(renderer):
-                renderer.cancel_stream_arm()
-            _clear_provisional()
-            return
-    last_activated_segment = expected
-    last_activated_intent = str(receipt.get("intent_id",""))
-    last_activated_attempt = int(receipt.get("attempt",-1))
     var now_ms: int = Time.get_ticks_msec()
-    var deadline_local: float = float(receipt["deadline_ms"]) + \
-        float(now_ms)-_backend_ms()
-    if not current.is_empty():
-        # Admission authorizes the exact source rate epochs before their
-        # scheduled downbeat. Renderer, inverse physical preflight and
-        # count-in now consume this same deterministic presentation clock.
-        flow.authorize_source_epoch(
-            deadline_local,float(current.get("from_beat",0.0)),
-            float(current.get("bpm",60.0)),
-            current.get("tempo_segments",[]),expected)
-    if not current.is_empty() and float(current.get("count_in_beats",0.0)) > 0.0:
-        metronome.reserve_count_in(
-            deadline_local, float(current.get("bpm",60.0)),
-            float(current.get("count_in_beats",0.0)),
-            current.get("count_in_meter",[4,4]),
-            float(current.get("count_in_beats",0.0)),
-            str(current.get("action","start")),
-            current.get("count_in_plan",{}),
-            str(receipt.get("take_id","")),expected)
-        metronome.acknowledge_reserved_count_in(now_ms)
-    _clear_provisional()
-
-
-func _clear_provisional() -> void:
-    # One local lifecycle termination for success, failed promotion,
-    # missing physical source and withdrawal.
-    renderer = null
-    current.clear()
-    receipt.clear()
-    admission_state.clear()
-
-
-func _cancel_provisional(withdraw_backend: bool = true) -> void:
-    if renderer != null and is_instance_valid(renderer):
-        renderer.cancel_stream_arm()
-    if withdraw_backend and not current.is_empty() and not withdraw_request.is_pending():
-        withdraw_request.request("playback.withdraw",{
-            "intent_id":str(current["intent_id"]),
-            "attempt":int(current["attempt"]),
-            "reason":"presentation_cancelled"})
-    # No provisional transaction owns an audible countdown: that
-    # reservation is created only after authorization. Cancelling here
-    # could otherwise silence the previous take's still-active count-in.
-    _clear_provisional()
-
-func _withdrawn(code: int, body: PackedByteArray) -> void:
-    # The backend may already have expired/superseded this attempt.
-    # No local retry creates a second deadline: the next authoritative
-    # state snapshot decides whether another attempt exists.
-    if code != 0:
-        # A denied withdrawal may reflect a source already superseded by
-        # the Python owner. A failed fixed-repeat withdrawal must be
-        # retryable rather than cached forever as a completed rejection.
-        last_rejected_fixed_intent = ""
-        _report_problem("Could not retire score reservation: " +
-            Request.failure_message(code,body))
+    var origin: float = float(view.runway_origin_beat)
+    var start_world: float = flow.run_world(float(take["world_start"]))
+    var placed: Dictionary = view.place_timeline_take(
+        flow.project(now_ms)-origin,float(take.get("source_from_beat",0.0)),
+        start_world-origin,float(current.get("count_in_beats",0.0)))
+    if placed.is_empty() or absf(float(placed.get("start_world",NAN))-(start_world-origin)) > .0001:
+        _report_problem("Cannot draw the take where the timeline placed it")
+        if not placed.is_empty():
+            view.cancel_stream_arm()
+        return false
+    if not view.bind_stream_segment(segment_id) or not view.acknowledge_stream_arm():
+        view.cancel_stream_arm()
+        return false
+    if runway != null and runway.owns_prepared_renderer(view):
+        if not runway.promote_reserved(state):
+            view.cancel_stream_arm()
+            _report_authorized_failure(str(current.get("take_id","")),
+                segment_id,"prepared_stage_promotion_failed")
+            return false
+    var count_in: float = float(current.get("count_in_beats",0.0))
+    if count_in > 0.0:
+        var backend_now: float = _backend_ms()
+        if is_finite(backend_now):
+            var deadline_local: float = float(current["deadline_ms"]) + \
+                float(now_ms)-backend_now
+            metronome.reserve_count_in(
+                deadline_local,float(current.get("bpm",60.0)),count_in,
+                current.get("count_in_meter",[4,4]),count_in,"start",
+                current.get("count_in_plan",{}),
+                str(current.get("take_id","")),segment_id)
+            metronome.acknowledge_reserved_count_in(now_ms)
+    return true
 
 func _failure_reported(code: int, body: PackedByteArray) -> void:
     if code != 0:
-        # An unsuccessful report is not a delivered failure. A subsequent
-        # frame may retry this exact source loss if playback remains active.
+        # An unsuccessful report is not a delivered failure. A later frame
+        # may retry this exact source loss if playback remains active.
         if reported_failure_segment == failure_report_in_flight:
             reported_failure_segment = ""
         _report_problem("Could not halt playback after notation loss: "+

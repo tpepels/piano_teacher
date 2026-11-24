@@ -38,6 +38,8 @@ func trim(facts: StreamGeometry, reason: String, protected_take: int = -1,
 
 var serial := 0
 var last_admitted := -1
+# True while a take the musical timeline placed is appended.
+var timeline_placement := false
 const RecoveryPlanner := preload("res://notation/native/stream_recovery_planner.gd")
 var _recovery = RecoveryPlanner.new()
 var retry_placement := false
@@ -325,7 +327,7 @@ func append_take(facts: StreamGeometry, windows: Array[Vector2], source_beat: fl
                 _pool.repeat_segments,_pool.rest_segments,
                 _pool.first_once,facts.world,width,
                 facts.playhead,density,gap_pixels,
-                duration,empty_strip,_pool.allocate):
+                duration,empty_strip,_pool.allocate,timeline_placement):
             # Do not leave a partial, ungraded take after a failed append.
             if added > 0:
                 queue.withdraw_take_tail(canvas(),first_serial,
@@ -443,6 +445,43 @@ func arm_take(facts: StreamGeometry, world: float, opening: float, right: float,
         reject_candidate,cancel_arm,empty_strip_onset,retry_placement,
         world,opening,right,header,planned_start_world,
         retrying,empty_strip_count_in,exact_authorized)
+
+## Append the take the musical timeline placed at `start_world`. Python
+## chose that place after all ink still ahead; unseen leftovers go first.
+func place_timeline_take(facts: StreamGeometry, opening: float,
+        start_world: float, right: float, header: float,
+        count_in_beats: float) -> Dictionary:
+    if not queue.abandon_unplayed(canvas(),facts.world,"timeline_new_run").is_empty():
+        _binding.reconcile()
+    trim(facts,"timeline_replaces_unseen")
+    # Print the count-in bar as a rest where no earlier ink fills it.
+    var before: float = maxf(facts.world,ink_end(facts))
+    var leading_rest: float = clampf(start_world-header-before-
+        Admission.REST_GAP_BEATS,0.0,count_in_beats)
+    timeline_placement = true
+    var admitted: Dictionary = arm_take(facts,facts.world,opening,right,
+        header,start_world,false,0.0,true,false,
+        leading_rest if leading_rest >= .5 else 0.0)
+    timeline_placement = false
+    return admitted
+
+## World beat where the ink that cannot be withdrawn ends (this layer and
+## live peer layers), or -INF when the staff ahead is empty.
+func ink_end(facts: StreamGeometry) -> float:
+    var played: Array = queue.online.slice(0,queue.online.size()-
+        StreamQueue.unplayed_tail_count(queue.online,facts.world))
+    var preview: Dictionary = queue.preview_tail_withdrawal(facts.world,
+        facts.density,facts.gap,facts.duration,facts.width,facts.playhead,
+        -1,false,-1,played)
+    var end := -INF
+    for item in preview.get("remaining",[]):
+        var bounds: Vector2 = Admission.clip_bounds(
+            item,facts.density,facts.gap,facts.duration)
+        end = maxf(end,float(item["world_origin"])+bounds.y/maxf(1.0,facts.density))
+    var peer: float = queue.minimum_peer_opening(facts.density,facts.width,facts.playhead)
+    if is_finite(peer):
+        end = maxf(end,peer)
+    return end
 
 func allocate_source(facts: StreamGeometry, source_beat: float, start_world: float,
         from_beat: float, take_key: String, empty_strip: bool,

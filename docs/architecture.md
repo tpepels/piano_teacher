@@ -128,26 +128,36 @@ has at most 10 constructor collaborators):
 `MusicalScheduler`). `TimedStart` opens the take a physical receipt
 authorized and never chooses a deadline.
 
-## Physical playback protocol
+## Musical timeline
 
-Production has exactly one transport: physical score presentation.
+Production has exactly one transport: the musical timeline
+(`musical_timeline.py`, evaluated identically by `godot/musical_timeline.gd`).
+A run of timed music is a list of contiguous count-in, take and rest
+segments on the world-beat line, each with a start time and tempo spans
+(constant or eased, `tempo_curve`). Time and world position are a pure
+function of it; a Pause is a hold that moves every later segment.
 
-1. A lesson decision or learner gesture requests playback;
-   `PlaybackCoordinator.request` publishes a `playback_intent` (source,
-   stage, revision, hand, BPM, count-in plan, earliest/fixed deadline).
-2. Godot's score admission measures physical clearance and calls
-   `playback.reserve`; Python alone chooses the deadline.
-3. Godot arms immutable ink and calls `playback.present` with its
-   attestation; Python validates source, stage, revision, hand, mode, BPM,
-   rate map and transport epoch, then starts the take
-   (`PlaybackAuthorization.commit_playback_intent` → `TimedStart.start`).
-4. Grading is enabled only for the presented segment. Stale, duplicated or
-   reordered replies fail closed: a failed reply cancels the provisional
-   admission, and the next state frame decides whether another attempt
-   exists; three failed admissions end in a visible failure.
+1. A lesson decision or learner gesture requests playback
+   (`PlaybackCoordinator.request`).
+2. After the event, `PlaybackAuthorization.start_pending` places the take
+   and starts it at once:
+   - automatic repeat: rest from the last sounding note to its barline,
+     one count-in bar easing to the new tempo, then the take (a late
+     decision adds whole rest bars);
+   - Start, Retry, Listen, score-ready: a run continues after the ink Godot
+     reported ahead of its playhead (`ink_ahead_beats`, sent with the
+     command), then one count-in bar;
+   - Resume: a pause in a rest or count-in only moves what follows; a take
+     paused while playing ends there and continues from the paused beat
+     after its own count-in.
+3. Godot follows the published timeline for the scrolling world during a
+   run and draws each take's notes at its world start (they may appear on
+   the visible staff). An abandoned take whose first note never reached
+   the playhead is withdrawn. A take that cannot be drawn is reported
+   (`playback.failure`) and Python stops it.
 
-Resume of a running take, automatic repeats, Listen and score-ready starts
-all use the same intent → reserve → present path.
+Free, idle and the time after a closed run keep the held presentation
+world; a new run continues from where the staff stands.
 
 ## Settlement and failure
 
@@ -191,9 +201,9 @@ composes no lesson text of its own.
 
 - `ScoreAssetSession` requests one source-bound `score.bundle` per stage
   and publishes readiness only after retained native ink compiled.
-- `ScoreAdmissionGateway` / `ScoreStreamQueue` implement reserve → arm →
-  attest → present over one immutable forward-only score stream; exposed
-  ink is never retimed.
+- `ContinuousScoreFlow` follows the musical timeline during a run;
+  `ScoreAdmissionGateway` draws each take at its timeline world start in
+  the forward-only `ScoreStreamQueue`; exposed ink is never retimed.
 - Presentation, metronome, count-in voice and feedback paint the
   authorized segment only.
 

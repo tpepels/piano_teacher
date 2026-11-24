@@ -136,6 +136,8 @@ func accept(state: Dictionary, request_midpoint_ms: int,
     score_effects.transition_mode(state,practice_view.stage)
     visual_clock.accept(state,request_midpoint_ms,received_ms)
     var beat: float = transport_beat(state,received_ms)
+    # During a run of timed music the world follows the musical timeline.
+    score_flow.follow(state.get("musical_timeline"),received_ms)
     guided.update_hold(state)
     var playback: Variant = state.get("playback_timeline")
     var authorized: Variant = playback.get("current") \

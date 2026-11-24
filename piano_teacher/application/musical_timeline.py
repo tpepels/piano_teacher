@@ -26,6 +26,9 @@ from .tempo_curve import TempoSpan, count_in_spans
 # An appended count-in may start this much in the past (the decision is
 # taken one worker tick after a take ends; Godot plays a late first click).
 LATE_GRACE_SECONDS = 0.25
+# A new run's count-in starts at least this long after the request, so the
+# state carrying it reaches Godot before the first click.
+RUN_LEAD_SECONDS = 0.35
 # Past segments kept in the published snapshot (their ink is still leaving).
 KEPT_PAST_SEGMENTS = 6
 
@@ -175,6 +178,8 @@ class MusicalTimeline:
         self.segments: list[TimelineSegment] = []
         # (wall start, duration or None while the pause lasts)
         self.holds: list[tuple[float, float | None]] = []
+        # A closed run holds its world here; nothing follows yet.
+        self.end_world: float | None = None
 
     # --- clock ---------------------------------------------------------
 
@@ -182,6 +187,18 @@ class MusicalTimeline:
         self.run += 1
         self.segments = []
         self.holds = []
+        self.end_world = None
+
+    def close(self) -> None:
+        """Hold the world after the last take's rest to its barline."""
+        last = self.last_take()
+        if last is not None and self.end_world is None:
+            self.end_world = last.world_end + last.rest_after_beats
+
+    @property
+    def open(self) -> bool:
+        """A run is moving and the next take may follow it."""
+        return bool(self.segments) and self.end_world is None
 
     @property
     def paused(self) -> bool:
@@ -227,6 +244,12 @@ class MusicalTimeline:
     def world_at(self, t: float) -> float | None:
         """World beat at wall instant `t`; past the last segment the
         music continues as an open rest at its final tempo."""
+        world = self._world_at(t)
+        if world is not None and self.end_world is not None:
+            return min(world, self.end_world)
+        return world
+
+    def _world_at(self, t: float) -> float | None:
         if not self.segments:
             return None
         m = self.musical(t)
@@ -260,6 +283,13 @@ class MusicalTimeline:
 
     def last_take(self) -> TimelineSegment | None:
         return next((s for s in reversed(self.segments) if s.kind == "take"), None)
+
+    def segment_at(self, t: float) -> TimelineSegment | None:
+        return self._segment_at(self.musical(t)) if self.segments else None
+
+    def take_start(self, take: TimelineSegment) -> float:
+        """Wall instant of a take's first beat."""
+        return self.wall(take.start_at)
 
     # --- placement -----------------------------------------------------
 
@@ -312,44 +342,30 @@ class MusicalTimeline:
             count_in_spans(bar_beats, outgoing, bpm), meter=tuple(meter)))
         return self._append_take(take, world=count_in.world_end, at=count_in.end_at)
 
-    def record_take(self, take: TakeSpec, *, run_at: float, count_in_beats: float,
-                    bpm: float, meter: tuple[int, int]) -> tuple[float | None, float]:
-        """Record a take that today's transport already started at `run_at`
-        after a constant count-in (T2: built alongside). Returns the count-in
-        start planned by bar arithmetic (None for a new run) and the actual
-        one, both in wall seconds."""
-        count_in_seconds = count_in_beats * 60.0 / bpm if count_in_beats > 0 else 0.0
-        actual = self.musical(run_at) - count_in_seconds
-        planned = self.planned_count_in_start()
-        last = self.segments[-1] if self.segments else None
-        if last is not None and actual < last.end_at - 1e-6:
-            # Overlaps the previous take: today's transport began a new run.
-            self.reset()
-            last, planned = None, None
-            actual = self.musical(run_at) - count_in_seconds
-        if last is None:
-            world = 0.0
-            if count_in_seconds > 0:
-                world = self.append(TimelineSegment(
-                    "count_in", 0.0, actual,
-                    (TempoSpan(count_in_beats, bpm, bpm),),
-                    meter=tuple(meter))).world_end
-            self._append_take(take, world=world, at=self.musical(run_at))
-            return None, run_at - count_in_seconds
-        gap = actual - last.end_at
-        if gap > 1e-6:
-            self.append(TimelineSegment(
-                "rest", last.world_end, last.end_at,
-                (TempoSpan(gap * last.end_bpm / 60.0, last.end_bpm, last.end_bpm),)))
-        if count_in_seconds > 0:
-            tail = self.segments[-1]
-            self.append(TimelineSegment(
-                "count_in", tail.world_end, tail.end_at,
-                (TempoSpan(count_in_beats, bpm, bpm),), meter=tuple(meter)))
-        tail = self.segments[-1]
-        self._append_take(take, world=tail.world_end, at=tail.end_at)
-        return (None if planned is None else self.wall(planned),
-                self.wall(actual))
+    def start_after(self, take: TakeSpec, *, now: float, rest_beats: float,
+                    bar_beats: float, meter: tuple[int, int], bpm: float,
+                    lead: float = RUN_LEAD_SECONDS) -> TimelineSegment:
+        """Rest past `rest_beats` of ink still ahead of the playhead, one
+        count-in bar, then `take`. Continues the run after a cut take;
+        otherwise begins it at `now`."""
+        self.end_world = None
+        m = self.musical(now)
+        if self.segments:
+            last = self.segments[-1]
+            world, at, tempo = last.world_end, last.end_at, last.end_bpm
+        else:
+            world, at, tempo = 0.0, m, bpm
+        rest = max(0.0, rest_beats)
+        # Never start the count-in before the state can reach Godot.
+        rest = max(rest, (m + lead - at) * tempo / 60.0)
+        if rest > 1e-9:
+            world = self.append(TimelineSegment(
+                "rest", world, at, (TempoSpan(rest, tempo, tempo),))).world_end
+            at = self.segments[-1].end_at
+        count_in = self.append(TimelineSegment(
+            "count_in", world, at, count_in_spans(bar_beats, tempo, bpm),
+            meter=tuple(meter)))
+        return self._append_take(take, world=count_in.world_end, at=count_in.end_at)
 
     def cut_take(self, t: float) -> None:
         """End the current take at wall instant `t` (Resume continues it in a
@@ -370,6 +386,7 @@ class MusicalTimeline:
         first = max(0, (past[-1] + 1 - KEPT_PAST_SEGMENTS) if past else 0)
         return {
             "run": self.run,
+            "end_world": self.end_world,
             "holds_ms": [[at * 1000.0, None if d is None else d * 1000.0]
                          for at, d in self.holds],
             "segments": [s.snapshot() for s in self.segments[first:]],

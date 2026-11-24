@@ -46,41 +46,41 @@ func run() -> void:
         7000,4000,0.0,60.0,shaped),first+4.0),
         "Hypothetical variable tempo and physical inverse agree")
 
-    flow.authorize_source_epoch(8000,0.0,60.0,[],"take:1")
-    check(near(flow.project(4500),first),
-        "A backend-authorized future epoch does not release Pause")
-    flow.sample(4500)
-    flow.release_hold()
-    var resumed := flow.project(4800)
-    check(resumed >= first and resumed < first+4.0,
-        "Resuming preserves continuous non-reversing presentation time")
-    check(flow.timeline.active_segment == "take:1",
-        "Authorized source identity survives the native Pause release")
-
+    # A run of timed music: the world follows the published timeline.
+    # Godot's clock stands in for the backend clock here (offset zero).
     var running := Flow.new()
-    running.sample(1000,60.0)
-    running.authorize_source_epoch(2000,0.0,60.0,shaped,"shaped:1")
-    running.sample(2000)
-    var at_first: float = running.project(2000)
-    check(near(running.physical_travel_ms_to(
-        at_first+4.0,2000,0.0,60.0,shaped),3000.0,.1),
-        "Unheld physical inverse integrates the committed tempo epochs")
-    var advanced := running.sample(5000)
-    check(near(advanced,at_first+4.0),
-        "The committed source reaches the authored four-beat position")
-    check(running.sample(4200) >= advanced,
-        "Late state frames cannot rewind the authorized world")
+    running.backend_clock = func(): return float(Time.get_ticks_msec())
+    var t0: float = float(Time.get_ticks_msec())
+    running.sample(int(t0),60.0)
+    var start_world: float = running.project(int(t0))
+    var run_state := {"run":1,"end_world":null,"holds_ms":[],"segments":[
+        {"kind":"count_in","world_start":0.0,"start_ms":t0+1000.0,"beats":4.0,
+            "spans":[[2.0,60.0,120.0],[2.0,120.0,120.0]],"take_id":"",
+            "mode":"","source_from_beat":0.0,"meter":[4,4]},
+        {"kind":"take","world_start":4.0,"start_ms":t0+1000.0+(120.0/sqrt(60.0*120.0)+1.0)*1000.0,
+            "beats":4.0,"spans":[[4.0,120.0,120.0]],"take_id":"take:1",
+            "mode":"practice","source_from_beat":0.0,"meter":[4,4]}]}
+    running.follow(run_state,int(t0))
+    check(running.following and near(running.project(int(t0)+500),start_world),
+        "A new run starts from the world where the staff stands")
+    var ramp_end_ms: float = t0+1000.0+120.0/sqrt(60.0*120.0)*1000.0
+    check(near(running.project(int(ramp_end_ms)),start_world+2.0,.03),
+        "The eased first half of the count-in covers exactly two beats")
+    var take_ms: float = float(run_state["segments"][1]["start_ms"])
+    check(near(running.project(int(take_ms)),start_world+4.0,.03),
+        "The take's first beat reaches the playhead at its timeline time")
+    check(near(running.project(int(take_ms)+1000),start_world+6.0,.03),
+        "The take scrolls at its own tempo")
+    var paused_state: Dictionary = run_state.duplicate(true)
+    paused_state["holds_ms"] = [[take_ms+500.0,null]]
+    running.sample(int(take_ms)+400)
+    running.follow(paused_state,int(take_ms)+400)
+    check(near(running.project(int(take_ms)+5000),start_world+5.0,.03),
+        "Pause freezes the timeline world")
+    running.follow(null,int(take_ms)+600)
+    check(not running.following and near(running.project(int(take_ms)+9000),running.beat),
+        "After the run the world holds where the run left it")
 
-    var uninterrupted := Flow.new()
-    uninterrupted.sample(1000,40.0)
-    uninterrupted.authorize_source_epoch(2000,0.0,40.0,[],"older:approved")
-    uninterrupted.sample(2000)
-    var authorized_rate: float = uninterrupted.timeline.current_rate()
-    uninterrupted.sample_uncommitted(2600,120.0)
-    check(near(uninterrupted.timeline.current_rate(),authorized_rate),
-        "Pending next source cannot apply its nominal BPM to previous authorized ink")
-    check(near(uninterrupted.project(3200)-uninterrupted.project(2600),.4),
-        "Predecessor's forward physical world keeps its original 40 BPM until new authorization")
     var unbound := Flow.new()
     unbound.sample_uncommitted(1000,72.0)
     check(near(unbound.timeline.current_rate(),72.0),

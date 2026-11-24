@@ -83,7 +83,7 @@ func _fail(message: String) -> void:
             "world_sample":timeline.last_world,
             "last_ms":timeline.last_ms,
             "intent":state.get("playback_intent"),
-            "reservation_current":app.score_admission.current,
+            "placed_segment":app.score_admission.placed_segment,
             "reservation_problem":app.score_admission.last_problem()
         }
     printerr("PHASE6_REAL_SCORE_FAILED: ", phase, ": ", message,
@@ -275,13 +275,9 @@ func _process(_delta: float) -> bool:
                         is_finite(playhead) and is_finite(viewport_width)):
                     wrong_side = true
                     continue
-                var clip: Vector2 = Admission.clip_bounds(
-                        item,density,gap,view.timeline.duration_beats)
-                var admitted_left: float = playhead + \
-                    (float(item["world_origin"])-world_at)*density + clip.x
-                wrong_side = wrong_side or \
-                    (admitted_left <= viewport_width and \
-                    not bool(item.get("admitted_on_empty_strip",false)))
+                # The musical timeline places the retry ahead of the
+                # playhead (it may appear on the visible staff).
+                wrong_side = wrong_side or source_at <= world_at+.0001
                 # A rest AFTER the retry source must never be mistaken for
                 # its preceding gap. Locate the nearest genuine rest ending
                 # at/before this source, which may itself already be moving.
@@ -340,7 +336,9 @@ func _process(_delta: float) -> bool:
             app.send_action({"action":"practice"})
             _advance("return_to_practice")
         "return_to_practice":
-            if str(state.get("mode",""))!="practice" or not _ready_score() or                     bool(state.get("running",false)):
+            # The timeline starts the take at once (count-in); the next
+            # step does not depend on it having started or not.
+            if str(state.get("mode",""))!="practice" or not _ready_score():
                 return false
             if int(state.get("lesson_step",0)) != 1:
                 _fail("Listen changed the selected lesson")

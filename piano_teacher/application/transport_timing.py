@@ -92,33 +92,22 @@ class TransportTiming:
         tempo = self.active_tempo_map()
         return SCHEDULER.source_seconds(tempo,beat,self.lesson.plan.bpm)
 
-    def record_timeline_take(self) -> None:
-        """Record the take today's transport just started in the declared
-        musical timeline and log where bar arithmetic would have placed it
-        (ROADMAP T2: the timeline is built alongside, it decides nothing)."""
-        plan, transport = self.lesson.plan, self.transport
-        if plan is None or not transport.running or plan.bpm <= 0:
-            return
+    def timeline_take(self, *, from_beat: float, mode: str, take_id: str) -> TakeSpec:
+        """The selected window from `from_beat` as a take on the musical
+        timeline: its authored tempo at the practice BPM and the rest from
+        its last sounding note to the following barline."""
+        plan = self.lesson.plan
         phrase = plan.active_phrase
         end = phrase.sounding_end-phrase.start
-        start = min(float(transport.play_from_beat), end)
+        start = min(max(0.0,float(from_beat)),end)
         bpm = float(plan.bpm)
-        tempo = self.active_tempo_map()
+        tempo = self.score.tempo_map(plan.active_stage,plan.bpm)
         local = (tempo.from_beat(start).as_segments()
                  if tempo is not None and start < tempo.duration_beats else ())
         spans = take_spans([(s["start_beat"],s["end_beat"],s["bpm"]) for s in local],
                            0.0,end-start,bpm)
         grid = self.attempt_progression.grid_for(phrase,plan.piece.bar_boundaries)
-        take = TakeSpec(str(transport.transport_id),transport.mode,start,spans,
-                        rest_to_barline(end,grid))
-        planned,actual = transport.record_timeline_take(take,
-            run_at=transport.run_at,count_in_beats=transport.count_in_beats,
-            bpm=bpm,meter=tuple(transport.count_in_meter))
-        if planned is not None:
-            print("MUSICAL_TIMELINE_AGREEMENT: planned_count_in_ms=%.1f "
-                  "actual_count_in_ms=%.1f delta_ms=%.1f mode=%s"
-                  % (planned*1000,actual*1000,(actual-planned)*1000,transport.mode),
-                  flush=True)
+        return TakeSpec(take_id,mode,start,spans,rest_to_barline(end,grid))
 
     def next_count_in(self) -> tuple[float,tuple[int,int]]:
         plan = self.lesson.plan
@@ -180,6 +169,9 @@ class TransportTiming:
         margin. The next source is admitted straight after the rest on the
         empty staff; its one count-in bar is spoken over the rest bar.
         """
+        ahead = kwargs.get("ink_ahead_beats")
+        if ahead is not None:
+            self.transport.report_ink_ahead(ahead)
         clear = kwargs.get("continuation_clear_beats")
         header = kwargs.get("continuation_header_beats")
         if clear is None or header is None:

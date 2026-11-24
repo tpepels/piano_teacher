@@ -93,7 +93,16 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
             library.mark_opened(event.opened_identifier)
         return resumed
 
-    return {
+    def then_start(handler):
+        # Every event may request a timed take; it is placed on the musical
+        # timeline and started once the event has finished.
+        def run(event):
+            result = handler(event)
+            playback_authorization.start_pending()
+            return result
+        return run
+
+    handlers = {
         UserCommand: lambda e: commands.apply(e.action, **e.parameters),
         PhysicalMidi: physical,
         ClockAdvanced: lambda e: tick.advance(),
@@ -121,6 +130,8 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
             e.fingerprint, confirm=e.confirm),
         LearnerHistoryDeleted: lambda e: history_management.delete_learner(
             confirm=e.confirm),
-        SessionClosed: lambda e: lifecycle.shutdown(
-            receive=midi_callback.receive),
     }
+    handlers = {kind: then_start(handler) for kind, handler in handlers.items()}
+    handlers[SessionClosed] = lambda e: lifecycle.shutdown(
+        receive=midi_callback.receive)
+    return handlers

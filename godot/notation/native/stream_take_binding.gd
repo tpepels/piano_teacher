@@ -122,6 +122,11 @@ func observe_transport(facts: StreamGeometry, world: float, opening: float,
                         armed_segment_id = ""
                     else:
                         cancel.call(facts,world)
+            elif key == last_take and was_paused and paused_owner >= 0 and \
+                    queue.has_take(paused_owner) and \
+                    expected_segment == live_segment_id:
+                # Resumed in its count-in: the same drawn take continues.
+                live_serial = paused_owner
             elif key == last_take and not was_paused:
                 var owned: int = Admission.select(
                     queue.online,"bound",opening,world,0.0,0.0,key)

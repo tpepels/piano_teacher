@@ -161,22 +161,13 @@ class PracticeSession:
         return values
 
     def admit(self, state=None):
-        """Reserve and present the pending physical intent, as Godot does."""
-        state = state or self.snapshot()
-        intent = state.get("playback_intent")
-        if not intent:
-            return state
-        receipt = self.ask("playback.reserve", **self.physical_offer(intent))
-        sampled = self.clock()*1000.0
-        self.ask("playback.present", intent_id=intent["intent_id"],
-                 attempt=intent["attempt"], segment_id=receipt["segment_id"],
-                 physical_world_origin=receipt["world_origin"],
-                 physical_sampled_at_ms=sampled,
-                 physical_travel_ms=receipt["deadline_ms"]-sampled,
-                 physical_queue_generation=receipt["queue_generation"]+1,
-                 physical_renderer_generation=intent["revision"])
-        self.receipt = receipt
-        return self.snapshot()
+        """A requested take is placed on the musical timeline and started by
+        the engine itself; Godot only draws it. Record its downbeat."""
+        state = self.snapshot()
+        current = (state.get("playback_timeline") or {}).get("current")
+        if current:
+            self.receipt = {"deadline_ms": current["deadline_ms"]}
+        return state
 
     def ready_score(self, *, admit=True, state=None):
         state = state or self.snapshot()

@@ -47,8 +47,12 @@ class Transport:
     def musical_timeline(self):
         return self._timeline.musical
 
-    def record_timeline_take(self, take, **kwargs):
-        return self._timeline.musical.record_take(take, **kwargs)
+    @property
+    def ink_ahead_beats(self) -> float:
+        return self._timeline.ink_ahead_beats
+
+    def report_ink_ahead(self, beats) -> None:
+        self._timeline.report_ink_ahead(beats)
 
     def reset_musical_timeline(self) -> None:
         self._timeline.musical.reset()
@@ -336,6 +340,12 @@ class Transport:
 
     def advance(self, *args, **kwargs):
         return self._admission.advance(*args, **kwargs)
+
+    def segment_id_for(self, *args, **kwargs):
+        return self._admission.segment_id_for(*args, **kwargs)
+
+    def authorize(self, *args, **kwargs):
+        return self._admission.authorize(*args, **kwargs)
 
     def automatic_request_blocked(self, *args, **kwargs):
         return self._admission.automatic_request_blocked(*args, **kwargs)

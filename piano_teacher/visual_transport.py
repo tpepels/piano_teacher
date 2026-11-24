@@ -82,9 +82,18 @@ class VisualTransport:
     rest_take_end: tuple[float, float] | None = None
     continuous_horizon_beats: float = 0.0
     next_boundary_beat: float = 0.0
-    # The declared musical timeline (ROADMAP T2: recorded alongside the
-    # deadlines above and published; it does not yet drive anything).
+    # The declared musical timeline: every timed take is placed on it and
+    # Godot draws and counts in from it.
     musical: MusicalTimeline = field(default_factory=MusicalTimeline)
+    # Beats of printed ink Godot last reported ahead of its playhead; a new
+    # run starts its count-in after it.
+    ink_ahead_beats: float = 0.0
+
+    def report_ink_ahead(self, beats) -> None:
+        value = float(beats)
+        if not math.isfinite(value) or not 0.0 <= value <= 256.0:
+            raise ValueError("Invalid ink-ahead measurement")
+        self.ink_ahead_beats = value
 
     def bind_scheduled_start(
         self, *, transport_id: int, from_beat: float, run_at: float,

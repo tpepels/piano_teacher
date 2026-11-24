@@ -247,6 +247,11 @@ class PlaybackCoordinator:
                 or transition.exposure.stage_key != source.stage_key
                 or transition.exposure.hand != source.hand):
             raise ValueError("Playback transition disagrees with its selected exposure")
+        if action in ("listen", "score_ready", "auto") and self._running_matches(
+                facts, mode=mode, from_beat=from_beat):
+            # A repeated readiness callback confirms the take already
+            # running on the timeline; it never starts a second one.
+            return None
         if self.intent is not None:
             existing = self.intent
             same_exposure = (
@@ -315,6 +320,18 @@ class PlaybackCoordinator:
         self.state = PlaybackState.AWAITING_ADMISSION
         self.failure = ""
         return self.intent
+
+    def _running_matches(self, facts: PlaybackRuntimeFacts, *, mode: str,
+                         from_beat: float) -> bool:
+        active, source = self.active_segment, facts.source
+        installed = active.get("source", {})
+        return (facts.running and bool(self.active_take_id) and source is not None
+                and active.get("mode") == mode
+                and installed.get("fingerprint") == source.fingerprint
+                and installed.get("stage_key") == source.stage_key
+                and installed.get("revision") == source.revision
+                and installed.get("hand") == source.hand
+                and abs(float(installed.get("from_beat", -1.0)) - float(from_beat)) < 1e-7)
 
     def _require_intent(self, facts: PlaybackRuntimeFacts, intent_id: str, attempt: int) -> PlaybackIntent:
         intent = self.intent
@@ -460,7 +477,39 @@ class PlaybackCoordinator:
         receipt = replace(
             receipt, world_origin=committed.world_origin,
             queue_generation=committed.queue_generation)
-        # No graded/audio transport mutation happened in either prior step.
+        return self._commit(intent, receipt, commit=commit, capture=capture,
+                            abort=abort)
+
+    def authorize(self, facts: PlaybackRuntimeFacts, *, deadline: float,
+                  world_origin: float, segment_id: str, commit: Callable,
+                  capture: Callable[[], PlaybackRuntimeFacts],
+                  abort: Callable[[str], None]) -> dict:
+        """Start the pending intent at the downbeat the musical timeline
+        placed it on. Godot draws it from the timeline; nothing is negotiated."""
+        intent = self.intent
+        if intent is None or not self._valid_source(facts, intent):
+            raise ValueError("Stale or cancelled playback intent")
+        receipt = ScoreReceipt(
+            intent_id=intent.intent_id, attempt=intent.attempt,
+            take_id=intent.take_id, fingerprint=intent.fingerprint,
+            stage_key=intent.stage_key, revision=intent.revision,
+            hand=intent.hand, source_from_beat=intent.from_beat,
+            source_end_beat=intent.end_beat,
+            segment_id=segment_id,
+            deadline_ms=float(deadline)*1000.0, world_origin=float(world_origin),
+            queue_generation=0, renderer_generation=intent.revision,
+            evidence_sampled_at_ms=facts.now*1000.0, evidence_travel_ms=0.0)
+        self.receipt = receipt
+        return self._commit(intent, receipt, commit=commit, capture=capture,
+                            abort=abort)
+
+    def segment_id_for(self, intent: PlaybackIntent) -> str:
+        return f"{intent.intent_id}:segment:{intent.attempt}"
+
+    def _commit(self, intent, receipt, *, commit, capture, abort) -> dict:
+        attempt, segment_id = receipt.attempt, receipt.segment_id
+        intent_id = receipt.intent_id
+        # No graded/audio transport mutation happened before this point.
         # This is the single authorization boundary. An exception leaves
         # the intent retryable; a successful commit fixes the take's clock.
         self.state = PlaybackState.AUTHORIZED

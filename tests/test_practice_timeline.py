@@ -16,9 +16,12 @@ def test_repeat_follows_held_ending_with_exactly_one_bar(practice_session, corre
     assert source["practice_timeline"]["sounding_duration_beats"] == 6
     after = session.play_take(correct=correct)
     incoming = take(after)
-    # A complete PRINTED rest belongs to the outgoing score clock (40),
-    # even when success has selected a faster next take.
-    expected = outgoing_start+(6-.5)*60/40+4*60/40
+    # The tied ending sounds to beat 6; the rest runs at the outgoing
+    # tempo (40) to the next barline (8), then one count-in bar eases to
+    # the incoming tempo over its first half (owner decision 2026-11-24).
+    from piano_teacher.application.tempo_curve import count_in_spans, spans_seconds
+    expected = (outgoing_start+(6-.5)*60/40+(8-6)*60/40
+                +spans_seconds(count_in_spans(4,40,incoming["bpm"])))
     assert incoming["deadline_ms"]/1000 == pytest.approx(expected,abs=.001)
     assert incoming["transport_id"] == after["transport_id"]
     assert after["transport_id"] != before["transport_id"]
