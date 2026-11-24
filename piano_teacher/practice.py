@@ -96,15 +96,20 @@ class Assessment:
     def correct(self) -> int:
         return sum(n.status == "correct" for n in self.notes)
 
+
     @property
-    def secure(self) -> bool:
-        """Clean with every onset inside half its accepted timing window."""
-        return (bool(self.notes) and self.extra_notes == 0
-                and all(n.status == "correct" and n.observation is not None
-                        and n.observation.onset_residual is not None
-                        and abs(n.observation.onset_residual)
-                            <= n.observation.onset_tolerance / 2
-                        for n in self.notes))
+    def timing_quality(self) -> float:
+        """1 when every attack is centred, 0 at the edge of its window."""
+        ratios = [min(1.0, abs(n.observation.onset_residual)/n.observation.onset_tolerance)
+                  for n in self.notes if n.observation is not None
+                  and n.observation.onset_residual is not None
+                  and n.observation.onset_tolerance > 0]
+        return 1.0-sum(ratios)/len(ratios) if ratios else 0.0
+
+    @property
+    def attacks(self) -> int:
+        """Distinct attack times in the graded notes (a chord is one)."""
+        return len({round(n.note.start, 4) for n in self.notes})
 
     @property
     def clean(self) -> bool:

@@ -17,14 +17,14 @@ def test_repeat_follows_held_ending_with_exactly_one_bar(practice_session, corre
     after = session.play_take(correct=correct)
     incoming = take(after)
     # A complete PRINTED rest belongs to the outgoing score clock (40),
-    # even when success has selected the next take's faster 56 BPM.
+    # even when success has selected a faster next take.
     expected = outgoing_start+(6-.5)*60/40+4*60/40
     assert incoming["deadline_ms"]/1000 == pytest.approx(expected,abs=.001)
     assert incoming["transport_id"] == after["transport_id"]
     assert after["transport_id"] != before["transport_id"]
     assert incoming["count_in_beats"] == 4
     assert incoming["source"]["from_beat"] == .5
-    assert incoming["bpm"] == (56 if correct else 40)
+    assert incoming["bpm"] > 40 if correct else incoming["bpm"] == 40
 
 
 def test_count_in_uses_authored_six_eight_and_first_playable_attack(practice_session):
@@ -147,4 +147,4 @@ def test_live_and_final_feedback_keep_the_same_authentic_source_heads(practice_s
     assert {event["source_id"] for event in final} == {note["id"] for note in source}
     assert all(event["transport_id"] == state["transport_id"] and event["release_advisory"] for event in final)
     assert all(event["note_id"] == layout["attack_map"][event["source_id"]] for event in final)
-    assert after["bpm"] == 56  # Short releases remain acceptable in normal flow.
+    assert after["bpm"] > 40  # Short releases remain acceptable in normal flow.

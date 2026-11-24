@@ -68,12 +68,18 @@ bar; do not make the learner sit through it.
 
 | Attempt result | Next action |
 | --- | --- |
-| Clean below target | Increase by 10% of target, capped at target |
-| Secure clean below target (every onset within half its timing window) | Skip a step: increase by 20% of target, capped at target |
+| Clean below target | Increase by **10% × (1 + timing quality) × length factor** of target, capped at target |
 | One failed attempt | Repeat at the same tempo |
 | Two failures in a row above 50% | Decrease by 10% of target, never below 50% |
 | Two failures in a row at 50% | Return to Free |
 | Two consecutive clean attempts at target | Complete this window/hand and advance |
+
+Timing quality is 1 when every attack is centred and 0 when attacks sit at
+the edge of their window (1 − mean |onset error| / tolerance). The length
+factor is 8 ÷ attacks, clamped to 1–2.5, so a short window climbs quickly:
+two quarter notes played well reach the target after one take, while a
+16-note window gains 10–20% per clean take. Two clean takes at target still
+complete the window.
 
 A slower success is practice, not target-tempo mastery. A failed attempt breaks
 the target clean streak. A clean flow attempt has all required pitches and

@@ -183,7 +183,8 @@ def test_automatic_repeat_keeps_its_one_bar_deadline_through_desktop_admission(p
     session.ask("score.native_layout")
     receipt = reserve(session, intent)
     initial = present(session, intent, receipt)
-    for bpm, next_bpm in ((40,56), (56,72), (72,80), (80,80)):
+    # A short, precisely played window reaches the target in one take.
+    for bpm, next_bpm in ((40,80), (80,80)):
         start = receipt["deadline_ms"]/1000
         for beat, pitch, on in ((0,72,True), (1,72,False), (3,79,True), (4,79,False)):
             session.clock.at = start+beat*60/bpm

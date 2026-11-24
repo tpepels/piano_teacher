@@ -100,13 +100,21 @@ def listen_finished(state: FlowState) -> Transition:
                       "Now without tempo")
 
 
-def take_graded(state: FlowState, *, passed: bool,
-                secure: bool = False) -> Transition:
-    """docs/practice-flow.md 2c, one graded Tempo take.
+def tempo_increase(target_bpm: int, *, quality: float, attacks: int) -> int:
+    """How far one clean take below target raises the tempo (BPM).
 
-    A secure clean take below target (every onset well inside its window)
-    skips one tempo step; an ordinary clean take moves one step.
+    10% of target x (1 + timing quality) x length factor: well-timed takes
+    climb faster, and short windows (few attacks) climb faster still, so
+    two quarter notes do not need five takes to reach the target.
     """
+    quality = min(1.0, max(0.0, quality))
+    length = min(2.5, max(1.0, 8.0/max(1, attacks)))
+    return max(1, round(target_bpm * .1 * (1.0+quality) * length))
+
+
+def take_graded(state: FlowState, *, passed: bool, quality: float = 0.0,
+                attacks: int = 8) -> Transition:
+    """docs/practice-flow.md Tempo, one graded take."""
     _require(state, Step.TEMPO)
     floor, step = floor_bpm(state.target_bpm), step_bpm(state.target_bpm)
     if not passed:
@@ -127,7 +135,8 @@ def take_graded(state: FlowState, *, passed: bool,
                                   free_returns=state.free_returns + 1),
                           "Once more without tempo", Outcome.BACK_TO_FREE)
     if state.bpm < state.target_bpm:
-        bpm = min(state.target_bpm, state.bpm + step * (2 if secure else 1))
+        bpm = min(state.target_bpm, state.bpm + tempo_increase(
+            state.target_bpm, quality=quality, attacks=attacks))
         return Transition(replace(state, bpm=bpm, failures=0, clean_at_target=0),
                           f"Faster: {bpm} BPM", Outcome.FASTER)
     clean = state.clean_at_target + 1

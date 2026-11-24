@@ -99,7 +99,7 @@ def _entry_tempo(event, state, decision):
 # --- Decisions ---------------------------------------------------------
 
 
-def graded_progress(course, *, accepted, secure=False):
+def graded_progress(course, *, accepted, quality=0.0, attacks=8):
     """One graded Tempo take, decided by the practice flow state machine
     (application/practice_py); this only maps it onto course progress."""
     p = course.progress
@@ -107,7 +107,7 @@ def graded_progress(course, *, accepted, secure=False):
                            Step.TEMPO, int(p.bpm), int(p.target_bpm),
                            failures=p.failures, clean_at_target=p.streak,
                            free_returns=dict(p.free_returns).get(course.key,0))
-    t = take_graded(state, passed=accepted, secure=secure)
+    t = take_graded(state, passed=accepted, quality=quality, attacks=attacks)
     def selected(c, message):
         return c, message, t.outcome
     if t.outcome not in (Outcome.STAGE_DONE, Outcome.PIECE_DONE):
@@ -152,7 +152,8 @@ def _base_decision(event, state):
     elif event.kind in ("full_result", "focused_result"):
         if eligible:
             chosen, message, flow_outcome = graded_progress(
-                c, accepted=passed, secure=passed and result.secure)
+                c, accepted=passed, quality=result.timing_quality,
+                attacks=result.attacks)
         if (not route.automatic or flow_outcome is Outcome.PIECE_DONE
                 or route.scope in ("perform", "section_review")):
             continuation = "stop"
