@@ -2,7 +2,7 @@
 
 <img src=".github/assets/piano-teacher.svg" alt="Piano Teacher — Practice your music, one measure at a time." width="960">
 
-An offline desktop companion for learning piano from your own MIDI files.
+An offline desktop companion for learning piano from your own MIDI or MusicXML files.
 
 [Practice flow](docs/practice-flow.md) · [Build and run](docs/development.md) · [Project roadmap](ROADMAP.md)
 

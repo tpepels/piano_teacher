@@ -11,7 +11,7 @@ from pathlib import Path
 import tempfile
 
 
-FORMATS = frozenset({'.mid', '.midi'})  # Only user-supplied MIDI enters the desktop library.
+from .importing.pieces import SOURCE_FORMATS as FORMATS  # MIDI and MusicXML
 MAX_FILES = 5000
 # Preferences of removed features (only Practice Flow remains, owner
 # decision 2026-11-23). A saved file holding them loads and is rewritten.

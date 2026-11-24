@@ -244,7 +244,7 @@ func _ready() -> void:
     folder_controls.add_child(folder_actions)
     folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
     folder_actions.add_child(_button("Save folder", func(): save_folder_requested.emit(folder_edit.text.strip_edges()), false, "secondary"))
-    music.add_child(_label("MIDI files in this folder and its subfolders.", 13, MUTED))
+    music.add_child(_label("MIDI and MusicXML files in this folder and its subfolders.", 13, MUTED))
     # History is a full-width secondary section, not part of folder setup.
 
     var practice := _section("Practice tempo")

@@ -11,7 +11,7 @@ Superseded designs, detailed audit checkpoints and earlier phase logs remain in 
 
 One Godot 4.7 desktop application, embedded CPython, native Verovio notation,
 one immutable score stream and a single MIDI/transport timeline. MIDI
-(`.mid`/`.midi`) is the only user import. Generated MusicXML serves engraving.
+(`.mid`/`.midi`) and MusicXML (`.musicxml`/`.xml`/`.mxl`, converted to the same MIDI timeline) are the user imports. Generated MusicXML serves engraving.
 
 Each authored measure is learned alone, then with up to three preceding
 measures: **1; 2, 1–2; 3, 2–3, 1–3; 4, 3–4, 2–4, 1–4; 5, 4–5, 3–5, 2–5**.

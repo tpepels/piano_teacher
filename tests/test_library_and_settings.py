@@ -93,7 +93,7 @@ def test_malformed_saved_values_and_retired_course_migrate_without_losing_prefer
     (tmp_path / "settings.json").write_text(json.dumps({
         "music_dir": " ", "midi_offset_ms": True, "metronome": False,
         "exercise_strategy": "source-progression", "timing_strategy": "dotted-long-short",
-        "tempo_strategy": "two-phase-tempo", "last_piece": "old.musicxml",
+        "tempo_strategy": "two-phase-tempo", "last_piece": "old.pdf",
     }))
     lib = ScoreLibrary(tmp_path)
     settings = lib.public_settings()
