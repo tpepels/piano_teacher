@@ -31,7 +31,7 @@ LOADED_REQUIRED = (
 # Buttons and native shortcuts must never supply their own action meaning.
 # These names are presentation ports, generated to Godot from this owner.
 CONTROL_ACTIONS = (
-    "primary", "pause", "retry", "listen", "previous", "review_previous",
+    "primary", "pause", "retry", "listen", "review_previous",
     "passage_previous", "passage_next", "stop",
     "hints", "midi_start", "tempo_up", "tempo_down",
 )
@@ -63,6 +63,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "exercise": ('number',),
     "exercise_count": ('number',),
     "flow": ('dict',),
+    "screen": ('dict',),
     "feedback": ('string',),
     "feedback_marks": ('list',),
     "feedback_unmapped": ('number',),

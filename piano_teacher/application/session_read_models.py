@@ -10,6 +10,7 @@ from dataclasses import replace
 from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
 from .score_state_publisher import ScoreProjectionFacts
 from .control_projection import project_controls
+from .screen_projection import project_screen
 from .session_snapshot_builder import SnapshotValues, capture as capture_session_snapshot
 from ..state_projection import SessionSnapshot, project_session_state
 
@@ -236,4 +237,6 @@ class SessionReadModels:
             self.score.publish_score_state(state, facts)
             self.extras.add(state, now)
             state["controls"] = project_controls(state)
+            state["screen"] = project_screen(
+                state, moving=state["controls"]["transport_active"])
             return state

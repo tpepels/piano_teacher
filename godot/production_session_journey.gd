@@ -351,8 +351,13 @@ func _process(_delta: float) -> bool:
             if int(state["revision"]) <= initial_revision:
                 _fail("Stage change did not prepare new notation")
                 return true
-            if not _press(app.practice_view.tempo_down_button,"-5 BPM"):
+            # Slower is a Pause-sheet / shortcut gesture, resolved by Python.
+            if app.command_coordinator.state.pending:
                 return false
+            if not bool(state.get("controls",{}).get("tempo_down",{}).get("enabled",false)):
+                _fail("Slower unavailable despite ready score")
+                return true
+            app.send_action({"action":"ui_tempo_down"})
             selected_bpm = float(state["bpm"])
             _advance("tempo_change")
         "tempo_change":

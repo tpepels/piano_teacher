@@ -22,7 +22,6 @@ var settings_view
 var metronome_frame
 var action_request
 var command_failure_presenter
-var fingering_save_error := ""
 var score_session
 
 func configure(practice, settings, metronome, request,
@@ -67,17 +66,9 @@ func correct_fingering(source_id: String, finger: Variant) -> void:
     var decision: Dictionary = score_session.fingering_correction_request(
         source_id,finger,last_state,state.pending)
     if not bool(decision.get("accepted",false)):
-        fingering_save_error = str(decision.get("message","Score not ready"))
-        present_fingering_status()
+        practice_view.present_message(str(decision.get("message","Score not ready")))
         return
-    fingering_save_error = ""
     request_command(str(decision["operation"]),decision["payload"])
-
-func present_fingering_status() -> void:
-    var issues: int = practice_view.stage.renderer.annotations.fingering_placement_issues.size() \
-        if score_session.is_ready() else 0
-    practice_view.stage.present_fingering(
-        last_state.get("fingering",{}),issues,fingering_save_error)
 
 func _flush_transport_action() -> void:
     var action: String = state.take_transport()
@@ -141,9 +132,6 @@ func request_command(operation: String, payload: Dictionary) -> void:
     if operation == "practice.command":
         practice_view.finish_action()
     var message := "Cannot reach practice engine (status %d)" % err
-    if operation == "fingering.correct":
-        fingering_save_error = message
-        present_fingering_status()
     var queued_library_failed: bool = state.discard_library()
     command_failure_presenter.present(
         message,operation,queued_library_failed)
@@ -163,9 +151,6 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
         # segment. MetronomeFrameCoordinator reconciles its countdown
         # directly from the authorized playback state.
         var message := Reply.failure_message(code,body)
-        if operation == "fingering.correct":
-            fingering_save_error = message
-            present_fingering_status()
         var queued_library_failed: bool = state.discard_library()
         command_failure_presenter.present(
             message,operation,queued_library_failed)
@@ -220,10 +205,7 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
         presentation_body = JSON.stringify(command_state).to_utf8_buffer()
     var decision: Dictionary = CommandSuccessPolicy.decide(
         operation,bool(completed["resume_saved"]),opened,accepted_outcome)
-    if str(decision["kind"]) == "fingering":
-        fingering_save_error = ""
-        present_fingering_status()
-    elif str(decision["kind"]) == "library_open":
+    if str(decision["kind"]) == "library_open":
         score_session.score_error = ""
     if bool(decision.get("publish_state",false)):
         last_published_control_started_ms = maxi(

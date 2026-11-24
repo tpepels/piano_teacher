@@ -76,7 +76,7 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
     _lessons.update_context(parsed,received_ms)
     _presentation.accept(parsed,tick_ms,received_ms)
     _presenter.present(parsed,_navigation.current_screen,_commands.state.pending,
-        assets.is_ready(),_commands.fingering_save_error,
+        assets.is_ready(),
         _presentation.demo_player != null and bool(_presentation.demo_player.get("audio_error")),
         _presentation.smoke)
     # Input policy consumes the accepted source snapshot AFTER presentation,

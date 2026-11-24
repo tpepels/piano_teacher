@@ -32,6 +32,7 @@ func state(mode: String, phase: String) -> Dictionary:
         "bpm":40,"target_bpm":80,"first_bar":2,"last_bar":3,
         "running":phase in ["playing","count_in"],"paused":phase == "paused",
         "device":"Piano","flow":{"status":"Measures 2–3 · Right hand · Free"},
+        "screen":{"status":"Measures 2–3 · Right hand · Free","notice":"","keyboard":"hidden"},
         "teaching":{"expected_notes":[{"pitch":60}],"hint_visible":false}}
 
 func _initialize() -> void:
@@ -52,25 +53,28 @@ func run() -> void:
     check(view.start_button.visible and view.start_button.text == "Pause"
         and view.listen_button.visible and view.listen_button.text == "Listen again"
         and view.metronome_switch.visible,"Free exposes the normal practice controls")
-    check(not view.practice_retry_button.visible and not view.practice_previous_button.visible,
+    check(not view.practice_retry_button.visible,
         "Default flow progresses without manual lesson controls")
     check(view.flow_status_label.text.contains("2–3") and view.flow_status_label.text.contains("Right hand")
         and view.flow_status_label.text.contains("Free"),"Status identifies the complete window, hand and step")
     check(not view.stage.keyboard.visible,"Thinking in Free does not show a keyboard")
-    free.teaching.hint_visible = true
-    free.teaching.hint_reason = "waiting"
-    view.present(free,true)
-    check(not view.stage.keyboard.visible,"An elapsed-wait hint cannot reveal the Free keyboard")
-    free.teaching.hint_reason = "wrong_note"
+    # Python decides when the hint shows (screen_projection.keyboard).
+    free.screen.keyboard = "hint"
     view.present(free,true)
     check(view.stage.keyboard.visible,"A wrong note reveals the target keyboard hint")
-    free.teaching.hint_visible = false
+    free.screen.keyboard = "hidden"
     view.present(free,true)
     check(not view.stage.keyboard.visible,"Correcting the target hides the hint")
+    free.screen.notice = "Connect your MIDI piano to play in tempo."
+    view.present(free,true)
+    check(view.stage.practice_playback_banner.visible
+        and view.stage.practice_playback_banner.text == free.screen.notice,
+        "A projected problem notice is shown on the score banner")
+    free.screen.notice = ""
+    view.present(free,true)
+    check(not view.stage.practice_playback_banner.visible,"No notice, no banner")
     for mode in ["practice","listen"]:
         var playing := state(mode,"playing")
-        playing.teaching.hint_visible = true
-        playing.teaching.hint_reason = "wrong_note"
         view.present(playing,true)
         check(not view.stage.keyboard.visible,"The hint stays hidden outside Free: "+mode)
         check(view.start_button.text == "Pause" and playing.controls.primary.action == "pause",

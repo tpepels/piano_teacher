@@ -14,15 +14,10 @@ func _init(practice, settings, lesson) -> void:
     lesson_view = lesson
 
 func present(parsed: Dictionary, screen: String, busy: bool,
-        score_ready: bool, fingering_error: String, audio_error: bool,
+        score_ready: bool, audio_error: bool,
         smoke: bool) -> void:
     settings_view.present_midi_key_range(
         parsed.get("midi_key_range",{}) if parsed.get("midi_key_range") is Dictionary else {})
-    var placement_issues := 0
-    if score_ready:
-        placement_issues = practice_view.stage.renderer.annotations.fingering_placement_issues.size()
-    practice_view.stage.present_fingering(
-        parsed.get("fingering",{}),placement_issues,fingering_error)
     lesson_view.present_context(parsed,busy)
     settings_view.present_calibration(
         parsed.get("midi_calibration",{}),int(parsed.get("midi_offset_ms",0)))

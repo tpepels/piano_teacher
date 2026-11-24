@@ -578,8 +578,6 @@ def test_physical_key_instruction_uses_only_available_backend_action():
     active = {"loaded":True, "device":"Test piano",
               "phase":"guided_complete","mode":"learn",
               "running":False,"paused":False}
-    solo = project_controls(active)["midi_start"]
-    assert solo["enabled"] and solo["action"] == "practice"
     course = project_controls({**active,"flow":{
         "step":"free","status":"Idea complete"}})["midi_start"]
     # The default Practice Flow transitions automatically: it must not
@@ -669,3 +667,17 @@ def test_source_independent_stop_halts_authorized_playback(practice_session):
     assert not stopped["running"] and not stopped["paused"]
     assert stopped["playback_intent"] is None
     assert stopped["feedback"] == "Stopped"
+
+
+def test_keyboard_hint_only_for_a_wrong_note_in_free():
+    """Owner-confirmed rule (previously checked in Godot): the keyboard is
+    hidden except as the wrong-note hint in Free."""
+    from piano_teacher.application.screen_projection import keyboard
+    free = {"mode": "learn", "teaching": {"hint_visible": False}}
+    assert keyboard(free) == "hidden"
+    waiting = {"mode": "learn", "teaching": {"hint_visible": True, "hint_reason": "waiting"}}
+    assert keyboard(waiting) == "hidden"
+    wrong = {"mode": "learn", "teaching": {"hint_visible": True, "hint_reason": "wrong_note"}}
+    assert keyboard(wrong) == "hint"
+    for mode in ("practice", "listen"):
+        assert keyboard({**wrong, "mode": mode}) == "hidden"

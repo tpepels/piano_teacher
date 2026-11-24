@@ -5,7 +5,7 @@ from .transport_commands import PAUSABLE_PHASES
 
 UI_INTENTS = frozenset((
     "ui_primary", "ui_pause", "ui_retry", "ui_listen",
-    "ui_previous", "ui_review_previous",
+    "ui_review_previous",
     "ui_tempo_up", "ui_tempo_down", "ui_midi_start", "ui_suspend",
     "ui_passage_previous", "ui_passage_next", "ui_stop"))
 SCORE_WAIT = "Preparing sheet music - wait for the notes before starting"
@@ -31,65 +31,37 @@ def active(s: Mapping) -> bool:
     return phase in (PAUSABLE_PHASES | {"paused"})
 
 
-def flow(s: Mapping) -> bool:
-    return isinstance(s.get("flow"), dict) and bool(s["flow"])
-
-
-def primary(s: Mapping, moving: bool, course: bool) -> str | None:
+def primary(s: Mapping, moving: bool) -> str | None:
+    """Practice Flow advances by itself: the main control pauses/resumes,
+    and only offers Play/Listen when the flow is waiting for the player."""
     if not s.get("loaded"):
         return None
     if s.get("paused"):
         return "resume"
-    mode = s.get("mode")
-    if course:
-        return "pause" if moving else "listen" if mode == "listen" else "start" if mode == "practice" else None
-    if mode == "listen" and not moving:
-        return "listen"
-    if mode == "learn":
-        phase = s.get("phase")
-        teaching = s.get("teaching") or {}
-        if phase == "guided_complete" and teaching.get("has_more_units") and not s.get("guided_recovery"):
-            return "learn_next"
-        if phase in ("guided_complete", "disconnected"):
-            return "practice"
-        if phase in ("guided_wait", "loading"):
-            return "pause"
-        return "learn_retry"
-    return "pause" if moving else "start"
+    if moving:
+        return "pause"
+    return {"listen": "listen", "practice": "start"}.get(s.get("mode"))
 
 
-def caption(s: Mapping, action: str | None, moving: bool, course: bool) -> str:
+def caption(s: Mapping, moving: bool) -> str:
     if s.get("paused"):
         return "Resume"
-    if course:
-        return "Pause" if moving else "Listen" if s.get("mode") == "listen" else "Play"
-    if s.get("mode") == "learn":
-        if action == "learn_next":
-            return "Next idea"
-        if s.get("phase") == "guided_complete" and s.get("guided_recovery"):
-            return "Retry rhythm"
-        return {"practice": "Try rhythm", "pause": "Pause", "learn_retry": "Learn"}.get(action, "Learn")
-    if s.get("mode") == "listen" and not moving:
-        return "Listen again"
-    return "Pause" if action == "pause" else "Play"
+    if moving:
+        return "Pause"
+    return "Listen" if s.get("mode") == "listen" else "Play"
 
 
 def project_controls(s: Mapping) -> dict:
     """Read-only control labels and available actions from authoritative state."""
-    moving, course = active(s), flow(s)
-    main = primary(s, moving, course)
-    pause = ("resume" if s.get("paused") else "pause") if (
-        s.get("loaded") and (moving or (s.get("mode") == "learn" and
-        s.get("phase") in ("guided_wait", "paused")))) else None
-    if course and not moving and not s.get("paused"):
-        pause = None
+    moving = active(s)
+    main = primary(s, moving)
+    pause = (None if not s.get("loaded") else "resume" if s.get("paused")
+             else "pause" if moving else None)
     retry = ("learn_retry" if s.get("mode") == "learn" else
              "listen" if s.get("mode") == "listen" else "restart") if s.get("loaded") else None
     retry_allowed = retry is not None and s.get("phase") not in ("admitting", "loading")
     tempo_allowed = bool(s.get("loaded")) and s.get("phase") not in (
         "count_in", "playing", "loading", "admitting")
-    previous_visible = bool(s.get("loaded")) and not course
-    previous_enabled = previous_visible and int(s.get("lesson_step", 1)) > 1
     # A passage is an exercise group; it may contain several lesson steps.
     passage_previous = bool(s.get("loaded")) and int(s.get("exercise", 1)) > 1
     passage_next = (bool(s.get("loaded")) and
@@ -113,10 +85,7 @@ def project_controls(s: Mapping) -> dict:
         "perform_current": {"enabled":loaded},
         "perform_whole": {"enabled":loaded},
     }
-    listen = None
-    if s.get("loaded"):
-        listen = (None if s.get("mode") == "listen" else "listen") if course else (
-            "practice" if s.get("mode") == "listen" else "listen")
+    listen = "listen" if s.get("loaded") and s.get("mode") != "listen" else None
     # A physical MIDI key is a gesture. The application determines
     # whether the current phase allows an initial start, manual retry
     # or course continuation. The input adapter only reports freshness.
@@ -135,20 +104,17 @@ def project_controls(s: Mapping) -> dict:
             midi_action = "restart"
     # Returning from standalone Listen is a mode action, not score
     # admission; the prior UI permitted it without ready notation.
-    needs_score = (main not in (None, "pause", "resume") and
-                   not (not course and s.get("mode") == "listen" and not moving))
+    needs_score = main not in (None, "pause", "resume")
     return {
-        "transport_active": moving, "flow_active": course,
-        "primary": {"action": main or "", "label": caption(s, main, moving, course),
+        "transport_active": moving,
+        "primary": {"action": main or "", "label": caption(s, moving),
                     "enabled": main is not None,
                     "requires_score": needs_score},
         "pause": {"action": pause or "", "enabled": pause is not None},
         "retry": {"action": retry or "", "enabled": retry_allowed,
-                  "requires_score": True, "visible": not course},
+                  "requires_score": True},
         "listen": {"action": listen or "", "enabled": listen is not None,
-                   "label": "Listen again" if course else "Practice" if s.get("mode") == "listen" else "Listen"},
-        "previous": {"action": "select_step" if previous_enabled else "",
-                     "enabled": previous_enabled, "visible": previous_visible},
+                   "label": "Listen again"},
         "review_previous": {
             "action": "select_step" if s.get("loaded") and
             int(s.get("lesson_step", 1)) > 1 else "",
@@ -210,7 +176,7 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
     choice = project_controls(state)[intent.removeprefix("ui_")]
     action = choice["action"]
     if not action or not choice.get("enabled", False):
-        if intent in ("ui_previous", "ui_review_previous",
+        if intent in ("ui_review_previous",
                       "ui_passage_previous", "ui_passage_next",
                       "ui_tempo_up", "ui_tempo_down"):
             raise ValueError("This control is no longer available in the current lesson")
@@ -219,10 +185,6 @@ def resolve_ui_intent(intent: str, state: Mapping, *,
         raise ValueError(score_error)
     if choice.get("requires_score") and not score_ready:
         raise ValueError(SCORE_WAIT)
-    if intent == "ui_previous":
-        return action, {"number": int(state["lesson_step"]) - 1}
     if intent == "ui_review_previous":
         return action, {"number": max(1, int(state["lesson_step"]) - 2)}
-    if intent == "ui_listen" and action == "practice" and not flow(state):
-        return action, {"wait_for_player": True}
     return action, {}

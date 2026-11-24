@@ -7,7 +7,7 @@ const VERSION := 7
 const STATIC_KEYS := ["import_warnings"]
 const REQUIRED := ["schema_version", "loaded", "controls"]
 const LOADED_REQUIRED := ["mode", "phase", "running", "paused", "revision", "transport_id", "piece_fingerprint", "stage_key", "presentation_directive", "playback_timeline"]
-const CONTROL_ACTIONS := ["primary", "pause", "retry", "listen", "previous", "review_previous", "passage_previous", "passage_next", "stop", "hints", "midi_start", "tempo_up", "tempo_down"]
+const CONTROL_ACTIONS := ["primary", "pause", "retry", "listen", "review_previous", "passage_previous", "passage_next", "stop", "hints", "midi_start", "tempo_up", "tempo_down"]
 const MOTION_KINDS := ["hold", "target", "retain", "run"]
 const SCHEMA := {
     "auto": ["bool"],
@@ -40,6 +40,7 @@ const SCHEMA := {
     "fingering": ["dict", "null"],
     "first_bar": ["number"],
     "flow": ["dict"],
+    "screen": ["dict"],
     "guided_recovery": ["bool"],
     "hand": ["string"],
     "hand_stages": ["list"],
