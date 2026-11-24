@@ -4,17 +4,13 @@ extends RefCounted
 var library_view
 var practice_view
 var settings_view
-var lesson_session
 
-func _init(library, practice, settings, lesson) -> void:
+func _init(library, practice, settings) -> void:
     library_view = library
     practice_view = practice
     settings_view = settings
-    lesson_session = lesson
 
 func present_accepted(decision: Dictionary) -> void:
-    if bool(decision.get("invalidate_lesson", false)):
-        lesson_session.invalidate()
     match str(decision.get("kind", "")):
         "library_open":
             library_view.present_open_status("")

@@ -7,8 +7,6 @@ const ScoreView := preload("res://notation/shared/view_base.gd")
 
 var practice_view
 var settings_view
-var lesson_view
-var lesson_session
 var demo_player
 var frame_meter
 var busy_presented: Variant = null
@@ -18,11 +16,9 @@ var last_sync_report_ms := 0
 var last_lead_tick := -999
 var last_cursor_tick := -1
 
-func _init(practice, settings, lesson, session, demo, meter) -> void:
+func _init(practice, settings, demo, meter) -> void:
     practice_view = practice
     settings_view = settings
-    lesson_view = lesson
-    lesson_session = session
     demo_player = demo
     frame_meter = meter
 
@@ -53,8 +49,6 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
         busy_presented = busy
         settings_view.present_busy(busy)
         practice_view.present_busy(busy)
-        lesson_view.present_busy(busy)
-    lesson_session.ensure_current(ticks)
 
     var listening: bool = str(state.get("mode","")) == "listen"
     var moving: bool = bool(state.get("running",false)) and not bool(state.get("paused",false))

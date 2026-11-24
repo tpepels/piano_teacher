@@ -14,7 +14,6 @@ var _statistics
 var _practice
 var _devices
 var _inbox
-var _lesson
 var _library
 var _window: Window
 var _demo
@@ -58,13 +57,12 @@ func configure(view, statistics) -> void:
     view.exit_requested.connect(func(): exit_requested.emit())
 
 func bind_application(window: Window, demo, practice, devices, inbox,
-        lesson, library) -> void:
+        library) -> void:
     _window = window
     _demo = demo
     _practice = practice
     _devices = devices
     _inbox = inbox
-    _lesson = lesson
     _library = library
     _view.present_volume(float(_demo.get("listen_volume_db")))
 
@@ -121,7 +119,6 @@ func learning_command_accepted(operation: String, values: Dictionary) -> void:
         _view.present_message("Current piece history and learning progress deleted."
             if operation == "learning.delete_piece" else
             "All learner history and learning progress deleted.")
-        _lesson.invalidate()
         request_settings()
         _library.request_catalog()
     request_learning_status()

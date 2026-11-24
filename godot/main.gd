@@ -12,8 +12,6 @@ const ContinuousScoreFlow := preload("res://continuous_score_flow.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SettingsScreen := preload("res://settings_screen.gd")
 const HomeScreen := preload("res://home_screen.gd")
-const LessonScreen := preload("res://lesson_screen.gd")
-const LessonSession := preload("res://lesson_session.gd")
 const PracticeScreen := preload("res://practice_screen.gd")
 const NavigationDrawer := preload("res://navigation_drawer.gd")
 const LibraryCatalogCoordinator := preload("res://library_catalog_coordinator.gd")
@@ -50,8 +48,6 @@ var navigation_drawer = NavigationDrawer.new()
 var settings_view: SettingsScreen
 var home_view: HomeScreen
 var practice_view: PracticeScreen
-var lesson_view: LessonScreen
-var lesson_session := LessonSession.new()
 var screens: Dictionary = {}
 var library_catalog = LibraryCatalogCoordinator.new()
 var statistics_coordinator
@@ -121,7 +117,7 @@ func _ready() -> void:
     _build_interface()
     navigation_session.configure(
         practice_backdrop,navigation_drawer,practice_view,
-        library_view,settings_view,lesson_session,screens)
+        library_view,settings_view,screens)
     navigation_session.suspend_requested.connect(
         func(): send_action({"action":"ui_suspend"}))
     navigation_session.library_requested.connect(library_catalog.request_catalog)
@@ -179,11 +175,10 @@ func _ready() -> void:
         _new_request(library_catalog.on_catalog),
         _new_request(library_catalog.on_health))
     settings_interactions.bind_application(get_window(),demo_player,practice_view,
-        midi_devices,state_inbox,lesson_session,library_catalog)
+        midi_devices,state_inbox,library_catalog)
     settings_interactions.attach_requests(_new_request(settings_interactions.on_settings),
         _new_request(settings_interactions.on_learning_status))
     statistics_coordinator.configure(_new_request(statistics_coordinator.on_report), settings_view.statistics_view)
-    lesson_session.attach_request(_new_request(lesson_session.on_overview))
     poll_session.bind_state_request(_new_request(state_inbox.receive),state_inbox,
         command_coordinator,score_session,practice_view)
     poll_session.library_requested.connect(library_catalog.request_catalog)
@@ -196,14 +191,13 @@ func _ready() -> void:
         func() -> String: return str(state_inbox.current.get("device","")),
         func() -> bool: return library_catalog.health_running)
     frame_coordinator = PracticeFrameCoordinator.new(
-        practice_view,settings_view,lesson_view,lesson_session,
-        demo_player,frame_meter)
+        practice_view,settings_view,demo_player,frame_meter)
     state_presenter = PracticeStatePresenter.new(
-        practice_view,settings_view,lesson_view)
+        practice_view,settings_view)
     command_failure_presenter = CommandFailurePresenter.new(
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(
-        library_view,practice_view,settings_view,lesson_session)
+        library_view,practice_view,settings_view)
     command_success_effects = CommandSuccessEffects.new(command_success_presenter)
     command_success_effects.publish_state.connect(state_inbox.receive)
     command_success_effects.navigate_practice.connect(_navigate)
@@ -239,7 +233,7 @@ func _ready() -> void:
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     state_inbox.configure(command_coordinator,practice_view,presentation_session,
         state_presenter,statistics_coordinator,debug_session_logger,
-        navigation_session,input_session,lesson_session)
+        navigation_session,input_session)
     command_success_effects.refresh_score.connect(presentation_session.refresh_status)
     practice_view.score_retry_requested.connect(presentation_session.retry_score)
     presentation_session.refresh_status()
@@ -271,7 +265,7 @@ func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
 
 func _resize_ui_fonts(node: Node) -> void:
-    if node == library_view or node == settings_view or node == home_view or node == lesson_view or node == practice_view:
+    if node == library_view or node == settings_view or node == home_view or node == practice_view:
         return # Screens own their text scaling through apply_viewport.
     if node is Control and node.has_meta("ui_font_base"):
         (node as Control).add_theme_font_size_override(
@@ -314,8 +308,6 @@ func _resize_overlay_drawer() -> void:
     navigation_drawer.resize(size)
     if library_view != null:
         library_view.apply_viewport(size, ui_scale)
-    if lesson_view != null:
-        lesson_view.apply_viewport(size, ui_scale)
     if settings_view != null:
         settings_view.apply_viewport(size, ui_scale)
 
@@ -395,7 +387,6 @@ func _build_practice_screen() -> void:
     practice_view.listen_requested.connect(command_coordinator.listen)
     practice_view.metronome_toggled.connect(settings_interactions.set_metronome)
     practice_view.stage.renderer.fingering_change_requested.connect(command_coordinator.correct_fingering)
-    _build_lesson_screen()
     navigation_drawer.mount(self, screens, _button, _navigate, _exit_app)
     _resize_overlay_drawer()
 
@@ -437,16 +428,6 @@ func _build_settings_screen() -> void:
     settings_interactions.action_requested.connect(send_action)
     settings_view.device_selected.connect(midi_devices.choose)
     settings_interactions.exit_requested.connect(_exit_app)
-
-func _build_lesson_screen() -> void:
-    var page := _screen("Lesson")
-    screens["lesson"] = page
-    lesson_view = LessonScreen.new()
-    page.add_child(lesson_view)
-    lesson_view.command_requested.connect(send_action)
-    lesson_view.advanced_requested.connect(practice_view.open_advanced_pause)
-    lesson_session.overview_changed.connect(lesson_view.present_overview)
-    lesson_session.request_failed.connect(lesson_view.present_error)
 
 func _input(event: InputEvent) -> void:
     if input_session.capture(event,current_screen,get_viewport()):

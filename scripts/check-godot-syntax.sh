@@ -25,7 +25,6 @@ for script in \
   res://settings_screen.gd \
   res://practice_frame_coordinator.gd \
   res://continuous_score_flow.gd \
-  res://lesson_screen.gd \
   res://practice_state_presenter.gd \
   res://command_failure_presenter.gd \
   res://command_success_policy.gd \

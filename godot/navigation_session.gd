@@ -16,17 +16,15 @@ var _drawer
 var _practice
 var _library
 var _settings
-var _lesson
 var _screens: Dictionary = {}
 
-func configure(backdrop, drawer, practice, library, settings, lesson,
+func configure(backdrop, drawer, practice, library, settings,
                screens: Dictionary) -> void:
     _backdrop = backdrop
     _drawer = drawer
     _practice = practice
     _library = library
     _settings = settings
-    _lesson = lesson
     _screens = screens
 
 func update_frame_rate(state: Dictionary) -> void:
@@ -69,6 +67,4 @@ func navigate(destination: String, state: Dictionary) -> void:
         _settings.begin_editing(state)
         settings_requested.emit()
         devices_requested.emit()
-    elif target == "lesson":
-        _lesson.refresh(Time.get_ticks_msec())
 

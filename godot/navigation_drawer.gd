@@ -41,8 +41,7 @@ func mount(host: Control, screens: Dictionary, make_button: Callable,
     var brand := UI.title("Piano\nTeacher", 23)
     brand.custom_minimum_size.y = 100
     rail.add_child(brand)
-    for item in [["library", "Library"], ["lesson", "Lesson path"],
-            ["settings", "Settings"]]:
+    for item in [["library", "Library"], ["settings", "Settings"]]:
         var destination: String = item[0]
         var button: Button = make_button.call(item[1],
             func(): navigate.call(destination), false, "choice")
@@ -64,7 +63,7 @@ func mount(host: Control, screens: Dictionary, make_button: Callable,
     pages.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     pages.size_flags_vertical = Control.SIZE_EXPAND_FILL
     shell.add_child(pages)
-    for page in ["library", "settings", "lesson"]:
+    for page in ["library", "settings"]:
         var content: Control = screens[page]
         content.reparent(pages, false)
         content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

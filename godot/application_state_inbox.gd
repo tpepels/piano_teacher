@@ -19,10 +19,9 @@ var _statistics
 var _logger
 var _navigation
 var _input
-var _lessons
 
 func configure(commands, practice, presentation, presenter, statistics,
-        logger, navigation, input_session, lessons) -> void:
+        logger, navigation, input_session) -> void:
     _commands = commands
     _practice = practice
     _presentation = presentation
@@ -31,7 +30,6 @@ func configure(commands, practice, presentation, presenter, statistics,
     _logger = logger
     _navigation = navigation
     _input = input_session
-    _lessons = lessons
 
 func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     var accepted: Dictionary = accept(code,body,sample_started_ms,
@@ -73,7 +71,6 @@ func receive(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> v
     _navigation.update_frame_rate(parsed)
     # The accepted-state boundary, not a render pass, owns the source-bound
     # lesson-overview request lifecycle.
-    _lessons.update_context(parsed,received_ms)
     _presentation.accept(parsed,tick_ms,received_ms)
     _presenter.present(parsed,_navigation.current_screen,_commands.state.pending,
         assets.is_ready(),
