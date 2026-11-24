@@ -354,6 +354,22 @@ func ink_ahead_beats() -> float:
     var end: float = _stream_controller.ink_end(_stream_facts(stream_world_beat))
     return clampf(end-stream_world_beat,0.0,256.0) if is_finite(end) else 0.0
 
+## The likely repeat, drawn early so it scrolls in from the right.
+func place_predicted_take(world: float, opening: float, start_world: float) -> int:
+    stream_world_beat = maxf(stream_world_beat,world)
+    if not native_ready or not retained_ready() or start_world <= stream_world_beat:
+        return -1
+    return _stream_controller.place_predicted_take(
+        _stream_facts(stream_world_beat),opening,start_world)
+
+func adopt_predicted_take(owner_serial: int, opening: float) -> Dictionary:
+    return _stream_controller.adopt_predicted_take(
+        _stream_facts(stream_world_beat),owner_serial,opening)
+
+func withdraw_predicted_take(owner_serial: int) -> void:
+    _stream_controller.withdraw_predicted_take(_stream_facts(stream_world_beat),owner_serial)
+    queue_redraw()
+
 ## Draw the take the musical timeline placed: its opening beat sits at
 ## `start_world`. Only a take whose start already passed the playhead is
 ## refused.

@@ -342,6 +342,33 @@ func abandon_unplayed(owner: Control, world: float, reason: String) -> Array[int
             count -= 1
     return removed
 
+## Withdraw one take at the tail whose first note is still ahead of the
+## playhead (a predicted repeat that did not happen), even when visible.
+func abandon_owner(owner: Control, take_owner: int, world: float, reason: String) -> Array[int]:
+    var removed: Array[int] = []
+    var start := INF
+    for item in online:
+        if int(item.get("take_owner",owner_id(item))) == take_owner and \
+                str(item.get("kind","source")) == "source":
+            start = minf(start,float(item["world_origin"])+float(item.get("source_floor",0.0)))
+    if not is_finite(start) or start <= world+.0001:
+        return removed
+    while not online.is_empty() and \
+            int(online[-1].get("take_owner",owner_id(online[-1]))) == take_owner:
+        var serial: int = owner_id(online[-1])
+        var snapshot: Array = []
+        for i in range(online.size()-1,-1,-1):
+            if owner_id(online[i]) != serial:
+                break
+            snapshot.push_front(source_record(online[i]))
+        if not _archive.record("withdrawn",serial,snapshot,reason,0,_writer_id):
+            break
+        while not online.is_empty() and owner_id(online[-1]) == serial:
+            var item: Dictionary = online.pop_back()
+            removed.append(int(item.get("serial",0)))
+            Lifecycle.retire(owner,item)
+    return removed
+
 func preview_tail_withdrawal(world: float, density: float,
         gap: float, duration: float, viewport_width: float,
         playhead_x: float, protected_take: int = -1,

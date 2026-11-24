@@ -180,6 +180,10 @@ class MusicalTimeline:
         self.holds: list[tuple[float, float | None]] = []
         # A closed run holds its world here; nothing follows yet.
         self.end_world: float | None = None
+        # Where the likely repeat of the last take would start (world beat,
+        # source opening). Godot draws it early so it scrolls in from the
+        # right; the real repeat placed there takes those notes over.
+        self.next_take: tuple[float, float] | None = None
 
     # --- clock ---------------------------------------------------------
 
@@ -188,12 +192,14 @@ class MusicalTimeline:
         self.segments = []
         self.holds = []
         self.end_world = None
+        self.next_take = None
 
     def close(self) -> None:
         """Hold the world after the last take's rest to its barline."""
         last = self.last_take()
         if last is not None and self.end_world is None:
             self.end_world = last.world_end + last.rest_after_beats
+        self.next_take = None
 
     @property
     def open(self) -> bool:
@@ -369,6 +375,18 @@ class MusicalTimeline:
         kept[-1] = replace(last, cut_beats=last.beat_at(m - last.start_at))
         self.segments = kept
         self.end_world = None
+        self.next_take = None
+
+    def predict_repeat(self, *, bar_beats: float, source_from_beat: float) -> None:
+        """Publish where a repeat of the last take would start by bar
+        arithmetic (rest to its barline, one count-in bar)."""
+        last = self.last_take()
+        if last is None or self.end_world is not None:
+            self.next_take = None
+            return
+        full = sum(span.beats for span in last.spans)
+        self.next_take = (last.world_start + full + last.rest_after_beats + bar_beats,
+                          float(source_from_beat))
 
     def cut_take(self, t: float) -> None:
         """End the current take at wall instant `t` (Resume continues it in a
@@ -390,6 +408,9 @@ class MusicalTimeline:
         return {
             "run": self.run,
             "end_world": self.end_world,
+            "next_take": (None if self.next_take is None else
+                          {"world_start": self.next_take[0],
+                           "source_from_beat": self.next_take[1]}),
             "holds_ms": [[at * 1000.0, None if d is None else d * 1000.0]
                          for at, d in self.holds],
             "segments": [s.snapshot() for s in self.segments[first:]],

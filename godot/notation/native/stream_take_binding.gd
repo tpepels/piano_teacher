@@ -211,6 +211,24 @@ func arm(facts: StreamGeometry, generation: int, append: Callable,
     cancel.call(facts,facts.world)
     return {}
 
+## Bind an already drawn predicted take as the armed take.
+func adopt(facts: StreamGeometry, owner_serial: int, opening: float) -> Dictionary:
+    if not facts.ready or not queue.has_take(owner_serial):
+        return {}
+    var snapshot: Dictionary = StreamLifecycle.snapshot_owner(queue.online,owner_serial)
+    if snapshot.is_empty() or not StreamLifecycle.activate(
+            queue.online,owner_serial,"armed:%d" % owner_serial,true):
+        return {}
+    arm_rollback = {"owner_serial":owner_serial,"source_snapshot":snapshot,
+        "newly_allocated":false,"predecessor_owner":-1,"old_live_serial":live_serial}
+    armed_serial = owner_serial
+    armed_segment_id = ""
+    arm_acknowledged = false
+    for item in queue.online:
+        if int(item.get("serial",-1)) == owner_serial:
+            return {"start_world":float(item["world_origin"])+opening,"opening":opening}
+    return {}
+
 ## Exact-deadline recovery preparation and commit live on the same
 ## immutable stream ledger as Play/Resume/Retry, with no second FIFO.
 

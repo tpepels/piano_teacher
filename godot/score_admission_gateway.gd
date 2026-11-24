@@ -19,6 +19,10 @@ var musical_clock
 var metronome
 var failure_request: Node
 var placed_segment := ""
+# The predicted repeat drawn ahead: {"key", "view", "owner"}.
+var predicted := {}
+# Repeats whose notes were drawn in advance and scrolled in from the right.
+var repeats_from_the_right := 0
 var missing_score_frames := 0
 var unplaced_frames := 0
 var reported_failure_segment := ""
@@ -129,14 +133,17 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
             missing_score_frames = 0
     if not running or bool(state.get("paused",false)) or not current is Dictionary:
         unplaced_frames = 0
+        _keep_prediction(state)
         return
     var segment_id: String = str(current.get("segment_id",""))
     if segment_id.is_empty() or segment_id == placed_segment:
+        _keep_prediction(state)
         return
     var outcome: String = _place(state,current,segment_id)
     if outcome == "placed":
         placed_segment = segment_id
         unplaced_frames = 0
+        _keep_prediction(state)
         return
     unplaced_frames += 1
     # A take first seen after its opening note passed can never be drawn:
@@ -160,9 +167,21 @@ func _place(state: Dictionary, current: Dictionary, segment_id: String) -> Strin
             not _assets_cover_window(view,state):
         return "wait"
     var origin: float = float(view.runway_origin_beat)
-    var placed: Dictionary = view.place_timeline_take(
-        flow.project(now_ms)-origin,float(take.get("source_from_beat",0.0)),
-        start_world-origin,float(current.get("count_in_beats",0.0)))
+    var opening: float = float(take.get("source_from_beat",0.0))
+    var placed: Dictionary = {}
+    if not predicted.is_empty() and predicted["view"] == view and \
+            str(predicted["key"]) == _prediction_key(state,float(take["world_start"]),opening):
+        # The repeat happened where it was predicted: its notes, already
+        # scrolling in, become this take.
+        placed = view.adopt_predicted_take(int(predicted["owner"]),opening)
+        predicted.clear()
+        if not placed.is_empty():
+            repeats_from_the_right += 1
+            print("TIMELINE_REPEAT_FROM_THE_RIGHT segment=",segment_id)
+    if placed.is_empty():
+        placed = view.place_timeline_take(
+            flow.project(now_ms)-origin,opening,
+            start_world-origin,float(current.get("count_in_beats",0.0)))
     if placed.is_empty() or absf(float(placed.get("start_world",NAN))-(start_world-origin)) > .0001:
         _report_problem("Cannot draw the take where the timeline placed it")
         if not placed.is_empty():
@@ -184,6 +203,49 @@ func _place(state: Dictionary, current: Dictionary, segment_id: String) -> Strin
                 str(current.get("take_id","")),segment_id)
             metronome.acknowledge_reserved_count_in(now_ms)
     return "placed"
+
+static func _prediction_key(state: Dictionary, world: float, opening: float) -> String:
+    var published: Variant = state.get("musical_timeline")
+    var run: int = int(published.get("run",-1)) if published is Dictionary else -1
+    return "%d|%d|%.5f|%.5f" % [run,int(state.get("revision",-1)),world,opening]
+
+func _drop_prediction() -> void:
+    if predicted.is_empty():
+        return
+    var view = predicted["view"]
+    if view != null and is_instance_valid(view):
+        view.withdraw_predicted_take(int(predicted["owner"]))
+    predicted.clear()
+
+## Draw the published likely repeat while it is still beyond the right
+## edge; withdraw a drawn prediction the timeline no longer offers.
+func _keep_prediction(state: Dictionary) -> void:
+    var published: Variant = state.get("musical_timeline")
+    var next: Variant = published.get("next_take") if published is Dictionary else null
+    if not next is Dictionary or not flow.following:
+        _drop_prediction()
+        return
+    var world: float = float(next.get("world_start",NAN))
+    var opening: float = float(next.get("source_from_beat",0.0))
+    var key: String = _prediction_key(state,world,opening)
+    if not predicted.is_empty() and str(predicted["key"]) == key:
+        return
+    _drop_prediction()
+    var view = stage.renderer
+    if view == null or not is_instance_valid(view) or score_session == null or \
+            not score_session.matches_ready_state(state):
+        return
+    # Draw it only after the current take is bound to its notes, so the
+    # running take never misses a frame of its own ink.
+    if bool(state.get("running",false)) and not placed_segment.is_empty() and \
+            view.bound_segment_id() != placed_segment:
+        return
+    var origin: float = float(view.runway_origin_beat)
+    var now_ms: int = Time.get_ticks_msec()
+    var owner: int = view.place_predicted_take(
+        flow.project(now_ms)-origin,opening,flow.run_world(world)-origin)
+    if owner >= 0:
+        predicted = {"key":key,"view":view,"owner":owner}
 
 func _failure_reported(code: int, body: PackedByteArray) -> void:
     if code != 0:

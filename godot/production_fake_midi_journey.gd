@@ -468,6 +468,11 @@ func _process(_delta: float) -> bool:
                     int(state.get("lesson_steps_mastered",0)) != 0):
                 _fail("Two real MIDI attacks did not produce a clean faster repeat (above 40 BPM)")
                 return true
+            # Owner rule: a repeat comes from the right. Its notes were
+            # drawn ahead and scrolled in; none popped onto the staff.
+            if app.score_admission.repeats_from_the_right < 1:
+                _fail("Automatic repeats did not scroll in from the right")
+                return true
             # End an already accepted take through the production UI port.
             # Pending auto-continuations must be invalidated; no late score
             # status/reply may restart musical grading after Stop.

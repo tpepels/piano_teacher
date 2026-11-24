@@ -63,8 +63,14 @@ class PlaybackAuthorization:
             placed = timeline.start_after(
                 take, now=now, rest_beats=self.transport.ink_ahead_beats,
                 bar_beats=plan.bar_beats, meter=plan.meter, bpm=intent.bpm)
+        timeline.next_take = None
         try:
             self._authorize(facts, timeline, placed)
+            if (self.transport.auto and intent.mode == "practice"
+                    and self.lesson.plan is not None
+                    and self.lesson.plan.exercise.kind != "perform"):
+                timeline.predict_repeat(bar_beats=plan.bar_beats,
+                                        source_from_beat=self.lesson.opening_beat)
         except Exception as exc:
             # _commit already stopped the take and published the failure;
             # the MIDI key, tick or command that triggered it stands.

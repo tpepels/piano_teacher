@@ -23,6 +23,7 @@ var ready_visible_since_ms := -1
 var paused_sample_ms := -1
 var paused_world_beat := NAN
 var paused_pass_serial := -1
+var ready_source_floor := 0.0
 var ready_pass_serial := -1
 var ready_take_owner := -1
 var ready_world_origin := NAN
@@ -212,6 +213,7 @@ func _process(_delta: float) -> bool:
                 ready_pass_serial = int(item["serial"])
                 ready_take_owner = int(item.get("take_owner",ready_pass_serial))
                 ready_world_origin = float(item["world_origin"])
+                ready_source_floor = float(item.get("source_floor",0.0))
                 ready_first_expiry_world = ready_world_origin + \
                     bounds.y/density + \
                     renderer.size.x*ScoreView.PLAYHEAD_FRACTION/density
@@ -399,9 +401,12 @@ func _process(_delta: float) -> bool:
     # The head may disappear only after its last printed pixel has left
     # the viewport. An exposed remainder of the same logical take keeps
     # the original musical placement; no new take can silently replace it.
+    # A take paused in its count-in never sounded: Resume gives it a fresh
+    # full count-in bar, so its unplayed notes make way for the new copy.
     var original_legitimately_retired: bool = \
-        not original_present and \
-        renderer.stream_world_beat >= ready_first_expiry_world-.00001
+        not original_present and (
+            renderer.stream_world_beat >= ready_first_expiry_world-.00001 or
+            ready_world_origin+ready_source_floor > paused_world_beat+.00001)
     if not original_unchanged or \
             not (original_present or original_legitimately_retired) or \
             not future_only_at_enqueue or not has_transport_binding:

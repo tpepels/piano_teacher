@@ -89,6 +89,9 @@ def test_automatic_repeat_follows_after_one_count_in_bar(practice_session):
     # A short, precisely played window reaches the target in one take.
     for bpm, next_bpm in ((40,80), (80,80)):
         start = take["deadline_ms"]/1000
+        # Where the repeat will start is published while this take plays,
+        # so its notes can be drawn early and scroll in from the right.
+        predicted = session.snapshot()["musical_timeline"]["next_take"]["world_start"]
         for beat, pitch, on in ((0,72,True), (1,72,False), (3,79,True), (4,79,False)):
             session.clock.at = start+beat*60/bpm
             session.key(pitch, on, after=0)
@@ -100,6 +103,9 @@ def test_automatic_repeat_follows_after_one_count_in_bar(practice_session):
         # whose first half eases from the outgoing to the incoming tempo.
         assert incoming["deadline_ms"]/1000 == pytest.approx(
             start+4*60/bpm+spans_seconds(count_in_spans(4,bpm,next_bpm)))
+        placed = next(segment for segment in state["musical_timeline"]["segments"]
+                      if segment["take_id"] == incoming["segment_id"])
+        assert placed["world_start"] == pytest.approx(predicted)
         if bpm == 80:
             assert state["streak"] == 1
         final = [event for event in session.ask("feedback.events")["events"]
