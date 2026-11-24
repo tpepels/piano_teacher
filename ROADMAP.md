@@ -41,6 +41,49 @@ The separate final examination uses the whole original piece.
 | 2026-11-24 | Import MusicXML again (as the same MIDI timeline). Remove the Lesson path; add checkpoints every 4 measures. Game-style menus; 4.3 staff spaces per sixteenth; header glyphs never touch; status colour bleeds from the head. |
 | 2026-11-24 | The course is a list of steps with a cursor; the aid is a phase; after a jump back, mastered windows are skipped. Tempo rises by 10% × (1 + timing quality) × length factor. MusicXML fingerings are kept. Calibration gets its own page and a tolerant measurement. Every control type gets its own visible look. |
 
+## Musical timeline rebuild (T1–T6, adopted 2026-11-24)
+
+Owner request: between-take placement must make musical sense (a repeat
+after a note tied over the barline must not fail), Godot keeps the pace
+and pulls what comes next, and tempo changes ease instead of jumping
+(decided: half-cosine ease over the first half of the count-in bar).
+
+**Problem.** Two clocks negotiate: Python pushes an absolute deadline,
+Godot must "admit" it against what is on screen *now*. Every "cannot
+admit / overlaps / expired" refusal is that race; a 2/4 bar (2 beats)
+lost it (`f00a241e` relaxed the rule; the race remains).
+
+**Design.** One declared musical timeline on the world-beat line, owned by
+Python (MIDI arrives there, grading must not depend on frame timing) and
+evaluated identically by both sides:
+
+- Segments: take (source window, from_beat, authored tempo map), rest,
+  count-in. Each has a world start in beats and tempo spans (constant or
+  eased, `tempo_curve.py` / `tempo_curve.gd`), anchored to the shared
+  monotonic clock. Time <-> world beat is a pure function of the timeline.
+- Placement is bar arithmetic: next take = last sounding note (incl. ties)
+  rounded up to the barline, then one count-in bar (ramp in its first
+  half). New notation is placed the same way; if its score is not ready
+  in time the rest grows by whole bars, never an error.
+- Godot pulls: it reads the timeline at its own pace, draws world(t),
+  places each segment's ink at its world start (refusing only what is
+  already behind the playhead), and derives count-in, clicks and bar
+  motion from the segments. Python appends the next segments when a take
+  settles; a late decision adds a rest bar.
+- Pause re-anchors the future segments; Free (untimed) stays a hold.
+
+| Stage | Content | Status |
+| --- | --- | --- |
+| T1 | Exact constant/eased timing maths, Python + Godot | Done `c2a262b1` |
+| T2 | Python `MusicalTimeline` model, built alongside today's transport and published in state; journeys log its agreement with today's deadlines | |
+| T3 | Godot scroll position from the published timeline (replaces presentation epochs); ramps visible | |
+| T4 | Count-in bubbles and clicks from timeline segments | |
+| T5 | Continuations and Start/Resume append segments at bar positions; remove reserve/present admission for them; late decision = extra rest bar | |
+| T6 | Grading via the timeline inverse; remove fixed deadlines, reservation and clearance machinery; tests and journeys on the new contract | |
+
+Each stage keeps the 4/4 and 2/4 synthetic journeys, the test suite and the
+full desktop check green before it is committed.
+
 ## Structural decoupling plan (R1–R8, adopted 2026-11-23)
 
 **Why:** A0–A7 removed duplicate owners and parallel paths, but the
