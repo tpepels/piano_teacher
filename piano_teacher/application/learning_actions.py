@@ -19,7 +19,7 @@ class LearningActions:
 
     def control_listening(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action == "listen":
-            if (self.lesson.flow_active and self.lesson.flow_state is not None
+            if (self.lesson.flow_state is not None
                     and self.lesson.flow_state.stage_key == self.lesson.plan.identity
                     and self.transport.mode != "listen"):
                 # Listen again: the state machine plays it, then Free.

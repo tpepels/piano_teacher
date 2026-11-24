@@ -45,7 +45,7 @@ class PreAssessmentTransitions:
             self.course.save_guided_preparation()
         elif decision.action == "listening":
             if self.listen_outcomes.finish(now):
-                if (self.lesson.flow_active and self.lesson.flow_state is not None
+                if (self.lesson.flow_state is not None
                         and self.lesson.flow_state.step is practice_flow.Step.LISTEN):
                     self.course.flow_execute(self.lesson.flow_listen_finished())
         elif decision.action == "feedback":

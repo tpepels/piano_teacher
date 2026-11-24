@@ -219,7 +219,7 @@ class SessionReadModels:
         # not infer it from a revision or from a mutable frontend hand label.
         plan = self.lesson.plan
         state["stage_key"] = plan.identity if plan is not None else ""
-        if self.lesson.flow_active:
+        if plan is not None:
             state["flow"] = self.lesson.flow_status(self.lesson.plan, self.transport.mode)
         return state, pending, timeline
 

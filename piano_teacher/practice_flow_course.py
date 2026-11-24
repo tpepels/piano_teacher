@@ -26,10 +26,12 @@ from .lesson_generators import CodaAid, FukudaAid
 from .teaching_decisions import (
     TeachingDecision, TeachingExposure, full_target_take,
 )
-from .teaching_course import flow_assessed_progress
+from .teaching_course import select_cursor
 from .teaching_manual import choose_manual, next_guided_range
 from .application.assessment_verdict import AssessmentVerdict
-from .application.practice_flow import Outcome, floor_bpm
+from .application.practice_flow import (
+    FlowState, Outcome, Step, floor_bpm, take_graded,
+)
 
 def _hands(notes) -> tuple[str, ...]:
     present = {n.hand for n in notes}
@@ -97,6 +99,42 @@ def _entry_tempo(event, state, decision):
 # --- Decisions ---------------------------------------------------------
 
 
+def graded_progress(course, *, accepted, secure=False):
+    """One graded Tempo take, decided by the practice flow state machine
+    (application/practice_py); this only maps it onto course progress."""
+    p = course.progress
+    state = FlowState(course.key, course.exercise.kind == "perform",
+                           Step.TEMPO, int(p.bpm), int(p.target_bpm),
+                           failures=p.failures, clean_at_target=p.streak,
+                           free_returns=dict(p.free_returns).get(course.key,0))
+    t = take_graded(state, passed=accepted, secure=secure)
+    def selected(c, message):
+        return c, message, t.outcome
+    if t.outcome not in (Outcome.STAGE_DONE, Outcome.PIECE_DONE):
+        bpm = p.bpm if t.outcome is Outcome.BACK_TO_FREE else t.state.bpm
+        returns = dict(p.free_returns)
+        if t.outcome is Outcome.BACK_TO_FREE:
+            returns[course.key] = t.state.free_returns
+        return selected(course.with_progress(bpm=bpm, failures=t.state.failures,
+                                    streak=t.state.clean_at_target,
+                                    free_returns=tuple(sorted(returns.items()))), t.message)
+    mastered = dict(p.mastered)
+    mastered[course.key] = p.target_bpm
+    course = course.with_progress(streak=0, failures=0,
+                                  mastered=tuple(sorted(mastered.items())))
+    if t.outcome is Outcome.PIECE_DONE:
+        return selected(course, t.message)
+    i, h, _ = p.cursor
+    if h + 1 < len(course.hands):
+        course = course.with_progress(cursor=(i, h + 1, 0))
+    elif i + 1 < len(course.definition.exercises):
+        course = select_cursor(course, (i + 1, 0, 0))
+    else:
+        return selected(course, "Piece mastered")
+    return selected(course.with_progress(bpm=floor_bpm(int(p.target_bpm)),
+                                failures=0, streak=0), t.message)
+
+
 def _base_decision(event, state):
     """The take/command outcome before Practice Flow's step rules apply."""
     c, route, result = state.course, state.route, event.assessment
@@ -115,7 +153,7 @@ def _base_decision(event, state):
         continuation = "stop"
     elif event.kind in ("full_result", "focused_result"):
         if eligible:
-            chosen, message, flow_outcome = flow_assessed_progress(
+            chosen, message, flow_outcome = graded_progress(
                 c, accepted=passed, secure=passed and result.secure)
         if (not route.automatic or flow_outcome is Outcome.PIECE_DONE
                 or route.scope in ("perform", "section_review")):

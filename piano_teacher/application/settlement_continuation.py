@@ -80,8 +80,7 @@ class SettlementContinuation:
                     now=now, bpm=self.lesson.plan.bpm,
                     presentation_bpm=self.transport_timing.presentation_bpm(),
                     count_in_beats=self.transport_timing.next_count_in_beats(),
-                    automatic=transaction.pending.state.route.automatic,
-                    flow_active=self.lesson.flow_active))
+                    automatic=transaction.pending.state.route.automatic))
             if publication.flow_outcome is not None:
                 self.lesson.settle_flow_decision(
                     publication.flow_outcome, plan=self.lesson.plan,
@@ -114,23 +113,11 @@ class SettlementContinuation:
         self.take.checkpoint_failed_streak(pending,plan=self.lesson.plan,now=now)
         self.transport.note_tempo(
             stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
-        exposure = pending.decision.next_exposure
-        target = exposure.from_beat if exposure is not None else self.transport.play_from_beat
         completion = self.transport.finish_full_passage(FullPassageFacts(
             pending=pending,stage_key=self.lesson.plan.identity,bpm=self.lesson.plan.bpm,
             target_bpm=self.lesson.plan.target_bpm,
             assessed_bpm=self.take.pending_assessed_bpm,
-            total_beats=total_beats,duration=duration,now=now,
-            visual_from=self.transport_timing.visual_motion(now)[0],feedback_seconds=SETTINGS.feedback_seconds,
-            source_model=self.score.source_model(),presentation_bpm=self.transport_timing.presentation_bpm(),
-            horizon_beats=self.transport.continuous_horizon_beats,
-            short_rest_enabled=self.transport.short_rest is not None,
-            retry_rest=self.transport_timing.collect_rest_measurement(from_beat=target),
-            repeat_rest=self.transport_timing.collect_rest_measurement(from_beat=0.0,
-                source_end=self.transport.run_at+duration),
-            assets_ready=self.score.decision_assets_ready(pending,
-                revision=self.lesson.revision,fingerprint=self.lesson.fingerprint),
-            exact_repeats=self.lesson.flow_active))
+            duration=duration,now=now,source_model=self.score.source_model()))
         if completion.next_action is not None:
             self.notices.next_action = completion.next_action
         if completion.advance_feedback:

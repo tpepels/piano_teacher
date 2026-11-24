@@ -156,11 +156,6 @@ class Lesson:
     def execute_flow(self, *args, **kwargs):
         return self._flow.execute(*args, **kwargs)
 
-    @property
-    def flow_active(self) -> bool:
-        """Practice Flow governs the selected source (not the warm-up)."""
-        return self._flow.active(self.plan)
-
     def display_phrase(self, *, learning: bool):
         """The phrase shown on the staff: Free's window while learning."""
         plan = self.plan

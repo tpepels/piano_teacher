@@ -14,7 +14,7 @@ from ..lesson_timing import preparation_meter
 from .musical_scheduler import SCHEDULER, SETTLEMENT_SECONDS
 from .playback_transitions import CountInPlan
 from .playback_facts import (
-    FullPassageFacts, PassageRuntimeFacts, PassageFinishPlan, PreparationRequest,
+    FullPassageFacts, PassageRuntimeFacts, PassageFinishPlan,
 )
 from .passage_outcome_presenter import next_action as passage_next_action
 
@@ -147,64 +147,32 @@ class AttemptProgression:
     @staticmethod
     def plan_full_passage(facts: FullPassageFacts,
                           runtime: PassageRuntimeFacts) -> PassageFinishPlan:
-        """Project a selected result into one metrical playback publication."""
+        """Project a selected result into one metrical playback publication.
+
+        An automatic take repeated at the same step (same window, timed)
+        follows after the printed one-bar rest. Free, the next hand/window
+        and piece completion are selected immediately; messages never add
+        a pedagogical waiting interval.
+        """
         pending,decision = facts.pending,facts.pending.decision
         exposure = decision.next_exposure
         same_timed = (exposure is not None and exposure.stage_key == facts.stage_key
             and exposure.mode == "practice" and decision.remediation is None)
-        rewind = decision.invalidate_failed_streak and runtime.automatic and not facts.exact_repeats
-        automatic = runtime.automatic
-        preparation = None
-        if rewind:
-            target = exposure.from_beat if exposure is not None else runtime.from_beat
-            preparation = PreparationRequest(facts.source_model,target,facts.now,
-                facts.visual_from,SCHEDULER.recovery_rewind(
-                    feedback_seconds=facts.feedback_seconds,
-                    passage_beats=facts.total_beats,bpm=facts.bpm),
-                facts.presentation_bpm,facts.horizon_beats,announce=same_timed,
-                short_deadline=SCHEDULER.measured_rest(
-                    facts.retry_rest,now=facts.now,bpm=facts.presentation_bpm))
-        if rewind and automatic:
-            return PassageFinishPlan(preparation,"advance",advance_early=True)
         notice = passage_next_action(pending,target_bpm=facts.target_bpm,
             start_beat=runtime.from_beat,assessed_bpm=facts.assessed_bpm)
-        if facts.exact_repeats and automatic and same_timed:
-            from ..notation.practice_timeline import retry_preparation_rest_beats
-            bar = retry_preparation_rest_beats(facts.source_model,exposure.from_beat)
-            # This printed rest is a continuation of the OUTGOING
-            # immutable source and must run at that source's tempo.
-            # Choosing the incoming faster BPM shortens its wall-clock
-            # duration, placing the next first header into still-visible
-            # old rest ink and making the fixed one-bar repeat impossible.
-            # The incoming tempo begins only at the authorized downbeat.
-            deadline = SCHEDULER.repeat(run_at=runtime.run_at,
-                source_seconds=facts.duration,gap_beats=bar,bpm=facts.bpm)
-            return PassageFinishPlan(None,"announce",deadline=deadline,
-                next_action=notice,advance_early=True)
-        if facts.exact_repeats:
-            # Free, the next hand/window, and piece completion are selected
-            # immediately. Messages never add a pedagogical waiting interval.
-            return PassageFinishPlan(None,"ready" if automatic else "stop",
-                next_action=notice)
-        if facts.assets_ready:
-            return PassageFinishPlan(preparation,"ready",next_action=notice)
-        if not automatic:
-            return PassageFinishPlan(preparation,"stop",next_action=notice)
-        if runtime.retry_previous_pass or rewind:
-            return PassageFinishPlan(preparation,"hold",next_action=notice)
+        if not runtime.automatic:
+            return PassageFinishPlan("stop",next_action=notice)
+        if not same_timed:
+            return PassageFinishPlan("ready",next_action=notice)
+        from ..notation.practice_timeline import retry_preparation_rest_beats
+        bar = retry_preparation_rest_beats(facts.source_model,exposure.from_beat)
+        # This printed rest is a continuation of the OUTGOING immutable
+        # source and runs at that source's tempo. The incoming faster BPM
+        # would shorten it, placing the next first header into still-visible
+        # old rest ink. The incoming tempo begins at the authorized downbeat.
         deadline = SCHEDULER.repeat(run_at=runtime.run_at,
-            source_seconds=facts.duration,gap_beats=runtime.gap_beats,bpm=facts.bpm)
-        if same_timed:
-            short = SCHEDULER.measured_rest(
-                facts.repeat_rest,now=facts.now,bpm=facts.presentation_bpm)
-            deadline = short if short is not None else SCHEDULER.missing_horizon(
-                deadline=deadline,rest_beats=runtime.gap_beats,
-                reading_horizon_beats=facts.horizon_beats,bpm=facts.presentation_bpm)
-        elif facts.short_rest_enabled:
-            deadline = facts.now
-        return PassageFinishPlan(preparation,"announce" if same_timed else "wait",
-            deadline=deadline,next_action=notice,
-            advance_early=automatic)
+            source_seconds=facts.duration,gap_beats=bar,bpm=facts.bpm)
+        return PassageFinishPlan("announce",deadline=deadline,next_action=notice)
 
     @staticmethod
     def preloaded_feedback_due(source, *, now: float, run_at: float,
@@ -215,7 +183,7 @@ class AttemptProgression:
 
     def inspect(self, tick: AttemptTick,
                 checkpoint: Callable[[float], None],
-                seconds_at: Callable[[float], float], *, exact_repeats: bool = False) -> AttemptStep:
+                seconds_at: Callable[[float], float]) -> AttemptStep:
         """Decide the next transition without modifying transport or learner state."""
         grid = self.grid_for(tick.phrase,tick.boundaries)
         boundary = tick.next_boundary
@@ -232,11 +200,7 @@ class AttemptProgression:
         ending = (min(total_beats,tick.review_end)
                   if tick.review_end is not None else total_beats)
         duration = seconds_at(ending)-seconds_at(tick.from_beat)
-        settlement = 0.0 if exact_repeats else SETTLEMENT_SECONDS
-        if tick.auto and tick.review_end is None:
-            settlement = min(settlement,
-                             SCHEDULER.beats_seconds(tick.gap_beats,tick.bpm))
-        if tick.now < tick.run_at+duration+settlement:
+        if tick.now < tick.run_at+duration:
             return AttemptStep("waiting",boundary,grid)
         return AttemptStep("complete",boundary,grid,
                            ending=ending,duration=duration)

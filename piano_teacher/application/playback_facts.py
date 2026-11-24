@@ -116,19 +116,9 @@ class FullPassageFacts:
     bpm: float
     target_bpm: float
     assessed_bpm: float | None
-    total_beats: float
     duration: float
     now: float
-    visual_from: float
-    feedback_seconds: float
     source_model: dict
-    presentation_bpm: float
-    horizon_beats: float
-    short_rest_enabled: bool
-    retry_rest: RestMeasurement | None
-    repeat_rest: RestMeasurement | None
-    assets_ready: bool
-    exact_repeats: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,19 +132,15 @@ class PassageCompletion:
 @dataclass(frozen=True, slots=True)
 class PassageRuntimeFacts:
     automatic: bool
-    retry_previous_pass: bool
     run_at: float
     from_beat: float
-    gap_beats: float
 
 
 @dataclass(frozen=True, slots=True)
 class PassageFinishPlan:
-    preparation: PreparationRequest | None
-    action: str
+    action: str  # "stop" | "ready" | "announce"
     deadline: float | None = None
     next_action: str | None = None
-    advance_early: bool = False
 
 
 @dataclass(frozen=True, slots=True)

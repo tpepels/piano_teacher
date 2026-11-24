@@ -112,8 +112,7 @@ class ExposureWorkflows:
             raise ValueError("Open a piece first")
         return ExposureSource(
             selected.identity, selected.active_variant,
-            selected.piece.bar_boundaries, selected.piece.time_signatures,
-            self.lesson.flow_active)
+            selected.piece.bar_boundaries, selected.piece.time_signatures)
 
     def prepare_practice(self, *, exposure=None, effect=None, reason="transition"):
         selected_plan = self.lesson.plan

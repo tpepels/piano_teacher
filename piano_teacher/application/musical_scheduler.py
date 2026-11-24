@@ -380,13 +380,5 @@ class MusicalScheduler:
             return max(now+lead,previous_deadline+distance+lead)
         return previous_deadline
 
-    @classmethod
-    def recovery_rewind(cls, *, feedback_seconds: float,
-                        passage_beats: float, bpm: float) -> float:
-        """Feedback animation may overlap the rest, never add another bar."""
-        if not math.isfinite(feedback_seconds) or feedback_seconds < 0:
-            raise ValueError("Invalid recovery feedback duration")
-        return max(feedback_seconds,
-                   min(4.0,cls.beats_seconds(passage_beats,bpm)/3.0))
 
 SCHEDULER = MusicalScheduler()

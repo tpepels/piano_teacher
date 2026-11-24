@@ -399,32 +399,19 @@ class PlaybackSession:
         if self._full_completion is not None and self._full_completion[0] == identity:
             return self._full_completion[1]
         plan = self._progression.plan_full_passage(facts,PassageRuntimeFacts(
-            self.auto,self._transport.retry_previous_pass,self._transport.run_at,
-            self._transport.play_from_beat,self._transport.visual_gap_beats))
-        if plan.preparation is not None:
-            self._transport.set_retry_previous_pass(True)
-            self.schedule_preparation(plan.preparation)
-        if plan.action == "advance":
-            result = PassageCompletion(advance_feedback=bool(self._transport.next_at),
-                force_early=True)
-        elif plan.action == "ready":
+            self.auto,self._transport.run_at,self._transport.play_from_beat))
+        if plan.action == "ready":
             self._transport.wait_for_continuation(facts.now)
             result = PassageCompletion(advance_feedback=True,next_action=plan.next_action)
         elif plan.action == "stop":
             self._transport.cancel_continuation()
             result = PassageCompletion(next_action=plan.next_action)
-        elif plan.action in ("announce","wait"):
-            if plan.action == "announce":
-                self._score.announce_successor(facts.pending,deadline=plan.deadline)
-            else:
-                self._transport.withdraw_announcement()
-                self._transport.wait_for_continuation(plan.deadline)
-            early = bool(plan.advance_early and self._transport.next_at)
+        else:
+            self._score.announce_successor(facts.pending,deadline=plan.deadline)
+            early = bool(self._transport.next_at)
             result = PassageCompletion(advance_feedback=early,force_early=early,
                 update_clock=not early and facts.now >= self._transport.next_at,
                 next_action=plan.next_action)
-        else:
-            result = PassageCompletion(next_action=plan.next_action)
         self._full_completion = (identity,result)
         return result
 
@@ -451,9 +438,8 @@ class PlaybackSession:
             if measurement is None or source_stride_beats is None:
                 raise ValueError("Continuation requires the exact source measurements")
             deadline = SCHEDULER.continuation(measurement,now=self._clock(),bpm=effect.bpm)
-            if not self._transport.retry_previous_pass:
-                self._transport.advance_source_stride(
-                    source_stride_beats-effect.exposure.from_beat)
+            self._transport.advance_source_stride(
+                source_stride_beats-effect.exposure.from_beat)
             result = AppliedContinuation(ScheduledContinuation(
                 effect.exposure.from_beat,deadline))
         elif isinstance(effect,AwaitSelectedScore):

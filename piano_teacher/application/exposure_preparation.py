@@ -27,7 +27,6 @@ class ExposureSource:
     variant: ExerciseVariant
     boundaries: tuple[float, ...]
     time_signatures: tuple[tuple[float, int, int], ...]
-    flow: bool
 
     @property
     def duration(self) -> float:
@@ -94,7 +93,7 @@ def prepare_guided(source: ExposureSource, selected: TeachingExposure, *,
         source,fragment,revision+int(bump_revision),recovery,remediation,
         tuple(retry_range.items()) if recovery and retry_range is not None else None,
         remediation.focus if remediation is not None else
-        "Now without tempo" if source.flow else "Preparing a short idea to learn",
+        "Now without tempo",
         f"Learn the selected {remediation.focus} notes, then retry the original."
         if remediation is not None else
         f"Learn bars {original.phrase.first_bar}-{original.phrase.last_bar} "
@@ -124,7 +123,7 @@ def prepare_listen(source: ExposureSource, *, revision: int, bpm: float,
         variant=source.variant,bpm=bpm,stage_key=source.stage_key,
         revision=revision+1,bar_boundaries=source.boundaries,
         time_signatures=source.time_signatures,tempo_map=tempo_map,
-        from_beat=source.variant.phrase.first_attack_beat if source.flow else 0.0))
+        from_beat=source.variant.phrase.first_attack_beat))
 
 
 @dataclass(frozen=True, slots=True)

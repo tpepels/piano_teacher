@@ -53,8 +53,7 @@ class TakeProgression:
             review_end=self.take.review_end_beat,
             auto=self.transport.auto, mode=self.transport.mode,
             bpm=self.lesson.plan.bpm, gap_beats=self.transport.visual_gap_beats),
-            self.checkpoint, self.transport_timing.elapsed_seconds,
-            exact_repeats=self.lesson.flow_active)
+            self.checkpoint, self.transport_timing.elapsed_seconds)
         self.transport.advance_boundary(step.next_boundary)
         followup = False
         if step.action == "complete":

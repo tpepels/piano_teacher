@@ -61,7 +61,6 @@ class VisualTransport:
     _visual_rewind_to: float | None = None
     _visual_rewind_at: float = 0.0
     _visual_rewind_seconds: float = 0.0
-    _retry_previous_pass: bool = False
     practice_preparation: dict | None = None
     _preparation_pending: bool = False
     _preparation_at: float = 0.0
@@ -159,10 +158,6 @@ class VisualTransport:
             self.retime_announcement(floor)
 
     @property
-    def retry_previous_pass(self) -> bool:
-        return self._retry_previous_pass
-
-    @property
     def preparation_pending(self) -> bool:
         return self._preparation_pending
 
@@ -171,9 +166,6 @@ class VisualTransport:
         """Only VisualTransport owns the pending rest/preparation epoch."""
         return self._preparation_at
 
-    def set_retry_previous_pass(self, enabled: bool) -> None:
-        """Track retry lifecycle without bypassing the transport owner."""
-        self._retry_previous_pass = bool(enabled)
 
     def finish_preparation_gate(self) -> None:
         """Release only the pending preparation flag, retaining authored rest."""
@@ -238,7 +230,6 @@ class VisualTransport:
         self._visual_rewind_to = None
         self._visual_rewind_at = 0.0
         self._visual_rewind_seconds = rewind_seconds
-        self._retry_previous_pass = False
         self.practice_preparation = None
         self._preparation_pending = False
         self._preparation_at = 0.0
@@ -254,7 +245,6 @@ class VisualTransport:
         self.paused_at = 0.0
         self._visual_rewind_from = None
         self._visual_rewind_to = None
-        self._retry_previous_pass = False
         self._preparation_pending = False
         if loop_continuation and self.practice_preparation is not None:
             self.practice_preparation["phase"] = "complete"

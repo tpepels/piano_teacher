@@ -118,7 +118,6 @@ class SettledSourceFacts:
     presentation_bpm: float
     count_in_beats: float
     automatic: bool
-    flow_active: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -411,7 +410,7 @@ class TeachingContinuation:
         else:
             effect = StopSelectedContinuation(identity,decision.message)
         self._settled_publication = SettledPublication(effect,
-            decision.flow_outcome if facts.flow_active else None,decision.message)
+            decision.flow_outcome,decision.message)
         return self._settled_publication
 
     def capture_state(self):

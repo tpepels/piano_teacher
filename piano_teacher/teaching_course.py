@@ -223,43 +223,6 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
         stage_tempos=tuple(sorted(tempos.items())), transferable_tempos=tuple(sorted(transferable)))
 
 
-def flow_assessed_progress(course, *, accepted, secure=False):
-    """One graded Tempo take, decided by the practice flow state machine
-    (application/practice_flow.py); this only maps it onto course progress."""
-    from .application import practice_flow as flow
-    p = course.progress
-    state = flow.FlowState(course.key, course.exercise.kind == "perform",
-                           flow.Step.TEMPO, int(p.bpm), int(p.target_bpm),
-                           failures=p.failures, clean_at_target=p.streak,
-                           free_returns=dict(p.free_returns).get(course.key,0))
-    t = flow.take_graded(state, passed=accepted, secure=secure)
-    def selected(c, message):
-        return c, message, t.outcome
-    if t.outcome not in (flow.Outcome.STAGE_DONE, flow.Outcome.PIECE_DONE):
-        bpm = p.bpm if t.outcome is flow.Outcome.BACK_TO_FREE else t.state.bpm
-        returns = dict(p.free_returns)
-        if t.outcome is flow.Outcome.BACK_TO_FREE:
-            returns[course.key] = t.state.free_returns
-        return selected(course.with_progress(bpm=bpm, failures=t.state.failures,
-                                    streak=t.state.clean_at_target,
-                                    free_returns=tuple(sorted(returns.items()))), t.message)
-    mastered = dict(p.mastered)
-    mastered[course.key] = p.target_bpm
-    course = course.with_progress(streak=0, failures=0,
-                                  mastered=tuple(sorted(mastered.items())))
-    if t.outcome is flow.Outcome.PIECE_DONE:
-        return selected(course, t.message)
-    i, h, _ = p.cursor
-    if h + 1 < len(course.hands):
-        course = course.with_progress(cursor=(i, h + 1, 0))
-    elif i + 1 < len(course.definition.exercises):
-        course = select_cursor(course, (i + 1, 0, 0))
-    else:
-        return selected(course, "Piece mastered")
-    return selected(course.with_progress(bpm=flow.floor_bpm(int(p.target_bpm)),
-                                failures=0, streak=0), t.message)
-
-
 def preserve_mastered(course, definition):
     if not course.progress.mastered:
         return definition
@@ -284,4 +247,3 @@ def preserve_mastered(course, definition):
                 sequences[(ex.key, hand)] = merged
                 changed = True
     return replace(definition, stage_sequences=sequences) if changed else definition
-
