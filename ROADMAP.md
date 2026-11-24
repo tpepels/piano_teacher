@@ -39,6 +39,7 @@ The separate final examination uses the whole original piece.
 | 2026-11-22 | Adopt A0–A7 architectural unification: one serialized PracticeSession; cohesive lesson, assessment, transport and score domains; one score preparation pipeline; physical Godot adapters; and complete migration/removal of redundant orchestration. Preserve supported features and real physical invariants; CI remains manual. |
 | 2026-11-23 | Practice Flow is the only course. Remove the other courses and strategies, the warm-up course, lesson-screen extras, the no-piano timing preview, save-failure recovery and lost-reply recovery. |
 | 2026-11-24 | Import MusicXML again (as the same MIDI timeline). Remove the Lesson path; add checkpoints every 4 measures. Game-style menus; 4.3 staff spaces per sixteenth; header glyphs never touch; status colour bleeds from the head. |
+| 2026-11-24 | The course is a list of steps with a cursor; the aid is a phase; after a jump back, mastered windows are skipped. Tempo rises by 10% × (1 + timing quality) × length factor. MusicXML fingerings are kept. Calibration gets its own page and a tolerant measurement. Every control type gets its own visible look. |
 
 ## Structural decoupling plan (R1–R8, adopted 2026-11-23)
 
@@ -97,6 +98,25 @@ event handlers that depend on domains, not on their internals.
   review to Godot admission/stream orchestration.
 - **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
   docs/architecture.md.
+
+### Course as a list, variable tempo, fingering, calibration — 2026-11-24 (`5ef…3ac7590e`)
+
+- `teaching_course`: one ordered step list (window × hand) and a cursor;
+  progress is the current tempo/failures/clean takes, mastered steps and
+  Free returns. Variant dimension, tempo history/carry-over and guided-idea
+  navigation removed (~900 lines). The aid is `practice_flow.Step.AID`,
+  held by the flow session. Owner's saved session restores exactly (checked
+  on a copy of the database).
+- Tempo step = 10% of target × (1 + timing quality) × clamp(8/attacks, 1,
+  2.5); ladder tests now assert behaviour, not step sizes.
+- MusicXML fingerings are authored, fixed fingers (grace notes excluded).
+- Calibration: 24 taps, median of consistent taps, accepted at ≤60 ms
+  deviation, early tapping = no correction; its own page with a tap strip.
+- Controls: menu choices (key notch), key-cap actions, pick-one key groups,
+  card rows with a play badge, card tiles.
+- Gates: 191 Python tests, Godot checks; full desktop check on `541a587a`
+  (synthetic-MIDI journey fixed and re-passed on `3ac7590e`). Nothing here
+  is tested at the piano.
 
 ### Thin practice screen and direct aid — 2026-11-24
 
