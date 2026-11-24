@@ -285,9 +285,8 @@ func _populate() -> void:
 
 
 func _menu_link(text: String) -> Button:
-    # Quiet game-menu words instead of boxed tool buttons.
-    var button := UI.button(text, "menu")
-    button.set_meta("ui_font_base", 19)
-    button.add_theme_font_size_override("font_size", 19)
-    button.custom_minimum_size = Vector2(0, 40)
+    # Library tools are key caps, distinct from the music rows below.
+    var button := UI.button(text, "key")
+    button.set_meta("ui_font_base", 16)
+    button.add_theme_font_size_override("font_size", 16)
     return button

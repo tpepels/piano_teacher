@@ -71,20 +71,22 @@ func _ready() -> void:
 	_gap(menu, 18)
 
 	hand_row = HBoxContainer.new()
-	hand_row.add_theme_constant_override("separation", 0)
+	hand_row.add_theme_constant_override("separation", 6)
 	menu.add_child(hand_row)
 	_gap(menu, 6)
 	var tempo_row := HBoxContainer.new()
-	tempo_row.add_theme_constant_override("separation", 0)
+	tempo_row.add_theme_constant_override("separation", 6)
 	menu.add_child(tempo_row)
-	slower_button = _item("−", {"action": "ui_tempo_down"}, tempo_row, 30)
+	slower_button = _item("−", {"action": "ui_tempo_down"}, tempo_row, 24, "key")
+	slower_button.custom_minimum_size = Vector2(52, 48)
 	slower_button.tooltip_text = "Slower"
 	tempo_value = _small("", tempo_row)
 	tempo_value.add_theme_font_size_override("font_size", 22)
 	tempo_value.add_theme_color_override("font_color", Design.STONE)
 	tempo_value.custom_minimum_size.x = 104
 	tempo_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	faster_button = _item("+", {"action": "ui_tempo_up"}, tempo_row, 30)
+	faster_button = _item("+", {"action": "ui_tempo_up"}, tempo_row, 24, "key")
+	faster_button.custom_minimum_size = Vector2(52, 48)
 	faster_button.tooltip_text = "Faster"
 	_gap(menu, 18)
 	exit_button = _item("Exit", {"action": "exit"}, menu, 30, "menu_danger")
@@ -158,6 +160,12 @@ class CheckpointTile extends Button:
 
 	func _draw() -> void:
 		var lit := is_hovered() or has_focus()
+		# A small card: the whole tile is one thing to press.
+		var card := Rect2(Vector2(2, 2), size-Vector2(4, 4))
+		draw_rect(card, Look.PANEL_RAISED if lit else Look.PANEL_RECESSED, true)
+		var outline: Color = (Look.MINT if current else Color(Look.MINT, .6) if lit
+			else Color(Look.STONE, .14))
+		draw_rect(card, outline, false, 1.5 if current else 1.0)
 		if current or lit:
 			# The same mint key as the menu words, under the tile.
 			var key := Rect2(Vector2(6, size.y-4), Vector2(size.x-12, 3))
@@ -226,7 +234,8 @@ func present(state: Dictionary) -> void:
 			child.queue_free()
 		for hand in hands:
 			var name: String = {"right": "Right", "left": "Left"}.get(str(hand), "Both")
-			var button := _item(name, {"action": "hand", "hand": hand}, hand_row, 26)
+			var button := _item(name, {"action": "hand", "hand": hand}, hand_row, 18, "key")
+			button.custom_minimum_size = Vector2(92, 46)
 			button.set_selected(str(hand) == str(state.get("hand", "")))
 			button.disabled = not bool(hand_actions.get(str(hand), {}).get("enabled", false))
 	if opening:

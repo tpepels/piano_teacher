@@ -148,8 +148,11 @@ The music is the focus:
 - **Pause** freezes both the visible score and the graded/untimed exercise.
   Resume continues the selected passage without presenting new notes during
   the pause. In Free, the next target holds still until the correct key.
-- Menus (the pause menu, Music, Settings) read as game menus: a few large
-  words, the chosen one lit by a mint key at its edge; no boxed tool buttons.
+- Every control type has its own look, so you can see what can be pressed:
+  menu choices are large words with a key notch (lit when chosen); actions
+  are raised key caps (danger ones rose); a pick-one group is a row of keys
+  with the chosen one filled; list rows are cards with an ivory key edge and
+  a play badge; checkpoints are small cards. Plain text is never framed.
 - Keep **Pause/Resume** and **Listen again** as the practice controls. Everything
   else progresses automatically. This controls the visible normal flow;
   configured physical MIDI shortcuts and existing keyboard/API tools remain.

@@ -137,14 +137,13 @@ func _button(value: String, callback: Callable, primary := false,
     var control := ActionButton.new()
     control.text = value
     control.clip_text = false
-    # Game-menu words, not boxed tool buttons; danger stays rose.
-    var menu_role := "menu_danger" if role == "danger" else "menu"
-    control.set_meta("ui_font_base", 19)
-    control.add_theme_font_size_override("font_size", _ui_font(19))
-    control.configure(menu_role)
-    var width: float = Design.title_font().get_string_size(value,
-        HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(19)).x
-    control.custom_minimum_size = Vector2(width + 46.0 * ui_scale, 40.0 * ui_scale)
+    # Actions are key caps; danger keys are rose.
+    control.set_meta("ui_font_base", 16)
+    control.add_theme_font_size_override("font_size", _ui_font(16))
+    control.configure("key_danger" if role == "danger" else "key")
+    var width: float = Design.font(600).get_string_size(value,
+        HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(16)).x
+    control.custom_minimum_size = Vector2(width + 40.0 * ui_scale, 42.0 * ui_scale)
     control.pressed.connect(callback)
     return control
 
@@ -397,11 +396,11 @@ func _build_learning_controls(parent: VBoxContainer) -> void:
     history_actions_body.add_child(actions)
     export_history_button = _button("Export history", _browse_history_export, false, "secondary")
     actions.add_child(export_history_button)
-    delete_piece_button = _button("Delete this piece's history", _confirm_piece_history_delete, false, "utility")
+    delete_piece_button = _button("Delete this piece's history", _confirm_piece_history_delete, false, "danger")
     delete_piece_button.disabled = true
     actions.add_child(delete_piece_button)
     delete_learner_button = _button("Delete all history", func():
-        delete_learner_dialog.popup_centered(), false, "utility")
+        delete_learner_dialog.popup_centered(), false, "danger")
     actions.add_child(delete_learner_button)
     history_actions_body.add_child(_label(
         "Deleting history also deletes saved progress. Your music files stay.",

@@ -10,7 +10,7 @@ var text_scale := 1.0
 
 func _init() -> void:
     super._init()
-    custom_minimum_size = Vector2(0, 64)
+    custom_minimum_size = Vector2(0, 70)
     size_flags_horizontal = Control.SIZE_EXPAND_FILL
     clip_text = false
 
@@ -22,8 +22,8 @@ func _ready() -> void:
     content.name = "MusicRowContent"
     content.mouse_filter = Control.MOUSE_FILTER_IGNORE
     content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    content.add_theme_constant_override("margin_left", 30)
-    content.add_theme_constant_override("margin_right", 16)
+    content.add_theme_constant_override("margin_left", 34)
+    content.add_theme_constant_override("margin_right", 72)
     content.add_theme_constant_override("margin_top", 8)
     content.add_theme_constant_override("margin_bottom", 8)
     add_child(content)
@@ -38,7 +38,7 @@ func _ready() -> void:
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     title_label.add_theme_font_override("font", Palette.title_font())
-    title_label.add_theme_font_size_override("font_size", roundi(26.0 * text_scale))
+    title_label.add_theme_font_size_override("font_size", roundi(22.0 * text_scale))
     title_label.add_theme_color_override("font_color", Palette.STONE)
     lines.add_child(title_label)
     detail_label = Label.new()
@@ -59,18 +59,30 @@ func set_text_scale(scale_factor: float) -> void:
     text_scale = clampf(scale_factor, 1.0, 1.75)
     if title_label == null or detail_label == null:
         return
-    title_label.add_theme_font_size_override("font_size", roundi(26.0 * text_scale))
+    title_label.add_theme_font_size_override("font_size", roundi(22.0 * text_scale))
     detail_label.add_theme_font_size_override("font_size", roundi(14.0 * text_scale))
     # Keep the compact tile height until actual enlarged font metrics need
     # more room; viewport scaling alone must not create oversized cards.
-    custom_minimum_size.y = maxf(64.0,
-        title_label.get_line_height() + detail_label.get_line_height() + 22.0)
+    custom_minimum_size.y = maxf(70.0,
+        title_label.get_line_height() + detail_label.get_line_height() + 26.0)
     queue_redraw()
 
 func set_entry(title: String, detail: String, status: String = "") -> void:
-    # A game-menu entry: the title on the stage, lit by the mint key on
-    # hover and focus. No card, icon chip or arrow.
-    configure("menu")
+    # A list row: a card with an ivory key at its left edge and a play badge
+    # at its right, so it reads as one openable piece. Hover lifts it.
+    configure("library")
+    var card := StyleBoxFlat.new()
+    card.bg_color = Palette.PANEL_RECESSED
+    card.set_corner_radius_all(10)
+    card.set_border_width_all(1)
+    card.border_color = Color(Palette.STONE, .10)
+    add_theme_stylebox_override("normal", card)
+    add_theme_stylebox_override("disabled", card)
+    var lifted := card.duplicate() as StyleBoxFlat
+    lifted.bg_color = Palette.PANEL_RAISED
+    lifted.border_color = Color(Palette.MINT, .55)
+    for state in ["hover", "focus", "pressed", "hover_pressed"]:
+        add_theme_stylebox_override(state, lifted)
     # The real entry title remains machine-readable for keyboard navigation
     # and diagnostics while custom visible labels use clearer hierarchy.
     set_meta("library_title", title)
@@ -102,4 +114,15 @@ func _update_labels() -> void:
         title_label.add_theme_color_override("font_color", Palette.STONE)
 
 func _draw() -> void:
-    _draw_menu_key()
+    var lit := is_hovered() or has_focus()
+    # The ivory key along the left edge (mint when lifted).
+    var key := Rect2(Vector2(10.0, 10.0), Vector2(8.0, size.y-20.0))
+    draw_rect(key, Palette.MINT if lit else Color(Palette.STONE, .62), true)
+    draw_rect(Rect2(key.position+Vector2(0, key.size.y*.62), Vector2(8.0, 1.0)),
+        Color(Palette.NIGHT, .35), true)
+    # The play badge on the right: this row opens the piece.
+    var center := Vector2(size.x-38.0, size.y*.5)
+    var tone: Color = Palette.MINT if lit else Color(Palette.STONE, .55)
+    draw_arc(center, 15.0, 0.0, TAU, 32, tone, 1.6, true)
+    draw_colored_polygon(PackedVector2Array([center+Vector2(-4,-6), center+Vector2(-4,6),
+        center+Vector2(7,0)]), tone)
