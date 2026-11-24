@@ -208,8 +208,12 @@ static func announced_empty_strip_start(passes: Array, world: float,
     # These are minimum remaining lead and left-edge guarantees, not a
     # new count-in duration. The learner's count-in began before this
     # renderer snapshot arrived; its original graded deadline remains.
-    var safe_lead: float = maxf(MIN_READING_BEATS,
-        header_beats+OFFSCREEN_MARGIN_BEATS)
+    # The announced count-in (one authored bar) IS the reading lead; a
+    # short meter (2/4: two beats) cannot also satisfy the full reading
+    # horizon. Refuse only when the header would no longer be ahead of the
+    # playhead, or less than half that bar remains.
+    var safe_lead: float = maxf(header_beats+OFFSCREEN_MARGIN_BEATS,
+        minf(MIN_READING_BEATS, count_in_beats)*.5)
     var safe_slot: float = empty_strip_start(passes,world,safe_lead,
         header_beats,peer_floor,density,gap,score_duration,peer_rest_floor)
     return deadline if is_finite(safe_slot) and \
