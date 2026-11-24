@@ -44,6 +44,16 @@ class Transport:
         return self._timeline.continuous_horizon_beats
 
     @property
+    def musical_timeline(self):
+        return self._timeline.musical
+
+    def record_timeline_take(self, take, **kwargs):
+        return self._timeline.musical.record_take(take, **kwargs)
+
+    def reset_musical_timeline(self) -> None:
+        self._timeline.musical.reset()
+
+    @property
     def next_at(self):
         return self._timeline.next_at
 

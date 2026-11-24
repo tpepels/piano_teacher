@@ -7,6 +7,7 @@ PlaybackSession/VisualTransport state for command or read-side use.
 from __future__ import annotations
 from .playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts, PreparationRequest
 from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasurement
+from .musical_timeline import TakeSpec, take_spans, rest_to_barline
 
 
 
@@ -90,6 +91,34 @@ class TransportTiming:
     def elapsed_seconds(self, beat: float) -> float:
         tempo = self.active_tempo_map()
         return SCHEDULER.source_seconds(tempo,beat,self.lesson.plan.bpm)
+
+    def record_timeline_take(self) -> None:
+        """Record the take today's transport just started in the declared
+        musical timeline and log where bar arithmetic would have placed it
+        (ROADMAP T2: the timeline is built alongside, it decides nothing)."""
+        plan, transport = self.lesson.plan, self.transport
+        if plan is None or not transport.running or plan.bpm <= 0:
+            return
+        phrase = plan.active_phrase
+        end = phrase.sounding_end-phrase.start
+        start = min(float(transport.play_from_beat), end)
+        bpm = float(plan.bpm)
+        tempo = self.active_tempo_map()
+        local = (tempo.from_beat(start).as_segments()
+                 if tempo is not None and start < tempo.duration_beats else ())
+        spans = take_spans([(s["start_beat"],s["end_beat"],s["bpm"]) for s in local],
+                           0.0,end-start,bpm)
+        grid = self.attempt_progression.grid_for(phrase,plan.piece.bar_boundaries)
+        take = TakeSpec(str(transport.transport_id),transport.mode,start,spans,
+                        rest_to_barline(end,grid))
+        planned,actual = transport.record_timeline_take(take,
+            run_at=transport.run_at,count_in_beats=transport.count_in_beats,
+            bpm=bpm,meter=tuple(transport.count_in_meter))
+        if planned is not None:
+            print("MUSICAL_TIMELINE_AGREEMENT: planned_count_in_ms=%.1f "
+                  "actual_count_in_ms=%.1f delta_ms=%.1f mode=%s"
+                  % (planned*1000,actual*1000,(actual-planned)*1000,transport.mode),
+                  flush=True)
 
     def next_count_in(self) -> tuple[float,tuple[int,int]]:
         plan = self.lesson.plan

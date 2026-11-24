@@ -69,6 +69,7 @@ class TimedStart:
             except Exception:
                 self.notices.feedback = "Could not record the start of this attempt"
                 raise
+            self.transport_timing.record_timeline_take()
             self.notices.feedback = "Count in, then play"
             self.notices.next_action = started.next_action
 

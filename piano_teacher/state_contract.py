@@ -98,6 +98,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "midi_held_pitches": ('list',),
     "midi_input_age": ('null', 'number'),
     "midi_input_count": ('number',),
+    "musical_timeline": ('dict', 'null'),
     "midi_input_note": ('null', 'number'),
     "midi_key_range": ('dict',),
     "midi_next_pitches": ('list',),

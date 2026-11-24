@@ -83,6 +83,7 @@ class PlaybackAuthorization:
             elif authorized.action == "listen":
                 self.transport.start_listen(revision=self.lesson.revision,
                     count_in=intent.count_in,deadline=authorized.deadline)
+                self.transport_timing.record_timeline_take()
                 self.notices.feedback = "Count in, then listen"
 
     def control_acknowledgement(self, action: str, kwargs: dict, *, reason=None) -> None:

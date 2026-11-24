@@ -217,6 +217,7 @@ class SessionReadModels:
             state, pending, timeline,
             running=self.transport.running,
             paused=self.transport.paused)
+        state["musical_timeline"] = self.transport.musical_timeline.snapshot(now)
         # Physical score admission must authenticate the selected course stage,
         # not infer it from a revision or from a mutable frontend hand label.
         plan = self.lesson.plan

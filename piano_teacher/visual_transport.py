@@ -16,6 +16,7 @@ from .notation.practice_timeline import (
 from .application.musical_scheduler import SCHEDULER, PassagePlan
 from .application.transport_commands import resume_timeline, resume_timing
 from .application.playback_facts import RestResumeFacts
+from .application.musical_timeline import MusicalTimeline
 
 
 @dataclass
@@ -81,6 +82,9 @@ class VisualTransport:
     rest_take_end: tuple[float, float] | None = None
     continuous_horizon_beats: float = 0.0
     next_boundary_beat: float = 0.0
+    # The declared musical timeline (ROADMAP T2: recorded alongside the
+    # deadlines above and published; it does not yet drive anything).
+    musical: MusicalTimeline = field(default_factory=MusicalTimeline)
 
     def bind_scheduled_start(
         self, *, transport_id: int, from_beat: float, run_at: float,
@@ -210,6 +214,7 @@ class VisualTransport:
         self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
+        self.musical.reset()
 
     def announced_deadline(self, source_from_beat: float) -> float | None:
         """The announced graded deadline of this source opening, if any."""
@@ -237,6 +242,7 @@ class VisualTransport:
         self.announced_continuation = None
         self.pending_rewind = None
         self.play_from_beat = 0.0
+        self.musical.reset()
 
     def begin_take(self, *, loop_continuation: bool) -> None:
         """Clear the former attempt while retaining its finished preparation."""
@@ -371,6 +377,7 @@ class VisualTransport:
             self._pause_floor = self.musical_seconds(at,grading_after=grading_after)
         self.paused_at = at
         self.paused = True
+        self.musical.pause(at)
 
     def resume(self, *, now: float, shift_run_at: bool) -> None:
         """Advance active deadlines by the exact elapsed paused duration.
@@ -394,6 +401,7 @@ class VisualTransport:
             self._preparation_at,duration,active=self._preparation_pending)
         self.paused_at = 0.0
         self.paused = False
+        self.musical.resume(now)
 
     def resume_attempt(self, *, now: float, learning: bool, running: bool,
                        automatic_feedback: bool, grading_after: float, mode: str,
