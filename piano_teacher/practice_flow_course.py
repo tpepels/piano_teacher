@@ -27,7 +27,7 @@ from .teaching_decisions import (
     TeachingDecision, TeachingExposure, full_target_take,
 )
 from .teaching_course import at_position, next_unmastered
-from .teaching_manual import choose_manual, next_guided_range
+from .teaching_manual import choose_manual
 from .application.assessment_verdict import AssessmentVerdict
 from .application.practice_flow import (
     FlowState, Outcome, Step, floor_bpm, take_graded,
@@ -177,14 +177,7 @@ def _base_decision(event, state):
             mode = "practice"
             if route.guided_return is not None:
                 start, end = route.guided_return[1], None
-        elif chosen.key != c.key and route.course_guided and route.mode == "learn":
-            selected = next_guided_range(chosen,state.manual_facts.credits)
-            if chosen.exercise.kind == "perform":
-                mode = "perform"
-            elif selected is not None:
-                start,end = selected
-                mode = "learn"
-        automatic = mode == "practice" if event.kind == "manual" and event.action in ("start","restart","practice","learn_next","course_stage","open_at") else route.automatic
+        automatic = mode == "practice" if event.kind == "manual" and event.action in ("start","restart","practice","course_stage","open_at") else route.automatic
         restart = (event.kind == "manual" and event.action == "restart"
                    and route.mode == "practice" and c.exercise.kind != "perform")
         exposure = TeachingExposure(chosen.key, chosen.hand, start, end, chosen.progress.bpm, mode,

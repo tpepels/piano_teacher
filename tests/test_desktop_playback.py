@@ -434,7 +434,6 @@ def test_command_reply_carries_backend_resolved_action_outside_state(practice_se
 def test_command_navigation_effects_are_projected_only_in_backend():
     from piano_teacher.application.control_projection import project_command_outcome
     assert project_command_outcome("select_step")["effects"]["navigate_practice"]
-    assert project_command_outcome("learn_next")["effects"]["navigate_practice"]
     assert project_command_outcome("calibration_apply")["effects"]["refresh_settings"]
     assert project_command_outcome("reset_path")["effects"]["invalidate_lesson"]
     assert not project_command_outcome(None)["executed"]

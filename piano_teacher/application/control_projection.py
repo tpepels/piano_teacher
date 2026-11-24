@@ -144,7 +144,7 @@ def project_controls(s: Mapping) -> dict:
 # View effects of the action ACTUALLY executed by the backend, never of a
 # stale raw gesture or a label reconstructed by the Godot screen.
 NAVIGATION_ACTIONS = frozenset((
-    "select_step", "previous", "next", "hand", "learn_next", "open_at"))
+    "select_step", "previous", "next", "hand", "open_at"))
 CALIBRATION_ACTIONS = frozenset(("calibration_apply", "calibration_reset"))
 
 

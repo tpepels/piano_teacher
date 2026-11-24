@@ -34,16 +34,7 @@ class LearningActions:
             self.navigation.seek(kwargs.get("bar"), effect=effect)
 
     def control_learning(self, action: str, kwargs: dict, *, effect=None) -> None:
-        if action == "learn_next":
-            if (self.transport.mode != "learn" or self.lesson.guided_controller is None
-                    or not self.lesson.guided_controller.snapshot(now=self.clock())["completed"]):
-                raise ValueError("Find the current notes before continuing to the next idea")
-            self.course.save_guided_preparation()
-            if self.lesson.guided_return_context is not None:
-                self.exposure_workflows.prepare_practice(effect=effect,reason=action)
-            else:
-                self.course.begin_course_stage(effect=effect,reason=action)
-        elif action in ("learn", "learn_retry"):
+        if action in ("learn", "learn_retry"):
             if action == "learn":
                 self.lesson.set_course_guided(True)
                 if "from_beat" not in kwargs:

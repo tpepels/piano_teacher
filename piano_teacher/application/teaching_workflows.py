@@ -64,9 +64,7 @@ class TeachingDecisions:
                 guided_range=self.guided_session.beat_range, review_end_beat=self.take.review_end_beat,
                 remediation_active=self.flow_session.aid is not None,
                 parent_decision_id=self.measurement.parent_decision),
-            ManualFacts(credits=self.learner_progress.teaching_credits(self.source_identity.fingerprint),
-                paused=self.transport.paused,
-                guidance_completed=bool(self.guided_session.controller is not None and self.guided_session.controller.snapshot(now=self.clock())["completed"]),
+            ManualFacts(paused=self.transport.paused,
                 open_from_beat=self.lesson_cursor.opening_beat,pending_rewind=self.transport.pending_rewind))
         if not store:
             decision = p.lesson_generator.decide_teaching(event, state)

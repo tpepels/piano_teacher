@@ -18,7 +18,7 @@ COMMAND_ROUTES = {
     "reset_path": "reset",
     **dict.fromkeys(("score_ready", "demo_ready"), "acknowledgement"),
     **dict.fromkeys(("listen", "perform", "seek"), "listening"),
-    **dict.fromkeys(("learn_next", "learn", "learn_retry",
+    **dict.fromkeys(("learn", "learn_retry",
                      "open_at", "hints"), "learning"),
     **dict.fromkeys(("practice", "stop", "start", "restart", "pause", "resume"), "transport"),
 }
