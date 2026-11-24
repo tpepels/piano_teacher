@@ -97,6 +97,20 @@ event handlers that depend on domains, not on their internals.
 - **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
   docs/architecture.md.
 
+### Thin practice screen and direct aid — 2026-11-24
+
+- The practice screen's "More" popup (instruction, progress, feedback,
+  streak, hand stages, fingering status, performance review, tempo popup)
+  was unreachable whenever a piece was loaded, and problems that need the
+  learner only reached those invisible labels. `screen_projection` now
+  owns status, notice and keyboard; Godot displays them (notice on the
+  score banner). Nine Godot scripts and ~1,300 lines removed.
+- The Practice Flow aid enters Free directly; the timed remedial review
+  and its flags never ran. pyflakes (per-file) cleaned 15 unused imports
+  that vulture's package-wide name matching cannot see.
+- Not tested at the piano: the banner text for no piano / failed
+  admission / a refused command is new to the learner.
+
 ### Practice Flow only — 2026-11-23/24 (`aa0caace`…`50c8e46c`)
 
 Owner decision 2026-11-23: remove what is not wired into Practice Flow.

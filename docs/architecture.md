@@ -105,7 +105,7 @@ Pure policy and services outside these domains:
 | Assessment | `practice.py`, `AssessmentService`, `practice_assessment` | original-note matching, onset/release evidence, verdict, `secure` timing |
 | Scheduling | `MusicalScheduler` (`SCHEDULER`), `CountInPlan` | every deadline/count-in/rest calculation; count-in pulse (subdivided when a click would exceed 1.5 s) |
 | Persistence | `ProgressRepository`, `LearningLedger`, `LearnerProgress` on one SQLite connection | progress, evidence, history; migrations at the load boundary only |
-| Projection | `SessionCapture`, `ScorePresentation`, `SnapshotExtras`, `SessionReadModels`, `control_projection`, `state_projection` | one snapshot and control set from committed state |
+| Projection | `SessionCapture`, `ScorePresentation`, `SnapshotExtras`, `SessionReadModels`, `control_projection`, `screen_projection`, `state_projection` | one snapshot, control set and screen model from committed state |
 
 Workflows coordinate domains for one event family each (every class
 has at most 10 constructor collaborators):
@@ -117,7 +117,7 @@ has at most 10 constructor collaborators):
 | Exposures | `ExposureWorkflows` (prepare Practice/Listen/Perform), `GuidedExposureInstall`, `TimedExposureInstall`, `ListenOutcomes` (Listen finished/failed) |
 | Physical playback | `PlaybackAuthorization` (reserve/present/withdraw/fail, authorized commit, score/audio ACKs, resume); `TimedStart`, `PlaybackContinuation`, `PauseResume` |
 | After a take | `TakeGrading` (assess, publish final marks); `TakeCompletion` (immediate consequences of focused/performance takes); `SettlementContinuation` (full passage: feedback, commit, exactly-once effect) |
-| Recovery | `SelectedRecovery` (the aid on the second return to Free) |
+| Recovery | `SelectedRecovery` (enters Free with the aid on the second return to Free) |
 | Teaching | `TeachingDecisions` (inside Lesson) captures the facts and calls `practice_flow_course.decide` |
 | Source | `SourcePreparationWorkflow` (off-lock), `SourceInstallation`, `LibraryOpening`, `PlanReinstallation` (adopt a plan at its first step) |
 | MIDI | `MidiCallback` (arrival stamp), `MidiDelivery` (ingress routing), `MidiDeviceConnection`, `MidiEpoch` |
@@ -170,11 +170,21 @@ again, after the printed one-bar rest at the outgoing tempo).
 
 ## Controls
 
-The backend projects every control. The primary button shows **Pause**
-only while learning or playing is running or automatically scheduled
-(take, count-in, Listen, Free, scheduled continuation or admission), and
-**Play** otherwise, including after a failed save. Godot displays the
-projected label and action; it makes no lesson, grading or timing decision.
+The backend projects every control and the screen itself. The primary
+button shows **Pause** while learning or playing is running or
+automatically scheduled (take, count-in, Listen, Free, scheduled
+continuation or admission), **Resume** when paused, and **Play** (or
+**Listen**) only when the flow waits for the player. **Listen again** is
+the other visible control; Retry, Slower/Faster, hand and bar choices are
+shortcuts and the Pause sheet.
+
+`screen_projection` decides what the practice screen shows
+(docs/practice-flow.md, On screen): the status line (window · hand ·
+step), one problem notice while the flow cannot continue by itself (no
+piano, failed admission, next step could not start), and the keyboard
+(the wrong-note hint in Free, otherwise hidden). Godot displays the status
+label, puts the notice and command messages on the score banner and
+composes no lesson text of its own.
 
 ## Godot
 
