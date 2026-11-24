@@ -18,8 +18,6 @@ class Take:
 
     # --- Live take: recorder, feedback marks, review and retry state
 
-    def apply_recovery(self, *args, **kwargs):
-        return self._runtime.apply_recovery(*args, **kwargs)
 
     def apply_settlement(self, *args, **kwargs):
         return self._runtime.apply_settlement(*args, **kwargs)
@@ -63,8 +61,6 @@ class Take:
     def publish_completion(self, *args, **kwargs):
         return self._runtime.publish_completion(*args, **kwargs)
 
-    def publish_live_marks(self, *args, **kwargs):
-        return self._runtime.publish_live_marks(*args, **kwargs)
 
     @property
     def recorder(self):

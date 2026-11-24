@@ -7,7 +7,6 @@ calibration facts; SessionReadModels composes the published snapshot.
 """
 from __future__ import annotations
 from dataclasses import replace
-from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
 from .score_state_publisher import ScoreProjectionFacts
 from .control_projection import project_controls
 from .screen_projection import project_screen
@@ -74,7 +73,6 @@ class SessionCapture:
             persistent_hints=self.lesson.persistent_hints,
             plan=self.lesson.plan,
             play_from_beat=self.transport.play_from_beat,
-            practice_preparation=self.transport.practice_preparation,
             recovery_notice=self.take.recovery_notice,
             retry_range=self.take.retry_range,
             review_end_beat=self.take.review_end_beat,
@@ -82,7 +80,6 @@ class SessionCapture:
             running=self.transport.running,
             score_revision=self.lesson.revision,
             transport_id=self.transport.transport_id,
-            visual_offset_beats=self.transport.visual_offset_beats,
         )
         guided = self.lesson.guided_controller
         reads = replace(self.ports,
@@ -127,7 +124,6 @@ class ScorePresentation:
             timeline={"intent":pending,"current":timeline},
             next_count_in_beats=self.timing.next_count_in_beats(),
             next_count_in_meter=tuple(self.timing.next_count_in_meter()),
-            continuous_horizon_beats=self.transport.continuous_horizon_beats,
             duration_beats=(self.lesson.display_phrase(learning=self.transport.mode == "learn").end-self.lesson.display_phrase(learning=self.transport.mode == "learn").start
                             if plan is not None else 0.0),
             has_source=plan is not None,
@@ -178,14 +174,6 @@ class SnapshotExtras:
         state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
         state["next_count_in_beats"] = self.timing.next_count_in_beats()
         state["next_count_in_meter"] = self.timing.next_count_in_meter()
-        state["short_rest_latency_seconds"] = SNAPSHOT_LATENCY_SECONDS
-        state["resume_count_in_beat"] = (
-            SCHEDULER.seconds_beats(
-                calibration_sample_at-self.midi_input.resume_grading_after,
-                self.lesson.plan.bpm)
-            if self.transport.running and not self.transport.paused
-            and calibration_sample_at < self.midi_input.resume_grading_after
-            and self.lesson.plan is not None else None)
         state["midi_key_range"] = self.midi_input.key_range_status(self.midi_input.device)
         state["midi_calibration"] = self.midi_input.calibration_snapshot(
             calibration_sample_at)

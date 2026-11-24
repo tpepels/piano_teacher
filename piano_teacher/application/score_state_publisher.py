@@ -33,7 +33,6 @@ class ScoreProjectionFacts:
     timeline: dict
     next_count_in_beats: float
     next_count_in_meter: tuple[int, int]
-    continuous_horizon_beats: float
     duration_beats: float
     has_source: bool
 
@@ -69,7 +68,7 @@ class ScoreStatePublisher:
                 now=now, previous_deadline=self.guided_deadline,
                 duration_beats=max(.25,facts.duration_beats),
                 count_in_beats=facts.next_count_in_beats,
-                horizon_beats=facts.continuous_horizon_beats,bpm=facts.bpm)
+                horizon_beats=0.0,bpm=facts.bpm)
 
     def guided_open_at(self, source: tuple[str, str, int, int]) -> float | None:
         """When the published Free target reaches the playhead, for `source`."""

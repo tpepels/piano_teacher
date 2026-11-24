@@ -6,7 +6,7 @@ PlaybackSession/VisualTransport state for command or read-side use.
 """
 from __future__ import annotations
 from .playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts, PreparationRequest
-from .musical_scheduler import SCHEDULER, RestMeasurement, ContinuationMeasurement
+from .musical_scheduler import SCHEDULER
 from .musical_timeline import TakeSpec, take_spans, rest_to_barline
 
 
@@ -136,20 +136,6 @@ class TransportTiming:
     def next_count_in_meter(self) -> list[int]:
         return list(self.next_count_in()[1])
 
-    def collect_continuation_measurement(self, deadline: float,
-                                          from_beat: float
-                                          ) -> ContinuationMeasurement:
-        """Sample queue and engraving facts; deadline calculus lives in SCHEDULER."""
-        return ContinuationMeasurement(
-            deadline=deadline,
-            announced_at=self.transport.announced_deadline(from_beat),
-            rest_beats=self.transport.visual_gap_beats,
-            horizon_beats=self.transport.continuous_horizon_beats,
-            rest=self.collect_rest_measurement(
-                from_beat=from_beat,
-                source_end=deadline if self.transport.rest_take_end is None else None),
-            automatic=self.lesson.plan is not None and self.transport.auto)
-
     def schedule_preparation(self, target: float, *, now: float,
                               from_visual: float, reverse_seconds: float,
                               reading_lead_included: bool = False,
@@ -157,67 +143,15 @@ class TransportTiming:
                               short_deadline: float | None = None):
         self.transport.schedule_preparation(PreparationRequest(
             self.score.source_model(),target,now,from_visual,reverse_seconds,
-            self.presentation_bpm(),self.transport.continuous_horizon_beats,
+            self.presentation_bpm(),0.0,
             reading_lead_included,announce,short_deadline))
 
-    def visual_motion(self, now: float) -> tuple[float, float, float]:
-        """Read the one transport projection, including authored tempo and silence."""
-        phrase = self.lesson.plan.active_phrase
-        return self.transport.position(
-            now, phrase_length=phrase.sounding_end-phrase.start, bpm=self.lesson.plan.bpm,
-            running=self.transport.running,
-            pending_auto_result=(self.take.pending_result is not None and self.transport.auto),
-            tempo_map=self.active_tempo_map())
-
-    def update_short_rest(self, kwargs: dict) -> None:
-        """Godot's written-rest geometry between takes (owner, round 4).
-
-        continuation_clear_beats: the written rest bar printed directly after
-        a take's last source beat, plus the margin that new ink keeps from it.
-        continuation_header_beats: the next opening's header plus a frame
-        margin. The next source is admitted straight after the rest on the
-        empty staff; its one count-in bar is spoken over the rest bar.
-        """
+    def update_placement_facts(self, kwargs: dict) -> None:
+        """Godot's measurement sent with a command: the beats of printed ink
+        still ahead of its playhead, which a new run's count-in follows."""
         ahead = kwargs.get("ink_ahead_beats")
         if ahead is not None:
             self.transport.report_ink_ahead(ahead)
-        clear = kwargs.get("continuation_clear_beats")
-        header = kwargs.get("continuation_header_beats")
-        if clear is None or header is None:
-            return
-        self.transport.report_rest_geometry(clear, header)
-
-    def collect_rest_measurement(self, *,
-                                  from_beat: float = 0.0,
-                                  source_end: float | None = None
-                                  ) -> RestMeasurement | None:
-        """Read authored meter and actual native glyph clearance only.
-
-        This routine has no timing arithmetic. The musical scheduler owns
-        the outgoing/incoming tempo conversion, count-in and deadline.
-        """
-        if self.transport.short_rest is None or self.lesson.plan is None or self.presentation_bpm() <= 0:
-            return None
-        clear, header = self.transport.short_rest
-        outgoing_bpm = self.presentation_bpm()
-        if source_end is None:
-            if self.transport.rest_take_end is None:
-                return None
-            source_end,outgoing_bpm = self.transport.rest_take_end
-        _, bar, _ = self.attempt_progression.count_in_bar(
-            phrase=self.lesson.plan.active_phrase,
-            boundaries=self.lesson.plan.piece.bar_boundaries,
-            time_signatures=self.lesson.plan.piece.time_signatures,
-            position=from_beat)
-        return RestMeasurement(
-            source_end=source_end,outgoing_bpm=outgoing_bpm,
-            clear_beats=clear,header_beats=header,
-            count_in_beats=bar,tempo_epoch=self.transport.tempo_epoch)
-
-    def update_continuous_horizon(self, value) -> None:
-        if value is None:
-            return
-        self.transport.configure_reading_horizon(value)
 
     def musical_seconds(self, at: float) -> float:
         """Graded musical time of wall instant ``at``, in seconds since run_at.

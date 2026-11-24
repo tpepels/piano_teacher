@@ -162,19 +162,13 @@ class TimingSnapshot(_Snapshot):
     count_in_bar_beats: float = UNLOADED_GAP_BEATS
     count_in_meter: tuple[int, int] = UNLOADED_METER
     midi_notes: int = 0
-    visual_offset_beats: float = 0.0
-    visual_gap_beats: float = UNLOADED_GAP_BEATS
-    visual_motion: tuple[float, float, float] = (0.0, 0.0, 0.0)
     practice_timeline: Mapping = field(default_factory=dict)
-    practice_preparation: Mapping | None = None
     take_result: Mapping | None = None
     feedback_marks: tuple[Mapping, ...] = ()
     live_marks: tuple[Mapping, ...] = ()
     feedback_unmapped: int = 0
     scoring_available: bool = False
     tempo_segments: tuple[Mapping, ...] = ()
-    visual_tempo_segments: tuple[Mapping, ...] = ()
-    visual_preparation_schedule: Mapping | None = None
     mapped_clock_beat: float | None = None
 
 
@@ -262,9 +256,6 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
     result.update({
         "loaded": True, "title": lesson.title, "kind": lesson.kind,
         "clock_sampled_at_ms": timing.sampled_at*1000.0,
-        # Exact backend monotonic origin shared by MIDI assessment and scrolling.
-        # The frontend projects this epoch; state polling cannot define tempo.
-        "visual_run_at_ms": timing.run_at*1000.0,
         "first_bar": lesson.first_bar, "last_bar": lesson.last_bar,
         "current_bar": bar_number_at(lesson.measure_boundaries,
             exercise_beat if timing.running else timing.play_from_beat, lesson.first_bar),
@@ -304,15 +295,8 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "lead_in_bars": 1, "play_from_beat": timing.play_from_beat,
         "recovery_beat": timing.pending_rewind,
         "clock_beat": active_beat if timing.running else 0.0,
-        "clock_elapsed_seconds": elapsed if timing.running else 0.0,
         "tempo_segments": _payload(timing.tempo_segments),
-        "visual_tempo_segments": _payload(timing.visual_tempo_segments),
-        "visual_preparation_schedule": _payload(timing.visual_preparation_schedule),
-        "visual_offset_beats": timing.visual_offset_beats,
-        "visual_scroll_beat": timing.visual_motion[0], "visual_target_beat": timing.visual_motion[2],
-        "visual_scroll_speed": timing.visual_motion[1], "visual_gap_beats": timing.visual_gap_beats,
         "practice_timeline": _payload(timing.practice_timeline),
-        "practice_preparation": _payload(timing.practice_preparation),
         "paused": timing.paused, "awaiting_score_revision": timing.awaiting_score_revision,
         "count_in_beats": timing.count_in_beats if timing.running else 0,
         "count_in_bar_beats": timing.count_in_bar_beats, "count_in_meter": list(timing.count_in_meter),

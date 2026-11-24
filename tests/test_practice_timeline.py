@@ -58,7 +58,8 @@ def test_resume_after_playing_preserves_full_authored_five_four_count_in(practic
     assert resumed["transport_id"] == before["transport_id"]
     assert resumed["count_in_meter"] == [5, 4]
     assert resumed["count_in_beats"] == 5
-    assert resumed["resume_count_in_beat"] < 0
+    # The take continues after its own count-in bar.
+    assert take(resumed)["deadline_ms"]/1000 > session.clock()
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0
 
@@ -76,13 +77,12 @@ def test_pause_freezes_musical_time_and_resume_ignores_lead_in_keys(practice_ses
     assert paused["clock_beat"] == pytest.approx(before["clock_beat"])
     resumed = session.admit(session.command("resume"))
     assert resumed["transport_id"] == before["transport_id"]
-    assert resumed["resume_count_in_beat"] < 0
+    lead = take(resumed)["deadline_ms"]/1000-session.clock()
+    assert lead > 0
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0
-    lead = -session.snapshot()["resume_count_in_beat"]*60/resumed["bpm"]
     after = session.tick(lead+.001)
     assert after["clock_beat"] >= before["clock_beat"]
-    assert after["visual_scroll_beat"] >= before["visual_scroll_beat"]
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 1
     assert session.snapshot()["mastered"] == 0

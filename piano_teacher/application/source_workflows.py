@@ -69,7 +69,6 @@ class SourceInstallation:
 
     def install(self, prepared) -> bool | None:
         """Called with application lock and source-mutation guard held."""
-        self.transport.clear_take_end()
         self.lifecycle.stop(reason="source_changed")
         self.plans.adopt(lambda: self.lesson.install_source(
             plan=prepared.plan, source=str(prepared.path),

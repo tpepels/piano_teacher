@@ -50,6 +50,7 @@ func configure(host: Node, bridge: Node, practice_stage,
     musical_clock = clock
     metronome = count_in
     flow.backend_clock = Callable(self,"_backend_ms")
+    musical_clock.backend_clock = Callable(self,"_backend_ms")
     failure_request = Request.new()
     failure_request.timeout = 8.0
     host.add_child(failure_request)

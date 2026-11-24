@@ -9,13 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 
-from .transport_projection import VisualMotionSnapshot, project_visual_motion
 from .notation.practice_timeline import (
     source_preparation_measure, UNLOADED_GAP_BEATS,
 )
 from .application.musical_scheduler import SCHEDULER, PassagePlan
 from .application.transport_commands import resume_timeline, resume_timing
-from .application.playback_facts import RestResumeFacts
 from .application.musical_timeline import MusicalTimeline
 
 
@@ -58,10 +56,6 @@ class VisualTransport:
     count_in_meter: list[int] = field(default_factory=lambda: [4, 4])
     next_at: float = 0.0
     visual_offset_beats: float = 0.0
-    _visual_rewind_from: float | None = None
-    _visual_rewind_to: float | None = None
-    _visual_rewind_at: float = 0.0
-    _visual_rewind_seconds: float = 0.0
     practice_preparation: dict | None = None
     _preparation_pending: bool = False
     _preparation_at: float = 0.0
@@ -78,9 +72,6 @@ class VisualTransport:
     _tempo_epoch: float | None = None
     # Presentation schedule facts live with the one forward visual transport.
     scheduled_start: tuple | None = None
-    short_rest: tuple[float, float] | None = None
-    rest_take_end: tuple[float, float] | None = None
-    continuous_horizon_beats: float = 0.0
     next_boundary_beat: float = 0.0
     # The declared musical timeline: every timed take is placed on it and
     # Godot draws and counts in from it.
@@ -106,31 +97,9 @@ class VisualTransport:
     def clear_scheduled_start(self) -> None:
         self.scheduled_start = None
 
-    def record_take_end(self, *, at: float, bpm: float) -> None:
-        """Record the completed source end used for the following printed rest."""
-        self.rest_take_end = (at, bpm)
-
-    def clear_take_end(self) -> None:
-        self.rest_take_end = None
-
     def advance_boundary(self, beat: float) -> None:
         """Install the next source checkpoint chosen by AttemptProgression."""
         self.next_boundary_beat = beat
-
-    def report_rest_geometry(self, clear: float, header: float) -> None:
-        """Accept bounded native ink clearance without modifying admitted strips."""
-        clear, header = float(clear), float(header)
-        if not all(math.isfinite(v) and 0.0 <= v <= 16.0 for v in (clear, header)):
-            raise ValueError("Invalid short-rest geometry")
-        self.short_rest = (clear, header)
-
-    def configure_reading_horizon(self, value: float) -> None:
-        """Record bounded renderer runway information, not a new deadline."""
-        horizon = float(value)
-        if not math.isfinite(horizon) or not 0.0 <= horizon <= 64.0:
-            raise ValueError("Invalid continuous score reading horizon")
-        self.continuous_horizon_beats = horizon
-
 
     @property
     def tempo_epoch(self) -> float | None:
@@ -143,32 +112,6 @@ class VisualTransport:
         self._tempo_key,self._tempo_epoch = SCHEDULER.tempo_epoch(
             stage=stage,bpm=bpm,now=now,
             prior_key=self._tempo_key,prior_epoch=self._tempo_epoch)
-
-    def reannounce_after_rest_pause(self, facts: RestResumeFacts) -> None:
-        announced = self.announced_continuation
-        if (facts.running or facts.bpm is None or facts.mode != "practice"
-                or announced is None or self.announced_deadline(announced[0]) is None):
-            return
-        if (facts.reading_lead_seconds <= 0 and not facts.physical_rest_enabled
-                and facts.horizon_beats <= 0):
-            return
-        short = (SCHEDULER.measured_rest(facts.rest,
-            now=facts.now,bpm=facts.presentation_bpm)
-            if facts.physical_rest_enabled else None)
-        deadline = SCHEDULER.fresh_resume(now=facts.now,
-            reading_lead_seconds=max(0.0,float(facts.reading_lead_seconds)),
-            horizon_beats=facts.horizon_beats,bpm=facts.bpm,
-            short_rest_at=short)
-        self.announce_continuation(announced[0],deadline,announced[2])
-
-    def refloor_announcement(self, *, now: float, bpm: float,
-                             count_in_beats: float, latency: float) -> None:
-        if self.announced_continuation is None:
-            return
-        floor = SCHEDULER.resolve("post_settlement_snapshot",now=now,bpm=bpm,
-            count_in_beats=count_in_beats,latency=latency).run_at
-        if self.announced_continuation[1] < floor:
-            self.retime_announcement(floor)
 
     @property
     def preparation_pending(self) -> bool:
@@ -211,19 +154,6 @@ class VisualTransport:
         """Retain a selected unannounced boundary without creating new ink."""
         self.next_at = float(deadline)
 
-    def advance_source_stride(self, stride: float) -> None:
-        """Retain prior exposed source on the forward world axis."""
-        self.visual_offset_beats += stride
-
-    def clear_pause_for_restart(self) -> None:
-        """An explicit Restart abandons the paused epoch without resuming it.
-
-        Normal Resume must instead call resume() to shift the source clock.
-        """
-        self._pause_floor = None
-        self.paused = False
-        self.paused_at = 0.0
-        self.musical.reset()
 
     def announced_deadline(self, source_from_beat: float) -> float | None:
         """The announced graded deadline of this source opening, if any."""
@@ -233,17 +163,13 @@ class VisualTransport:
             return None
         return announced[1]
 
-    def reset_for_stop(self, *, rewind_seconds: float) -> None:
+    def reset_for_stop(self) -> None:
         """Forget the visible attempt but retain the loaded score's gap duration."""
         self.running = False
         self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
         self.visual_offset_beats = 0.0
-        self._visual_rewind_from = None
-        self._visual_rewind_to = None
-        self._visual_rewind_at = 0.0
-        self._visual_rewind_seconds = rewind_seconds
         self.practice_preparation = None
         self._preparation_pending = False
         self._preparation_at = 0.0
@@ -258,8 +184,6 @@ class VisualTransport:
         self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
-        self._visual_rewind_from = None
-        self._visual_rewind_to = None
         self._preparation_pending = False
         if loop_continuation and self.practice_preparation is not None:
             self.practice_preparation["phase"] = "complete"
@@ -307,16 +231,12 @@ class VisualTransport:
         }
         self._preparation_pending = True
         self.pending_rewind = source_from_beat
-        self._visual_rewind_from = from_visual
-        self._visual_rewind_to = measure["start_beat"]
         plan = SCHEDULER.prepare(
             now=now,reverse_seconds=reverse_seconds,
             rest_beats=measure["duration_beats"],
             horizon_beats=horizon_beats,bpm=bpm,
             include_reading=reading_lead_included or not announce,
             short_deadline=short_deadline,announce=announce)
-        self._visual_rewind_at = plan.reverse_at
-        self._visual_rewind_seconds = plan.reverse_seconds
         self._preparation_at = plan.prepare_at
         self.next_at = plan.run_at
         return self.next_at
@@ -327,24 +247,6 @@ class VisualTransport:
         self.practice_preparation = None
         self.pending_rewind = None
         self.announced_continuation = None
-        self._visual_rewind_from = None
-        self._visual_rewind_to = None
-
-    def preparation_schedule(self) -> dict | None:
-        """Absolute monotonic endpoints for the same rewind/preparation clock.
-
-        Python MIDI transitions and Godot's rendering use these deadlines.
-        Poll latency must never become another animation origin.
-        """
-        if not self._preparation_pending or self._visual_rewind_from is None:
-            return None
-        return {
-            "reverse_at_ms": self._visual_rewind_at * 1000.0,
-            "prepare_at_ms": self._preparation_at * 1000.0,
-            "deadline_at_ms": self.next_at * 1000.0,
-            "from_beat": self._visual_rewind_from,
-            "to_beat": self._visual_rewind_to,
-        }
 
     def clear_grading_floor(self) -> None:
         self._pause_floor = None
@@ -403,9 +305,6 @@ class VisualTransport:
         if self.announced_continuation is not None:
             self.announced_continuation = SCHEDULER.shift_passage(
                 self.announced_continuation,seconds=duration)
-        self._visual_rewind_at = SCHEDULER.shift_epoch(
-            self._visual_rewind_at,duration,
-            active=self._visual_rewind_from is not None)
         self._preparation_at = SCHEDULER.shift_epoch(
             self._preparation_at,duration,active=self._preparation_pending)
         self.paused_at = 0.0
@@ -442,28 +341,3 @@ class VisualTransport:
         self.run_at = timing.origin
         return previous_origin,shift,timing
 
-    def position(
-        self, now: float, *, phrase_length: float, bpm: float,
-        running: bool, pending_auto_result: bool,
-        tempo_map=None,
-    ) -> tuple[float, float, float]:
-        measure = (self.practice_preparation["measure"]
-                   if self.practice_preparation is not None else None)
-        return project_visual_motion(VisualMotionSnapshot(
-            phrase_length=phrase_length,
-            visual_offset=self.visual_offset_beats,
-            play_from_beat=self.play_from_beat,
-            bpm=bpm,
-            run_at=self.run_at,
-            running=running,
-            preparation_pending=self._preparation_pending,
-            preparation_at=self._preparation_at,
-            preparation_measure=measure,
-            rewind_from=self._visual_rewind_from,
-            rewind_to=self._visual_rewind_to,
-            rewind_at=self._visual_rewind_at,
-            rewind_seconds=self._visual_rewind_seconds,
-            pending_auto_result=pending_auto_result,
-            gap_beats=self.visual_gap_beats,
-            paused=self.paused,
-        ), now, tempo_map=tempo_map)

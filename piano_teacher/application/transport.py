@@ -23,9 +23,9 @@ class Transport:
         self._timeline.cancel_preparation()
         self._timeline.cancel_continuation()
 
-    def reset_for_stop(self, *, rewind_seconds: float) -> None:
+    def reset_for_stop(self) -> None:
         """Return timeline and session intent to idle after Stop."""
-        self._timeline.reset_for_stop(rewind_seconds=rewind_seconds)
+        self._timeline.reset_for_stop()
         self._session.reset_for_stop()
 
 
@@ -40,10 +40,6 @@ class Transport:
         return self._timeline.announced_continuation
 
     @property
-    def continuous_horizon_beats(self):
-        return self._timeline.continuous_horizon_beats
-
-    @property
     def musical_timeline(self):
         return self._timeline.musical
 
@@ -54,8 +50,6 @@ class Transport:
     def report_ink_ahead(self, beats) -> None:
         self._timeline.report_ink_ahead(beats)
 
-    def reset_musical_timeline(self) -> None:
-        self._timeline.musical.reset()
 
     @property
     def next_at(self):
@@ -94,20 +88,12 @@ class Transport:
         return self._timeline.preparation_pending
 
     @property
-    def rest_take_end(self):
-        return self._timeline.rest_take_end
-
-    @property
     def run_at(self):
         return self._timeline.run_at
 
     @property
     def scheduled_start(self):
         return self._timeline.scheduled_start
-
-    @property
-    def short_rest(self):
-        return self._timeline.short_rest
 
     @property
     def tempo_epoch(self):
@@ -127,9 +113,6 @@ class Transport:
     def advance_boundary(self, *args, **kwargs):
         return self._timeline.advance_boundary(*args, **kwargs)
 
-    def advance_source_stride(self, *args, **kwargs):
-        return self._timeline.advance_source_stride(*args, **kwargs)
-
     def announced_deadline(self, *args, **kwargs):
         return self._timeline.announced_deadline(*args, **kwargs)
 
@@ -145,17 +128,9 @@ class Transport:
     def clear_grading_floor(self, *args, **kwargs):
         return self._timeline.clear_grading_floor(*args, **kwargs)
 
-    def clear_pause_for_restart(self, *args, **kwargs):
-        return self._timeline.clear_pause_for_restart(*args, **kwargs)
 
     def clear_scheduled_start(self, *args, **kwargs):
         return self._timeline.clear_scheduled_start(*args, **kwargs)
-
-    def clear_take_end(self, *args, **kwargs):
-        return self._timeline.clear_take_end(*args, **kwargs)
-
-    def configure_reading_horizon(self, *args, **kwargs):
-        return self._timeline.configure_reading_horizon(*args, **kwargs)
 
     def enter_preparation_phase(self, *args, **kwargs):
         return self._timeline.enter_preparation_phase(*args, **kwargs)
@@ -172,23 +147,8 @@ class Transport:
     def note_tempo(self, *args, **kwargs):
         return self._timeline.note_tempo(*args, **kwargs)
 
-    def position(self, *args, **kwargs):
-        return self._timeline.position(*args, **kwargs)
-
-    def preparation_schedule(self, *args, **kwargs):
-        return self._timeline.preparation_schedule(*args, **kwargs)
-
     def prepare_rewind(self, *args, **kwargs):
         return self._timeline.prepare_rewind(*args, **kwargs)
-
-    def reannounce_after_rest_pause(self, *args, **kwargs):
-        return self._timeline.reannounce_after_rest_pause(*args, **kwargs)
-
-    def record_take_end(self, *args, **kwargs):
-        return self._timeline.record_take_end(*args, **kwargs)
-
-    def report_rest_geometry(self, *args, **kwargs):
-        return self._timeline.report_rest_geometry(*args, **kwargs)
 
     def select_opening(self, *args, **kwargs):
         return self._timeline.select_opening(*args, **kwargs)
@@ -292,11 +252,6 @@ class Transport:
     def prepare_admitted_continuation(self, *args, **kwargs):
         return self._session.prepare_admitted_continuation(*args, **kwargs)
 
-    def prepare_section_review(self, *args, **kwargs):
-        return self._session.prepare_section_review(*args, **kwargs)
-
-    def refloor_fresh_announcement(self, *args, **kwargs):
-        return self._session.refloor_fresh_announcement(*args, **kwargs)
 
     def require_authorized_start(self, *args, **kwargs):
         return self._session.require_authorized_start(*args, **kwargs)

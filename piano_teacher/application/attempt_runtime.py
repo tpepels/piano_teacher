@@ -61,8 +61,6 @@ class AttemptRuntime:
     def reset_source_presentation(self) -> None:
         self.clear_feedback()
 
-    def publish_live_marks(self, marks: list[dict]) -> None:
-        self.feedback_marks = marks
 
     def publish_completion(self, *, marks: list[dict], unmapped: int) -> None:
         self.feedback_marks = marks
@@ -95,10 +93,6 @@ class AttemptRuntime:
         self.review_end_beat = None
         self.retry_range = None
 
-    def apply_recovery(self, transition) -> None:
-        self.guided_recovery_pending = transition.guided
-        self.recovery_notice = transition.display.notice
-        self.retry_range = transition.display.retry_range
 
     def reset_for_stop(self) -> None:
         """Reset every attempt/review/recovery field in one stable owner."""

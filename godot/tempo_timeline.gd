@@ -57,23 +57,3 @@ static func bpm_at_beat(beat: float, nominal_bpm: float,
             return selected
     return selected
 
-
-static func beat_at_seconds(seconds: float, nominal_bpm: float, segments: Array) -> float:
-    var nominal: float = maxf(1.0, nominal_bpm)
-    if segments.is_empty() or seconds <= 0.0:
-        return beats_from_seconds(seconds, nominal)
-    var elapsed := 0.0
-    var final_beat := 0.0
-    var final_bpm := nominal
-    for raw in segments:
-        var segment: Dictionary = raw
-        var first: float = float(segment.get("start_beat", final_beat))
-        var last: float = float(segment.get("end_beat", first))
-        var speed: float = maxf(1.0, float(segment.get("bpm", nominal)))
-        var until: float = elapsed + seconds_from_beats(last - first, speed)
-        if seconds <= until:
-            return first + beats_from_seconds(seconds - elapsed, speed)
-        elapsed = until
-        final_beat = last
-        final_bpm = speed
-    return final_beat + beats_from_seconds(seconds - elapsed, final_bpm)

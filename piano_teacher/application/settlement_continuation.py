@@ -12,7 +12,7 @@ from .playback_facts import FullPassageFacts
 from .teaching_continuation import (
     UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
     SettledSourceFacts, EnterSelectedExposure,
-    EnterSelectedRemediation, ContinueSelectedScore,
+    EnterSelectedRemediation,
 )
 
 
@@ -156,17 +156,11 @@ class SettlementContinuation:
             self.selected_recovery.start_remedial_assignment(effect.assignment,
                 exposure=effect.exposure)
         else:
-            if isinstance(effect,ContinueSelectedScore):
-                applied = self.transport.apply_continuation(effect,
-                    measurement=self.transport_timing.collect_continuation_measurement(
-                        effect.deadline,effect.exposure.from_beat),
-                    source_stride_beats=self.score.source_model()["practice_timeline"]["stride_beats"])
-            else:
-                applied = self.transport.apply_continuation(effect)
+            applied = self.transport.apply_continuation(effect)
             if applied.feedback is not None:
                 self.notices.feedback = applied.feedback
             if applied.start is not None:
-                self.continuation.continue_at(applied.start.deadline,from_beat=applied.start.from_beat)
+                self.continuation.continue_at(from_beat=applied.start.from_beat)
         # Record success after every domain and physical start effect.
         # If any action raises, the same settlement receipt can replay it.
         self._applied_continuation_effect = effect

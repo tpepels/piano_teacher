@@ -179,13 +179,6 @@ class TeachingContinuation:
     def readiness(self, *, revision: int, fingerprint: str) -> ContinuationReadiness:
         return ContinuationReadiness(self.acknowledged,revision,fingerprint,self.native_failure)
 
-    def decision_assets_ready(self, pending, *, revision: int, fingerprint: str) -> bool:
-        planned = self.selection(pending,revision=revision,fingerprint=fingerprint)
-        if planned is None:
-            return False
-        selection,_ = planned
-        return (self.acknowledged == (selection.stage_key,selection.revision)
-                and self.future_score.ready(selection))
 
     def choose_ahead(self, plan, *, fingerprint: str, revision: int,
                      offset: int = 1, decided=None):

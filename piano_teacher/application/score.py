@@ -85,8 +85,6 @@ class Score:
     def consume_committed_asset(self, *args, **kwargs):
         return self._successor.consume_committed_asset(*args, **kwargs)
 
-    def decision_assets_ready(self, *args, **kwargs):
-        return self._successor.decision_assets_ready(*args, **kwargs)
 
     def ensure_next_score(self, *args, **kwargs):
         return self._successor.ensure_next(*args, **kwargs)

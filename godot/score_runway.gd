@@ -238,8 +238,7 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
     _future.present({
         "running":true,"paused":false,"phase":"playing",
         "play_from_beat":0.0,
-        "hand":str(value.get("hand","both")),
-        "practice_preparation":null},-50.0,-50.0)
+        "hand":str(value.get("hand","both"))},-50.0,-50.0)
     _next_poll_ms = 0
 
 # Textures a prepared stage's ink draws, uploaded a few per frame while it

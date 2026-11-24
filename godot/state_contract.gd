@@ -3,7 +3,7 @@ extends RefCounted
 ## piano_teacher/state_contract.py. Do not edit by hand.
 ## The versioned contract of the per-frame state snapshot.
 
-const VERSION := 7
+const VERSION := 8
 const STATIC_KEYS := ["import_warnings"]
 const REQUIRED := ["schema_version", "loaded", "controls"]
 const LOADED_REQUIRED := ["mode", "phase", "running", "paused", "revision", "transport_id", "piece_fingerprint", "stage_key", "presentation_directive", "playback_timeline"]
@@ -20,7 +20,6 @@ const SCHEMA := {
     "checkpoints": ["list"],
     "clean_runs_required": ["number"],
     "clock_beat": ["number"],
-    "clock_elapsed_seconds": ["number"],
     "clock_sampled_at_ms": ["number"],
     "controls": ["dict"],
     "count_in_bar_beats": ["number"],
@@ -91,14 +90,12 @@ const SCHEMA := {
     "play_from_beat": ["number"],
     "playback_intent": ["dict", "null"],
     "playback_timeline": ["dict"],
-    "practice_preparation": ["dict", "null"],
     "practice_timeline": ["dict"],
     "presentation_directive": ["dict"],
     "progress": ["number"],
     "recovery_beat": ["null", "number"],
     "recovery_notice": ["dict", "null"],
     "required_notes": ["number"],
-    "resume_count_in_beat": ["null", "number"],
     "retry_range": ["dict", "null"],
     "review_range": ["dict", "null"],
     "revision": ["number"],
@@ -109,7 +106,6 @@ const SCHEMA := {
     "seek_available": ["bool"],
     "seek_range": ["dict", "null"],
     "selected_start_bar": ["number"],
-    "short_rest_latency_seconds": ["number"],
     "stage_change": ["string"],
     "stage_family": ["string"],
     "stage_key": ["string"],
@@ -126,14 +122,6 @@ const SCHEMA := {
     "title": ["string"],
     "transition_in_seconds": ["null", "number"],
     "transport_id": ["number"],
-    "visual_gap_beats": ["number"],
-    "visual_offset_beats": ["number"],
-    "visual_preparation_schedule": ["dict", "null"],
-    "visual_run_at_ms": ["number"],
-    "visual_scroll_beat": ["number"],
-    "visual_scroll_speed": ["number"],
-    "visual_target_beat": ["number"],
-    "visual_tempo_segments": ["list"],
 }
 
 static func kind_of(value: Variant) -> String:

@@ -4,7 +4,6 @@ Checkpoints the played prefix at each bar boundary and hands a completed
 take to TakeCompletion.
 """
 from __future__ import annotations
-from .playback_facts import TimedTakeSource
 from .attempt_progression import AttemptTick
 
 
@@ -59,9 +58,4 @@ class TakeProgression:
         if step.action == "complete":
             followup = self.completion.complete_take(phrase, step.ending,
                 phrase.sounding_end-phrase.start, step.duration, now)
-            self.transport.refloor_fresh_announcement(TimedTakeSource(
-                self.lesson.plan.active_phrase,self.lesson.plan.piece.bar_boundaries,
-                self.lesson.plan.piece.time_signatures,self.lesson.plan.bpm,
-                self.transport.visual_gap_beats),
-                physical_rest_enabled=self.transport.short_rest is not None)
         return followup

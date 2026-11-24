@@ -14,7 +14,6 @@ from copy import deepcopy
 from ..music import Phrase
 from .playback_transitions import CountInPlan
 from .musical_scheduler import SCHEDULER
-from .musical_scheduler import SNAPSHOT_LATENCY_SECONDS
 from .playback_facts import (
     PlaybackRuntimeFacts, PlaybackSourceFacts,
     TimedTakeSource, TimedStartRequest, StartedTake, PreparationRequest,
@@ -29,7 +28,6 @@ from .teaching_continuation import (
     FeedbackFault, HandoffScore, ContinueSelectedScore, AwaitSelectedScore,
     StopSelectedContinuation,
 )
-from .musical_scheduler import ContinuationMeasurement
 
 
 @dataclass(slots=True)
@@ -299,25 +297,11 @@ class PlaybackSession:
             return True
         return False
 
-    def prepare_section_review(self) -> None:
-        self.awaiting_score_revision = None
-        self.auto = False
 
     def prepare_admitted_continuation(self) -> None:
         self._transport.cancel_continuation()
         self._transport.finish_preparation_gate()
         self._transport.finish_rewind()
-
-    def refloor_fresh_announcement(self, source: TimedTakeSource, *,
-                                   physical_rest_enabled: bool) -> None:
-        announced = self._transport.announced_continuation
-        if announced is None or self.running or not physical_rest_enabled or source.bpm <= 0:
-            return
-        _,bar,_ = self._progression.count_in_bar(phrase=source.phrase,
-            boundaries=source.boundaries,time_signatures=source.time_signatures,
-            position=announced[0])
-        self._transport.refloor_announcement(now=self._clock(),bpm=source.bpm,
-            count_in_beats=bar,latency=SNAPSHOT_LATENCY_SECONDS)
 
     def activate_preloaded_feedback(self, source: PreloadedFeedbackSource | None, *,
                                     revision: int, fingerprint: str) -> float | None:
@@ -425,26 +409,14 @@ class PlaybackSession:
             self.auto = False
         self._transport.cancel_continuation()
 
-    def apply_continuation(self, effect, *,
-                           measurement: ContinuationMeasurement | None = None,
-                           source_stride_beats: float | None = None
-                           ) -> AppliedContinuation:
+    def apply_continuation(self, effect) -> AppliedContinuation:
         """Execute one typed, source-bound publication without reselecting it."""
         if self._applied_continuation is not None and self._applied_continuation[0] == effect.identity:
             return self._applied_continuation[1]
-        if isinstance(effect,HandoffScore):
-            deadline = max(effect.earliest_deadline,self._clock()+
-                SCHEDULER.beats_seconds(effect.count_in_beats,effect.bpm))
+        if isinstance(effect,(HandoffScore,ContinueSelectedScore)):
+            # The musical timeline places the next take after this one.
             result = AppliedContinuation(ScheduledContinuation(
-                effect.exposure.from_beat,deadline))
-        elif isinstance(effect,ContinueSelectedScore):
-            if measurement is None or source_stride_beats is None:
-                raise ValueError("Continuation requires the exact source measurements")
-            deadline = SCHEDULER.continuation(measurement,now=self._clock(),bpm=effect.bpm)
-            self._transport.advance_source_stride(
-                source_stride_beats-effect.exposure.from_beat)
-            result = AppliedContinuation(ScheduledContinuation(
-                effect.exposure.from_beat,deadline))
+                effect.exposure.from_beat))
         elif isinstance(effect,AwaitSelectedScore):
             self._transport.musical.close()
             self.awaiting_score_revision = effect.identity.revision

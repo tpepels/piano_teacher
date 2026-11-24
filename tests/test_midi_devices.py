@@ -219,7 +219,7 @@ def test_calibration_collects_real_ingress_then_applies_persists_and_resets(conn
     assert engine.preferences()["midi_offset_ms"] == pytest.approx(80, abs=1)
     assert ScoreLibrary(tmp_path / "app" / "config").public_settings()["midi_offset_ms"] == 80
     tempo_take(engine, now)
-    deadline = engine.state()["visual_run_at_ms"] / 1000
+    deadline = engine.state()["playback_timeline"]["current"]["deadline_ms"] / 1000
     now[0] = deadline + .08
     backend.ports[-1].press()
     events = PracticeSession.attach(engine, ListClock(now)).ask("feedback.events")["events"]

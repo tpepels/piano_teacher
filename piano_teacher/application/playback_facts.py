@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any
 from ..music import Phrase
 from .playback_transitions import CountInPlan
-from .musical_scheduler import RestMeasurement
 
 @dataclass(frozen=True, slots=True)
 class PlaybackSourceFacts:
@@ -146,26 +145,12 @@ class PassageFinishPlan:
 @dataclass(frozen=True, slots=True)
 class ScheduledContinuation:
     from_beat: float
-    deadline: float
 
 
 @dataclass(frozen=True, slots=True)
 class AppliedContinuation:
     start: ScheduledContinuation | None = None
     feedback: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RestResumeFacts:
-    now: float
-    reading_lead_seconds: float
-    running: bool
-    mode: str
-    bpm: float | None
-    presentation_bpm: float
-    horizon_beats: float
-    physical_rest_enabled: bool
-    rest: RestMeasurement | None
 
 
 @dataclass(frozen=True, slots=True)

@@ -144,7 +144,7 @@ def test_guided_plan_deadline_changes_only_with_authenticated_source():
         run_at=0.0, play_from_beat=0.0, announced=None,
         announced_deadline=None, announcement_serial=0,
         scheduled_start=None, timeline={}, next_count_in_beats=4.0,
-        next_count_in_meter=(4, 4), continuous_horizon_beats=4.0,
+        next_count_in_meter=(4, 4),
         duration_beats=4.0, has_source=True)
     state = {"phase": "guided_wait"}
     publisher.prepare_guided(state, template, now=100.0)
@@ -181,7 +181,7 @@ def test_backend_publishes_hold_target_and_running_motion_without_ui_phase_polic
         run_at=0.0, play_from_beat=0.0, announced=None,
         announced_deadline=None, announcement_serial=0,
         scheduled_start=None, timeline={}, next_count_in_beats=4.0,
-        next_count_in_meter=(4,4), continuous_horizon_beats=4.0,
+        next_count_in_meter=(4,4),
         duration_beats=4.0, has_source=True)
 
     def motion(observation, context):
@@ -230,7 +230,7 @@ def test_real_state_contract_includes_authoritative_motion_directive(practice_se
     from piano_teacher.state_contract import VERSION, problems
     session = practice_session(bars=1)
     result = session.snapshot()
-    assert VERSION == 7
+    assert VERSION == 8
     assert "presentation_directive" in result
     assert result["presentation_directive"]["kind"] in (
         "hold", "target", "retain", "run")

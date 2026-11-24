@@ -172,62 +172,18 @@ func cancel(facts: StreamGeometry, world: float, canvas: Control, restore: Calla
     canvas.queue_redraw()
     return restored
 
-func arm(facts: StreamGeometry, generation: int, append: Callable, reserve: Callable,
-        reject: Callable, cancel: Callable, empty_onset: Callable, retry_placement: bool,
-        world: float, opening: float, right: float,
-        header: float, planned_start_world: float = NAN,
-        retrying: bool = false, empty_strip_count_in: float = 0.0,
-        exact_authorized: bool = false) -> Dictionary:
-    # The common future-only admission route owns a rollback snapshot until
-    # the backend confirms the newly armed transport. Failure returns all
-    # source/rest clip roles to their exact original state.
-    if not facts.ready:
+func arm(facts: StreamGeometry, generation: int, append: Callable,
+        reject: Callable, cancel: Callable, opening: float,
+        start_world: float) -> Dictionary:
+    # Append the take at the exact world the musical timeline gave it. The
+    # binding owns a rollback snapshot until the take is acknowledged;
+    # failure returns all source/rest clip roles to their original state.
+    if not facts.ready or not is_finite(start_world):
         return {}
     var old_live: int = live_serial
     var serial_before: int = generation
-    var candidate_serial := -1
-    # Paused musical identity is protected by the immutable queue's
-    # predecessor owner, never physically restarted at its frozen origin.
-    # Resume always appends a fresh backend-authorized count-in source.
-    if candidate_serial < 0 and is_finite(planned_start_world):
-        var checked: float = planned_start_world if exact_authorized else Admission.position(queue.online,
-            facts.world,right,
-            header,planned_start_world,0.0,
-            facts.density,facts.gap,facts.duration)
-        # An exact automatic continuation may be preflighted as an
-        # announced empty-strip opening. Do not reinterpret the one fixed
-        # deadline as an offscreen append after that physical proof.
-        var onto_empty_strip: bool = exact_authorized and \
-            empty_strip_count_in > 0.0
-        if not is_finite(checked) and retry_placement:
-            # A Retry is placed by Admission.retry_start (right edge at
-            # once, after exposed ink, no REST_GAP/READY travel): the commit
-            # accepts exactly that slot (the preflight's own rule).
-            var retry_floor: float = Admission.retry_start(
-                queue.online,facts.world,right,
-                header,float(facts.rest_gap),
-                facts.density,facts.gap,facts.duration)
-            if planned_start_world >= retry_floor-.0001:
-                checked = planned_start_world
-        if not is_finite(checked) and empty_strip_count_in > 0.0:
-            # The preflight chose the empty-strip count-in bar slot; the
-            # live queue must still permit exactly that deadline.
-            var earliest: float = empty_onset.call(
-                queue.online,facts.world,empty_strip_count_in,
-                header,maxf(1.0,facts.density),
-                facts.gap,facts.duration,
-                facts.width,facts.playhead)
-            onto_empty_strip = is_finite(earliest) and \
-                planned_start_world >= earliest-.0001
-            checked = planned_start_world if onto_empty_strip else NAN
-        if not is_finite(checked):
-            return {}
-        candidate_serial = int(append.call(
-            facts,opening,checked,opening,"prepared",onto_empty_strip))
-        if candidate_serial < 0:
-            return {}
-    elif candidate_serial < 0:
-        candidate_serial = reserve.call(facts,facts.world,opening,right,header)
+    var candidate_serial: int = int(append.call(
+        facts,opening,start_world,opening,"prepared",false))
     if candidate_serial < 0:
         return {}
     var snapshot: Dictionary = StreamLifecycle.snapshot_owner(
@@ -264,33 +220,14 @@ func live_owner() -> int:
 func restore_live(owner: int) -> void:
     live_serial = owner
 
-func release_live() -> void:
-    live_serial = -1
-
 func admitted(owner: int) -> void:
     live_serial = owner
-
-func remember_withdrawn_suffix(previous: Array) -> void:
-    arm_rollback["withdrawn_suffix"] = previous
 
 func has_armed_reservation() -> bool:
     return armed_serial >= 0 and arm_acknowledged
 
 func bound_segment() -> String:
     return live_segment_id
-
-func owns_authorized_segment(segment_id: String) -> bool:
-    # The physical source may be ACKed but not yet promoted by the next
-    # state-poll observation. Both states must prove ownership of an
-    # existing queue take, not merely preserve a matching string.
-    if segment_id.is_empty():
-        return false
-    if (live_segment_id == segment_id and live_serial >= 0
-            and queue.has_take(live_serial)):
-        return true
-    return (armed_segment_id == segment_id and arm_acknowledged
-        and armed_serial >= 0 and not arm_rollback.is_empty()
-        and queue.has_take(armed_serial))
 
 func status(generation: int) -> Dictionary:
     return {"generation":generation,"live_serial":live_serial,

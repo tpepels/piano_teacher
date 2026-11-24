@@ -53,28 +53,6 @@ class PreparationDeadline:
     reverse_seconds: float
 
 
-@dataclass(frozen=True, slots=True)
-class RestMeasurement:
-    """Facts reported by engraving and the outgoing graded score clock."""
-    source_end: float
-    outgoing_bpm: float
-    clear_beats: float
-    header_beats: float
-    count_in_beats: float
-    tempo_epoch: float | None
-
-
-@dataclass(frozen=True, slots=True)
-class ContinuationMeasurement:
-    """No calculated deadline: a snapshot of immutable queue/score facts."""
-    deadline: float
-    announced_at: float | None
-    rest_beats: float
-    horizon_beats: float
-    rest: RestMeasurement | None
-    automatic: bool
-
-
 class MusicalScheduler:
     """All backend decisions about absolute musical time.
 
@@ -109,9 +87,6 @@ class MusicalScheduler:
     def seconds_per_beat(cls, bpm: float) -> float:
         return cls.beats_seconds(1.0,bpm)
 
-    @classmethod
-    def beat_rate(cls, bpm: float) -> float:
-        return cls.seconds_beats(1.0,bpm)
 
     @staticmethod
     def seconds_beats(seconds: float, bpm: float) -> float:
@@ -225,93 +200,6 @@ class MusicalScheduler:
         return deadline+cls.beats_seconds(lead_beats,bpm)
 
     @classmethod
-    def missing_horizon(cls, *, deadline: float, rest_beats: float,
-                        reading_horizon_beats: float, bpm: float) -> float:
-        return cls.offscreen(deadline=deadline,
-            lead_beats=max(0.0,reading_horizon_beats-rest_beats),bpm=bpm)
-
-    @classmethod
-    def short_rest(cls, *, now: float, source_end: float,
-                   outgoing_bpm: float, incoming_bpm: float,
-                   clear_beats: float, header_beats: float,
-                   count_in_beats: float, latency: float,
-                   tempo_epoch: float | None = None) -> MusicalDeadline:
-        """Time authentic rest+header at outgoing tempo, with one rate change.
-
-        If the outgoing BPM switches during the rest, integrate both
-        constant-rate intervals exactly; the count-in uses incoming tempo.
-        """
-        if not all(math.isfinite(x) for x in (
-                now,source_end,clear_beats,header_beats,latency)):
-            raise ValueError("Invalid rest geometry")
-        if clear_beats < 0 or header_beats < 0:
-            raise ValueError("Negative rest/header clearance")
-        span = clear_beats+header_beats
-        physical = source_end+cls.beats_seconds(span,outgoing_bpm)
-        if (tempo_epoch is not None and math.isfinite(tempo_epoch)
-                and source_end < tempo_epoch < physical
-                and abs(outgoing_bpm-incoming_bpm)>1e-9):
-            passed = cls.seconds_beats(tempo_epoch-source_end,outgoing_bpm)
-            physical = tempo_epoch+cls.beats_seconds(
-                max(0.0,span-passed),incoming_bpm)
-        return cls.resolve("short_rest",now=now,bpm=incoming_bpm,
-            count_in_beats=count_in_beats,latency=latency,
-            physical_at=physical)
-
-    @classmethod
-    def measured_rest(cls, rest: RestMeasurement | None, *,
-                      now: float, bpm: float,
-                      latency: float = SNAPSHOT_LATENCY_SECONDS
-                      ) -> float | None:
-        if rest is None:
-            return None
-        return cls.short_rest(now=now,source_end=rest.source_end,
-            outgoing_bpm=rest.outgoing_bpm,incoming_bpm=bpm,
-            clear_beats=rest.clear_beats,header_beats=rest.header_beats,
-            count_in_beats=rest.count_in_beats,latency=latency,
-            tempo_epoch=rest.tempo_epoch).run_at
-
-    @classmethod
-    def continuation(cls, measured: ContinuationMeasurement, *,
-                     now: float, bpm: float,
-                     latency: float = SNAPSHOT_LATENCY_SECONDS) -> float:
-        """Compute one continuation deadline from all physical measurements.
-
-        An existing, identical score plan wins unchanged. The result is the
-        only run_at used by MIDI grading and by immutable future source ink.
-        """
-        if not measured.automatic:
-            return measured.deadline
-        if measured.announced_at is not None and abs(
-                measured.announced_at-measured.deadline)<=1e-9:
-            return measured.deadline
-        short_at = cls.measured_rest(
-            measured.rest,now=now,bpm=bpm,latency=latency)
-        return cls.automatic(
-            announced_at=measured.announced_at,
-            from_beat_matches=measured.announced_at is not None,
-            deadline=measured.deadline,now=now,bpm=bpm,
-            rest_beats=measured.rest_beats,
-            horizon_beats=measured.horizon_beats,
-            short_rest_at=short_at)
-
-    @classmethod
-    def automatic(cls, *, announced_at: float | None, from_beat_matches: bool,
-                  deadline: float, now: float, bpm: float,
-                  rest_beats: float, horizon_beats: float,
-                  short_rest_at: float | None) -> float:
-        if announced_at is not None and from_beat_matches and (
-                abs(announced_at-deadline)<=1e-9):
-            return announced_at
-        if short_rest_at is not None:
-            return max(deadline,short_rest_at)
-        if horizon_beats <= 0:
-            return deadline
-        return max(cls.missing_horizon(deadline=deadline,rest_beats=rest_beats,
-                   reading_horizon_beats=horizon_beats,bpm=bpm),
-                   cls.offscreen(deadline=now,lead_beats=horizon_beats,bpm=bpm))
-
-    @classmethod
     def prepare(cls, *, now: float, reverse_seconds: float,
                 rest_beats: float, horizon_beats: float, bpm: float,
                 include_reading: bool, short_deadline: float | None = None,
@@ -334,16 +222,6 @@ class MusicalScheduler:
         else:
             end = base_end+cls.beats_seconds(max(0.,horizon_beats-rest_beats),bpm)
         return PreparationDeadline(now,prepare,end,reverse)
-
-    @classmethod
-    def fresh_resume(cls, *, now: float, reading_lead_seconds: float,
-                     horizon_beats: float, bpm: float,
-                     short_rest_at: float | None) -> float:
-        if not math.isfinite(reading_lead_seconds) or reading_lead_seconds < 0:
-            raise ValueError("Invalid resumed reading lead")
-        floor = (short_rest_at if short_rest_at is not None
-                 else cls.offscreen(deadline=now,lead_beats=horizon_beats,bpm=bpm))
-        return max(now+reading_lead_seconds,floor)
 
     @classmethod
     def resume_playing(cls, *, now: float, origin: float, bpm: float,

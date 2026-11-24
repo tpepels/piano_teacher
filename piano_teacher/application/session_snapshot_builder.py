@@ -58,7 +58,6 @@ class SnapshotValues:
     persistent_hints: bool
     plan: Any
     play_from_beat: float
-    practice_preparation: Any
     recovery_notice: Any
     retry_range: Any
     review_end_beat: float | None
@@ -66,7 +65,6 @@ class SnapshotValues:
     running: bool
     score_revision: int
     transport_id: int
-    visual_offset_beats: float
 
 
 @dataclass(frozen=True)
@@ -78,13 +76,11 @@ class SnapshotReadPorts:
     phase: Callable[..., Any]
     source_model: Callable[..., Any]
     live_feedback: Callable[..., Any]
-    visual_motion: Callable[..., Any]
     active_tempo_map: Callable[..., Any]
     display_phrase: Callable[..., Any]
     guided_marks: Callable[..., Any]
     listen_snapshot: Callable[..., Any]
     live_input_snapshot: Callable[..., Any]
-    preparation_schedule: Callable[..., Any]
     teaching_snapshot: Callable[..., Any] | None
     clock: Callable[[], float]
 
@@ -143,7 +139,6 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
             device=state.midi_device, revision=state.score_revision,
             transport_id=state.transport_id, activity=activity)
     practice_timeline = reads.source_model()["practice_timeline"]
-    gap_beats = practice_timeline["gap"]["duration_beats"]
     ex, variant = p.exercise, p.active_variant
     # Only the current exercise's hand rows are used by the HUD.
     # Capturing/freezing the full sequence of thousands of lesson stages
@@ -158,31 +153,19 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     elapsed = now-state.run_at
     phase = reads.phase(now)
     live_marks = reads.live_feedback(elapsed) if phase == "playing" else []
-    visual_motion = reads.visual_motion(now)
     lesson = build_lesson_snapshot(
         p, ex, variant, fingerprint=state.fingerprint,
         lesson_steps=lesson_steps,
         lesson_step_count=len(all_steps))
     tempo_map = reads.active_tempo_map()
-    # Local-zero source timing followed by the explicit practice-BPM
-    # silence. These exact segments are sent to Godot and retained
-    # through the automatic-rest phase with the same run_at timestamp.
-    visual_segments = ()
+    # Local-zero source timing of the selected window (Listen audio and
+    # the published duration read it).
     tempo_segments = ()
     if tempo_map is not None:
-        local_map = tempo_map.from_beat(state.play_from_beat)
-        tempo_segments = local_map.as_segments()
-        visual_segments = (*tempo_segments, {
-            "start_beat": local_map.duration_beats,
-            "end_beat": local_map.duration_beats+gap_beats,
-            "bpm": float(p.bpm),
-            "start_seconds": local_map.duration_seconds,
-        })
+        tempo_segments = tempo_map.from_beat(state.play_from_beat).as_segments()
     timing = TimingSnapshot(
         sampled_at=sampled_at, now=now, run_at=state.run_at,
         tempo_segments=tempo_segments,
-        visual_tempo_segments=visual_segments,
-        visual_preparation_schedule=reads.preparation_schedule(),
         mapped_clock_beat=(reads.elapsed_beat(now-state.run_at)
                            if tempo_map is not None else None),
         running=state.running, paused=state.paused, auto=state.auto,
@@ -193,9 +176,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         count_in_beats=state.count_in_beats,
         count_in_bar_beats=state.count_in_bar_beats, count_in_meter=state.count_in_meter,
         midi_notes=state.midi_notes,
-        visual_offset_beats=state.visual_offset_beats,
-        visual_gap_beats=gap_beats, visual_motion=visual_motion,
-        practice_timeline=practice_timeline, practice_preparation=state.practice_preparation,
+        practice_timeline=practice_timeline,
         take_result=({"clean": bool(state.assessment_verdict.clean)
                             if state.assessment_verdict is not None else False,
                       "accepted": bool(state.assessment_verdict.accepted)

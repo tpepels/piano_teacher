@@ -90,18 +90,8 @@ static func engine_count_in_deadline_ms(state: Dictionary, action: String,
             var agreed: float = float(active.get("deadline_ms",NAN))
             if is_finite(agreed) and agreed > 0.0:
                 return agreed+offset_ms
-        # A graphical take without a matching authorized current segment
-        # has no valid audible musical epoch.
-        return NAN
-    if not bool(state.get("running",false)) or bool(state.get("paused",false)):
-        return NAN
-    var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
-    var countdown: Variant = state.get("resume_count_in_beat")
-    if action == "resume" and countdown != null and float(countdown) < 0.0 and \
-            state.has("clock_sampled_at_ms"):
-        return float(state["clock_sampled_at_ms"])+offset_ms- \
-            TempoTimeline.seconds_from_beats(float(countdown),bpm)*1000.0
-    return float(state.get("visual_run_at_ms",NAN))+offset_ms
+    # A take without a current timeline entry has no audible epoch.
+    return NAN
 
 
 ## Beats from a take's first note at local `now_ms`, read from the musical
@@ -352,39 +342,6 @@ func update(state: Dictionary, state_tick_ms: int,
     # A hand-built snapshot without the key counts one bar of the meter.
     var count_in_beats: float = float(state.get("count_in_beats",
         CueTimeline.WHOLE_BAR))
-    var resume_value: Variant = state.get("resume_count_in_beat")
-    var moving: bool = bool(state.get("running",false)) and \
-        not bool(state.get("paused",false))
-    if resume_value != null and moving:
-        var bpm: float = maxf(1.0,float(state.get("bpm",60.0)))
-        var resume_beat: float = float(resume_value) + \
-            TempoTimeline.beats_from_milliseconds(maxf(0.0,float(now_ms-state_tick_ms)),bpm)
-        if resume_beat < 0.0:
-            # A Resume that reuses the paused count-in keeps its original
-            # first-beat deadline, so its countdown is the same musical axis
-            # as the transport beat. Continue that epoch: a syllable already
-            # heard before Pause is not spoken again (one cycle only). This
-            # continued countdown resumes mid-beat by construction, so a
-            # beat first observed late is consumed (R1 M4); every other
-            # count-in is spoken from a deadline Godot reserved (round 4).
-            var transport_beat: float = sampled_beat if is_finite(sampled_beat) \
-                else float(transport_beat_at.call(now_ms))
-            var running_token: String = "running:%d:%d" % [
-                int(state.get("revision",-1)),int(state.get("transport_id",0))]
-            var pulse: float = authorized_pulse(state)
-            if not is_finite(pulse) or pulse <= 0.0:
-                return
-            var continued: bool = is_finite(transport_beat) and \
-                absf(transport_beat-resume_beat) < .05 and \
-                _cues.continues(running_token,resume_beat/pulse)
-            var resume_token: String = running_token if continued else \
-                "resume:%d:%d" % [int(state.get("revision",-1)),
-                int(state.get("transport_id",0))]
-            _count_in(resume_token,resume_beat,
-                float(state.get("count_in_bar_beats",4)),
-                state.get("count_in_meter"),true,count_in_beats,false,true,
-                pulse)
-            return
     if state.is_empty() or not bool(state.get("running",false)):
         practice_view.stage.count_in.present(0.0,4,false,false)
         _cues.reset()

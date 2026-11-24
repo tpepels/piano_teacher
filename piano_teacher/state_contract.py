@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-VERSION = 7
+VERSION = 8
 
 # Values that do not change frame to frame. They travel in command replies
 # (library.open, practice.command, ...) and are omitted from state.snapshot.
@@ -47,7 +47,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "can_increase_tempo": ('bool',),
     "clean_runs_required": ('number',),
     "clock_beat": ('number',),
-    "clock_elapsed_seconds": ('number',),
     "clock_sampled_at_ms": ('number',),
     "count_in_bar_beats": ('number',),
     "count_in_beats": ('number',),
@@ -110,7 +109,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "next_action": ('string',),
     "next_count_in_beats": ('number',),
     "next_count_in_meter": ('list',),
-    "short_rest_latency_seconds": ('number',),
     "original_bpm": ('number',),
     "pause_context": ('null', 'string'),
     "paused": ('bool',),
@@ -122,13 +120,11 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "piece_last_bar": ('number',),
     "play_from_beat": ('number',),
     "presentation_directive": ('dict',),
-    "practice_preparation": ('dict', 'null'),
     "practice_timeline": ('dict',),
     "progress": ('number',),
     "recovery_beat": ('null', 'number'),
     "recovery_notice": ('dict', 'null'),
     "required_notes": ('number',),
-    "resume_count_in_beat": ('null', 'number'),
     "retry_range": ('dict', 'null'),
     "review_range": ('dict', 'null'),
     "revision": ('number',),
@@ -153,15 +149,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "title": ('string',),
     "transition_in_seconds": ('null', 'number'),
     "transport_id": ('number',),
-    "visual_gap_beats": ('number',),
-    "visual_offset_beats": ('number',),
-    "visual_preparation_schedule": ('dict', 'null'),
-    "visual_run_at_ms": ('number',),
     "tempo_epoch_ms": ('number',),
-    "visual_scroll_beat": ('number',),
-    "visual_scroll_speed": ('number',),
-    "visual_target_beat": ('number',),
-    "visual_tempo_segments": ('list',),
 }
 
 

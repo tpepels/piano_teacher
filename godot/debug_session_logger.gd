@@ -41,9 +41,7 @@ func record_transition(state: Dictionary, now_ms: int,
         "phase":phase_name, "transport_id":attempt, "revision":revision,
         "state_request_ms":now_ms-request_started_ms,
         "score_ready":score_ready,"bundle_pending":bundle_pending,
-        "awaiting_score_revision":state.get("awaiting_score_revision"),
-        "visual_scroll_beat":state.get("visual_scroll_beat"),
-        "visual_scroll_speed":state.get("visual_scroll_speed")}))
+        "awaiting_score_revision":state.get("awaiting_score_revision")}))
     _last_timing_phase = phase_name
     _last_timing_transport = attempt
     _last_timing_revision = revision

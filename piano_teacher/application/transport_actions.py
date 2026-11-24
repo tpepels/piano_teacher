@@ -134,7 +134,7 @@ class PlaybackAuthorization:
             # The compiled native score has now supplied real printed rest
             # and header clearance. Install it before the score-ready ACK
             # can select a future fixed-deadline automatic continuation.
-            self.transport_timing.update_short_rest(kwargs)
+            self.transport_timing.update_placement_facts(kwargs)
             revision = int(kwargs.get("revision",-1))
             decision = self.transport.score_acknowledged(revision,
                 current_revision=self.lesson.revision,teaching_bound=self.lesson.guided_controller is not None)
@@ -193,7 +193,6 @@ class RouteCommands:
     def stop(self) -> None:
         self.lifecycle.stop(reason="stop")
         # A stopped session has no take a later rest could follow (M6).
-        self.transport.clear_take_end()
         self.notices.feedback = "Stopped"
         self.notices.next_action = "Start when you are ready."
 
@@ -233,8 +232,7 @@ class TransportCommands:
         elif action == "stop":
             self.routes.stop()
         elif action in ("start", "restart"):
-            self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
-            self.transport_timing.update_short_rest(kwargs)
+            self.transport_timing.update_placement_facts(kwargs)
             effect = effect or self.lesson.manual_effect(action)
             transition = PlaybackTransition.from_effect(
                 effect,action=action,source_changed=(
@@ -256,8 +254,7 @@ class TransportCommands:
                 pending_admission=self.transport.suspend_pending(
                     self.transport_timing.playback_facts()))
         elif action == "resume":
-            self.transport_timing.update_continuous_horizon(kwargs.get("continuous_horizon_beats"))
-            self.transport_timing.update_short_rest(kwargs)
+            self.transport_timing.update_placement_facts(kwargs)
             suspended = self.transport.take_suspended(
                 self.transport_timing.playback_facts())
             if suspended is not None:

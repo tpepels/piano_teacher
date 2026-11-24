@@ -7,8 +7,7 @@ PauseResume freezes and resumes the timeline and Free, and starts Listen
 once its score and audio are ready.
 """
 from __future__ import annotations
-from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest, RestResumeFacts
-from .musical_scheduler import SCHEDULER
+from .playback_facts import TimedTakeSource, TimedStartRequest, ResumeRequest
 
 
 class TimedStart:
@@ -83,8 +82,8 @@ class PlaybackContinuation:
         self.notices = notices
         self.clock = clock
 
-    def continue_at(self, deadline: float, *, from_beat: float = 0.0):
-        """Continue only through the unified score-admission gate."""
+    def continue_at(self, *, from_beat: float = 0.0):
+        """Request the next take; the musical timeline places it."""
         # Check the canonical terminal admission latch BEFORE changing
         # visual-transport or preparation state. Repeated automatic
         # callbacks after exhaustion must leave a visible FAILED
@@ -101,13 +100,6 @@ class PlaybackContinuation:
             from_beat=from_beat)
         self.transport.clear_scheduled_start()
         self.notices.feedback = "Preparing the next passage"
-
-    def continue_measured(self, deadline: float, *, from_beat: float = 0.0):
-        """Continue from `from_beat` at the scheduler's measured continuation."""
-        self.continue_at(SCHEDULER.continuation(
-            self.transport_timing.collect_continuation_measurement(deadline, from_beat),
-            now=self.clock(), bpm=self.transport_timing.presentation_bpm()),
-            from_beat=from_beat)
 
 class PauseResume:
     def __init__(self, *, lesson, transport, transport_timing, midi_input,
@@ -147,15 +139,6 @@ class PauseResume:
             scheduled_deadline=scheduled_deadline))
         if resumed.learning:
             self.lesson.guided_controller.resume(now=resumed.now)
-        announced = self.transport.announced_continuation
-        self.transport.reannounce_after_rest_pause(RestResumeFacts(
-            now=resumed.now,reading_lead_seconds=presentation_lead_seconds,
-            running=self.transport.running,mode=self.transport.mode,
-            bpm=self.lesson.plan.bpm if self.lesson.plan is not None else None,
-            presentation_bpm=self.transport_timing.presentation_bpm(),horizon_beats=self.transport.continuous_horizon_beats,
-            physical_rest_enabled=self.transport.short_rest is not None,
-            rest=(self.transport_timing.collect_rest_measurement(from_beat=announced[0],source_end=0.0)
-                if announced is not None else None)))
         completion = self.transport.finish_resume(resumed)
         self.notices.clear_fault()
         if completion.feedback is not None:

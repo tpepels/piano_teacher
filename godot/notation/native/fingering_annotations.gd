@@ -41,14 +41,6 @@ func clear() -> void:
     if fingering_popup != null:
         fingering_popup.hide()
 
-func set_enabled(enabled: bool) -> void:
-    fingering_annotations_enabled = enabled
-    drawn_fingerings.clear()
-    fingering_placement_issues.clear()
-    fingering_layout_gap = -1.0
-    if not enabled and fingering_popup != null:
-        fingering_popup.hide()
-
 func layout_fingerings(gap: float, play_from_beat: float = 0.0) -> void:
     fingering_layout.clear()
     fingering_placement_issues.clear()

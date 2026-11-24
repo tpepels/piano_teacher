@@ -123,8 +123,7 @@ def _session_state(r, *, clock, feedback_events) -> None:
     r.source_identity = SourceIdentity()
     r.lesson_cursor = LessonCursor()
     r.notices = SessionNotices()
-    r.visual_transport = VisualTransport(
-        _visual_rewind_seconds=SETTINGS.feedback_seconds)
+    r.visual_transport = VisualTransport()
     r.playback = PlaybackCoordinator()
     r.playback_session = PlaybackSession()
     r.transport = Transport(timeline=r.visual_transport,
@@ -354,14 +353,12 @@ def _transport_and_completion(r) -> None:
             phase=r.session_phase.at,
             source_model=r.score.source_model,
             live_feedback=r.live_feedback_workflows.latest_marks,
-            visual_motion=r.transport_timing.visual_motion,
             active_tempo_map=r.transport_timing.active_tempo_map,
             display_phrase=lambda: r.lesson.display_phrase(
                 learning=r.transport.mode == "learn"),
             guided_marks=r.score.guided_marks,
             listen_snapshot=r.listen.snapshot,
             live_input_snapshot=r.midi_input.live_input_snapshot,
-            preparation_schedule=r.transport.preparation_schedule,
             teaching_snapshot=None, clock=r.now),
         clock=r.now)
     r.score_presentation = ScorePresentation(

@@ -42,7 +42,6 @@ var last_admitted := -1
 var timeline_placement := false
 const RecoveryPlanner := preload("res://notation/native/stream_recovery_planner.gd")
 var _recovery = RecoveryPlanner.new()
-var retry_placement := false
 
 func reset() -> bool:
     # No direct queue array replacement: the queue first releases its own
@@ -52,7 +51,6 @@ func reset() -> bool:
     _recovery.reset()
     _binding.reset()
     last_admitted = -1
-    retry_placement = false
     return true
 
 func register_predecessor(previous) -> void:
@@ -110,15 +108,6 @@ func preflight_facts(world: float, opening: float, source_exists: bool,
                 break
     return facts
 
-func remember_withdrawn_suffix(previous: Array) -> void:
-    # Rollback is owned by the stream ledger. The native executor may
-    # attach only the exact suffix removed by its immediately preceding
-    # successful preflight.
-    _binding.remember_withdrawn_suffix(previous)
-
-func retry_placement_enabled(enabled: bool) -> void:
-    retry_placement = enabled
-
 func queue_generation() -> int:
     return serial
 
@@ -130,9 +119,6 @@ func has_take(owner_serial: int) -> bool:
 
 func bound_segment() -> String:
     return _binding.bound_segment()
-
-func owns_authorized_segment(segment_id: String) -> bool:
-    return _binding.owns_authorized_segment(segment_id)
 
 func has_armed_reservation() -> bool:
     return _binding.has_armed_reservation()
@@ -152,31 +138,6 @@ func peer_clearance_facts(density: float, gap: float,
         })
     return {"queue_id":queue.get_instance_id(),"density":density,
         "playhead_x":playhead_x,"ends":ends}
-
-func empty_strip_onset(passes: Array, world: float, count_in_beats: float,
-        header: float, density: float, gap: float,
-        duration: float, width: float, playhead: float) -> float:
-    return Admission.empty_strip_start(
-        passes,world,count_in_beats,header,
-        queue.minimum_peer_opening(density,width,playhead,true,"source"),
-        density,gap,duration,
-        queue.minimum_peer_opening(density,width,playhead,true,"rest"))
-
-func rest_geometry(rest: float, density: float, gap: float,
-        header: float) -> Dictionary:
-    # Preserve the source's full authored rest; long final barline ink
-    # requires peer raster clearance beyond that physical silence.
-    var trailing: float = 2.2*gap/density
-    var after: float = rest if rest >= trailing else \
-        trailing+Admission.REST_GAP_BEATS
-    var margin: float = (
-        StreamQueue.PEER_REST_MARGIN_PX if rest >= trailing
-        else StreamQueue.PEER_MARGIN_PX)
-    return {
-        "continuation_clear_beats":after+margin/density+ \
-            Admission.OFFSCREEN_MARGIN_BEATS,
-        "continuation_header_beats":header+Admission.OFFSCREEN_MARGIN_BEATS,
-    }
 
 func prune_expired(owner: Control, world: float, density: float,
         gap: float, duration: float, playhead_x: float) -> void:
@@ -380,50 +341,6 @@ func receipt(planned: Dictionary, admitted: Dictionary, world: float,
     admitted["admission_receipt"] = receipt_data
     return admitted
 
-func reserve_ready(facts: StreamGeometry, world: float, opening: float,
-        right: float, header: float) -> int:
-    if not facts.ready or \
-            opening >= facts.duration:
-        return -1
-    var index: int = Admission.select(
-        queue.online,"ready",opening,world,right,header)
-    if index >= 0:
-        return int(queue.online[index]["serial"])
-    # READY never edits an existing placement. If its hidden source has
-    # approached the display, withdraw the still-unexposed tail into the
-    # offline queue, then append a fresh immutable future reservation.
-    var stale: int = Admission.select(
-        queue.online,"idle",opening,world)
-    if stale >= 0:
-        var stale_serial: int = int(queue.online[stale]["serial"])
-        var removed: Array[int] = queue.withdraw_tail(
-            canvas(),world,facts.density,facts.gap,
-            facts.duration,facts.width,facts.playhead,
-            "idle_expired")
-        if not removed.has(stale_serial):
-            # The old reservation has crossed its immutable exposure
-            # boundary. Retain it and append beyond its printed end.
-            # Returning -1 here strands Pause -> Resume at low BPM.
-            pass
-    var onset: float = Admission.position(queue.online,world,right,
-        header,NAN,Admission.READY_TRAVEL_BEATS,
-        facts.density,facts.gap,facts.duration)
-    # A new stage may be ready while prior lesson ink is still moving.
-    # Choose a later offscreen origin instead of repeatedly rejecting Play.
-    var peer_floor: float = queue.minimum_peer_opening(
-        facts.density,facts.width,facts.playhead)
-    if is_finite(peer_floor):
-        onset = maxf(onset,peer_floor+header+
-            Admission.REST_GAP_BEATS)
-    if not is_finite(onset):
-        return -1
-    var old_serial := serial
-    append_source(facts,opening,onset,opening,"prepared")
-    if serial == old_serial:
-        return -1
-    _binding.release_live()
-    return last_admitted
-
 func reject_candidate(facts: StreamGeometry, owner_serial: int, before_serial: int,
         old_live_serial: int, snapshot: Dictionary) -> void:
     # A failed pre-commit reservation must not leave a speculative future
@@ -436,15 +353,10 @@ func reject_candidate(facts: StreamGeometry, owner_serial: int, before_serial: i
         StreamLifecycle.restore_owner(queue.online,owner_serial,snapshot)
     _binding.restore_live(old_live_serial)
 
-func arm_take(facts: StreamGeometry, world: float, opening: float, right: float,
-        header: float, planned_start_world: float = NAN,
-        retrying: bool = false, empty_strip_count_in: float = 0.0,
-        exact_authorized: bool = false,
-        display_context: bool = false, leading_rest_beats: float = 0.0) -> Dictionary:
-    return _binding.arm(facts,serial,allocate_source.bind(display_context,leading_rest_beats),reserve_ready,
-        reject_candidate,cancel_arm,empty_strip_onset,retry_placement,
-        world,opening,right,header,planned_start_world,
-        retrying,empty_strip_count_in,exact_authorized)
+func arm_take(facts: StreamGeometry, opening: float, start_world: float,
+        leading_rest_beats: float = 0.0) -> Dictionary:
+    return _binding.arm(facts,serial,allocate_source.bind(false,leading_rest_beats),
+        reject_candidate,cancel_arm,opening,start_world)
 
 ## Append the take the musical timeline placed at `start_world`. Python
 ## chose that place after all ink still ahead; unseen leftovers go first.
@@ -459,8 +371,7 @@ func place_timeline_take(facts: StreamGeometry, opening: float,
     var leading_rest: float = clampf(start_world-header-before-
         Admission.REST_GAP_BEATS,0.0,count_in_beats)
     timeline_placement = true
-    var admitted: Dictionary = arm_take(facts,facts.world,opening,right,
-        header,start_world,false,0.0,true,false,
+    var admitted: Dictionary = arm_take(facts,opening,start_world,
         leading_rest if leading_rest >= .5 else 0.0)
     timeline_placement = false
     return admitted

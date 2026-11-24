@@ -13,7 +13,7 @@ from .playback_facts import PlaybackRuntimeFacts
 from enum import Enum
 import math
 
-from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
+from .musical_scheduler import SCHEDULER
 from .playback_transitions import CountInPlan, PlaybackTransition
 
 
@@ -311,13 +311,6 @@ class PlaybackCoordinator:
                 and installed.get("hand") == source.hand
                 and abs(float(installed.get("from_beat", -1.0)) - float(from_beat)) < 1e-7)
 
-    def _require_intent(self, facts: PlaybackRuntimeFacts, intent_id: str, attempt: int) -> PlaybackIntent:
-        intent = self.intent
-        if (intent is None or intent.intent_id != intent_id
-                or intent.attempt != attempt
-                or not self._valid_source(facts, intent)):
-            raise ValueError("Stale or cancelled playback intent")
-        return intent
 
     def authorize(self, facts: PlaybackRuntimeFacts, *, deadline: float,
                   world_origin: float, segment_id: str, commit: Callable,
@@ -495,7 +488,6 @@ class PlaybackCoordinator:
         times out. A client must query this state before rolling back ink.
         """
         intent = self.intent
-        receipt = self.receipt
         observed = self.observed_state(facts)
         return {
             "state": observed.value,

@@ -20,17 +20,6 @@ static func reader_level(raw: String) -> String:
     return raw.replace("-"," ").capitalize()
 
 
-static func reader_hand(raw: String) -> String:
-    match raw:
-        "right":
-            return "Right hand"
-        "left":
-            return "Left hand"
-        "both":
-            return "Both hands"
-        _:
-            return raw.capitalize()
-
 var picker: OptionButton
 var previous_button: Button
 var next_button: Button
@@ -67,37 +56,8 @@ func _ready() -> void:
     add_child(next_button)
     _present()
 
-func present_context(state: Dictionary, busy: bool) -> void:
-    _loaded = bool(state.get("loaded",false))
-    _current_fingerprint = str(state.get("piece_fingerprint",""))
-    _current = int(state.get("lesson_step",0))
-    if not _loaded:
-        entries.clear()
-        picker.clear()
-        _fingerprint = ""
-    present_busy(busy)
-
 func present_busy(busy: bool) -> void:
     _busy = busy
-    _present()
-
-func present_overview(values: Dictionary) -> void:
-    _fingerprint = str(values.get("piece_fingerprint",""))
-    entries = values.get("steps",[]).duplicate(true)
-    picker.clear()
-    for step in entries:
-        picker.add_item("%d/%d · measures %d–%d · %s · %s" % [
-            int(step.get("number",0)),entries.size(),
-            int(step.get("first_bar",1)),int(step.get("last_bar",1)),
-            reader_hand(str(step.get("hand",""))),
-            reader_level(str(step.get("stage_label",step.get("level",""))))])
-        var available: bool = bool(step.get("available",true))
-        picker.set_item_disabled(picker.item_count - 1,not available)
-        picker.set_item_tooltip(picker.item_count - 1,
-            ("Not available yet" if not available
-             else "%s · %s · %s" % [str(step.get("stage_family","Practice")),
-                 str(step.get("stage_label",step.get("level",""))),
-                 str(step.get("stage_change",""))]))
     _present()
 
 func _present() -> void:

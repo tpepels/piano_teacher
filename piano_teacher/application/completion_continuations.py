@@ -34,9 +34,6 @@ class TakeCompletion:
         and grading occur only after a completed take.
         Returns whether another same-tick transition must be queued.
         """
-        self.transport.record_take_end(
-            at=self.transport.run_at + duration,
-            bpm=self.lesson.plan.bpm)
         completed = self.grading.grade(phrase, ending, now)
         result = completed.assessed.result
         self.notices.feedback = completed.assessed.feedback

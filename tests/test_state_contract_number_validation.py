@@ -18,8 +18,7 @@ def _state():
 
 
 @pytest.mark.parametrize("key", [
-    "bpm", "clock_beat", "visual_scroll_beat",
-    "visual_target_beat", "clock_sampled_at_ms",
+    "bpm", "clock_beat", "clock_sampled_at_ms",
 ])
 @pytest.mark.parametrize("value", [nan, inf, -inf])
 def test_nonfinite_top_level_time_and_rate_are_rejected(key, value):
@@ -30,7 +29,7 @@ def test_nonfinite_top_level_time_and_rate_are_rejected(key, value):
 
 def test_finite_numeric_ports_remain_valid():
     state = _state()
-    state.update(bpm=20, clock_beat=-4.0, visual_scroll_beat=0.0)
+    state.update(bpm=20, clock_beat=-4.0)
     assert problems(state) == []
 
 

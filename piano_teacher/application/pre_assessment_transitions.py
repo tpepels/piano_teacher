@@ -55,6 +55,5 @@ class PreAssessmentTransitions:
                 self.course.begin_learn(from_beat=self.transport.pending_rewind, recovery=True,
                     exposure=self.take.pending.decision.next_exposure)
             else:
-                self.continuation.continue_measured(
-                    self.transport.next_at, from_beat=self.transport.pending_rewind)
+                self.continuation.continue_at(from_beat=self.transport.pending_rewind)
         return decision.consumed, followup

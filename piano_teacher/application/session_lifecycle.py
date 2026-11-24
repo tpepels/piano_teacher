@@ -7,7 +7,6 @@ lesson or grades the recorder.
 """
 from __future__ import annotations
 
-from ..lesson_settings import SETTINGS
 
 
 class SessionLifecycle:
@@ -55,8 +54,7 @@ class SessionLifecycle:
         # Precompiled successors remain valid only for their source identity.
         self.score.stop_successor()
         self.lesson.stop_guided()
-        self.transport.reset_for_stop(
-            rewind_seconds=SETTINGS.feedback_seconds)
+        self.transport.reset_for_stop()
         self.take.reset_for_stop()
         self.midi_input.reset_live_input()
         self.listen.cancel()

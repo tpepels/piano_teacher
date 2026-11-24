@@ -23,7 +23,6 @@ var play_from_beat := 0.0
 var count_in_beats := 0.0
 var visual_scroll_beat := 0.0
 var practice_timeline: Dictionary = {}
-var practice_preparation: Dictionary = {}
 var practice_contract_error := ""
 var active_hand := "both"
 var bpm := 60.0
@@ -47,7 +46,6 @@ func clear_score() -> bool:
     notice = "Waiting for /score/model"
     visual_scroll_beat = 0.0
     practice_timeline.clear()
-    practice_preparation.clear()
     practice_contract_error = ""
     queue_redraw()
     return true
@@ -59,7 +57,6 @@ func load_score(candidate: Dictionary) -> bool:
         return false
     practice_timeline = candidate.get("practice_timeline",{}).duplicate(true)
     density_locked = false
-    practice_preparation.clear()
     practice_contract_error = ""
     notice = ""
     queue_redraw()
@@ -141,14 +138,11 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
     var next_visual: float = visual_beat if is_finite(visual_beat) else transport_beat + float(state.get("play_from_beat", 0.0))
     var timed_practice: bool = str(state.get("mode","")) == "practice" and \
         str(state.get("kind","")) != "perform"
-    var next_preparation: Dictionary = state["practice_preparation"].duplicate(true) if state.get("practice_preparation") is Dictionary else {}
     var contract_error := ""
     if timed_practice:
         contract_error = _practice_timeline_error()
         if contract_error.is_empty() and state.get("practice_timeline",practice_timeline) != practice_timeline:
             contract_error = "Practice timeline differs from the loaded score"
-        elif contract_error.is_empty() and absf(float(state.get("visual_gap_beats",practice_timeline["gap"]["duration_beats"]))-float(practice_timeline["gap"]["duration_beats"]))>.00001:
-            contract_error = "Practice pause differs from its engraved measure"
     var next_from: float = float(state.get("play_from_beat", 0.0))
     var next_count: float = maxf(0.0, float(state.get("count_in_beats", 0.0)))
     var next_hand: String = str(state.get("hand", "both"))
@@ -156,11 +150,11 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
     var next_transport: int = int(state.get("transport_id", -1))
     var next_running: bool = bool(state.get("running", false))
     var next_paused: bool = bool(state.get("paused", false))
-    if next_running or next_paused or absf(float(state.get("visual_scroll_speed",0.0))) > .000001:
+    if next_running or next_paused:
         density_locked = true
     if (absf(clock_beat-next_clock) > .00001 or
         absf(visual_scroll_beat-next_visual) > .00001 or
-        practice_preparation != next_preparation or practice_contract_error != contract_error or
+        practice_contract_error != contract_error or
         absf(play_from_beat-next_from) > .00001 or
         absf(count_in_beats-next_count) > .00001 or
         active_hand != next_hand or absf(bpm-next_bpm) > .001 or
@@ -168,7 +162,6 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
         paused != next_paused):
         clock_beat = next_clock
         visual_scroll_beat = next_visual
-        practice_preparation = next_preparation
         practice_contract_error = contract_error
         play_from_beat = next_from
         count_in_beats = next_count

@@ -359,13 +359,9 @@ func _stream_header_beats(opening: float) -> float:
     return (_first_source_header_spaces() if opening <= .0001 else 1.6)* \
         staff_gap()/maxf(1.0,timeline.pixels_per_beat)
 
-func short_rest_geometry() -> Dictionary:
-    var geometry: Dictionary = _stream_controller.rest_geometry(
-        float(practice_timeline.get("gap",{}).get("duration_beats",0.0)),
-        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
-        _stream_header_beats(0.0))
-    geometry["ink_ahead_beats"] = ink_ahead_beats()
-    return geometry
+## Facts sent with every command that may start a run of timed music.
+func placement_facts() -> Dictionary:
+    return {"ink_ahead_beats":ink_ahead_beats()}
 
 ## Beats of printed ink still ahead of the playhead that a new take must
 ## follow (Python starts the next run's count-in after it).
@@ -405,9 +401,6 @@ func unscored_take_status() -> String:
 
 func bound_segment_id() -> String:
     return _stream_controller.bound_segment()
-
-func owns_authorized_segment(segment_id: String) -> bool:
-    return _stream_controller.owns_authorized_segment(segment_id)
 
 func has_armed_reservation() -> bool:
     return _stream_controller.has_armed_reservation()

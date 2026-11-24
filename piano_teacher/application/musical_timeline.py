@@ -261,25 +261,7 @@ class MusicalTimeline:
             return segment.world_end + (m - segment.end_at) * segment.end_bpm / 60.0
         return segment.world_start + segment.beat_at(m - segment.start_at)
 
-    def musical_at_world(self, world: float) -> float | None:
-        """Musical seconds at which the timeline reaches `world`."""
-        if not self.segments:
-            return None
-        first = self.segments[0]
-        if world <= first.world_start:
-            return first.start_at
-        chosen = first
-        for segment in self.segments:
-            if segment.world_start > world:
-                break
-            chosen = segment
-        if world >= chosen.world_end and chosen is self.segments[-1]:
-            return chosen.end_at + (world - chosen.world_end) * 60.0 / chosen.end_bpm
-        return chosen.start_at + chosen.seconds_at(world - chosen.world_start)
 
-    def time_at(self, world: float) -> float | None:
-        m = self.musical_at_world(world)
-        return None if m is None else self.wall(m)
 
     def last_take(self) -> TimelineSegment | None:
         return next((s for s in reversed(self.segments) if s.kind == "take"), None)
@@ -314,12 +296,6 @@ class MusicalTimeline:
             mode=take.mode, source_from_beat=take.source_from_beat,
             rest_after_beats=take.rest_after_beats))
 
-    def planned_count_in_start(self) -> float | None:
-        """Musical seconds of the next count-in by bar arithmetic alone."""
-        if not self.segments or self.segments[-1].kind != "take":
-            return None
-        last = self.segments[-1]
-        return last.end_at + last.rest_after_beats * 60.0 / last.end_bpm
 
     def continue_after_take(self, take: TakeSpec, *, now: float,
                             bar_beats: float, meter: tuple[int, int],
