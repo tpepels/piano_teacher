@@ -1,7 +1,6 @@
 """Imported MIDI remains the music the player opened, including repairs."""
 from pathlib import Path
 import shutil
-import time
 
 import mido
 import pytest
@@ -182,45 +181,3 @@ def test_authored_meter_change_survives_source_selection_and_native_engraving(pr
     assert state["count_in_meter"] == [4,4] and state["count_in_beats"] == 4
 
 
-def test_preloaded_score_stays_bound_to_its_source_after_opening_another_piece(practice_session):
-    from piano_teacher.inprocess import INVALID
-    from session_inputs import write_midi
-    import json
-
-    session = practice_session(bars=2)
-    session.finish_listen()
-    session.finish_free()
-    before = session.ready_score()
-
-    def next_score():
-        deadline = time.monotonic()+8
-        while time.monotonic() < deadline:
-            prepared = session.ask("score.next_stage")
-            if prepared["status"] != "preparing":
-                assert prepared["status"] == "ready", prepared
-                return prepared
-            time.sleep(.005)
-        raise AssertionError("Real next-stage notation did not prepare")
-
-    first = next_score()
-    assert first["hand"] == "left" and first["step_number"] == 2
-    assert first["layout"]["attack_map"]
-    assert all(note["hand"] == "left" for note in first["model"]["notes"])
-    assert session.snapshot()["hand"] == before["hand"]
-    assert session.snapshot()["transport_id"] == before["transport_id"]
-    assert session.ask("score.stage_ready", stage_key=first["stage_key"],
-                       revision=first["revision"])["accepted"]
-    second_path = write_midi(session.music/"new.mid", bars=2, bpm=100)
-    session.ask("library.open", id=second_path.name)
-    session.finish_listen()
-    session.finish_free()
-    session.ready_score()
-    status, _ = session.commands.request("score.stage_ready", json.dumps({
-        "stage_key": first["stage_key"], "revision": first["revision"]}))
-    assert status == INVALID
-    assert not session.ask("score.stage_failed", fingerprint=first["fingerprint"],
-                           step_number=first["step_number"], revision=first["revision"],
-                           error="Late failure from the previous piece")["accepted"]
-    second = next_score()
-    assert second["fingerprint"] != first["fingerprint"]
-    assert second["fingerprint"] == session.ask("learning.status")["current_fingerprint"]

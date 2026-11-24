@@ -16,6 +16,8 @@ class SourceIdentity:
     source: str | None = None
     fingerprint: str = ""
     revision: int = 0
+    # What the published revision draws (recorded by the exposure install).
+    drawn: tuple | None = None
 
     def install(self, *, plan: LearningPlan, source: str, fingerprint: str) -> None:
         self.plan = plan
@@ -27,6 +29,14 @@ class SourceIdentity:
 
     def advance_revision(self) -> None:
         self.revision += 1
+        self.drawn = None
 
     def publish_revision(self, revision: int) -> None:
+        # A newly published revision has not been described yet; the
+        # exposure that published it records what it draws (record_drawn).
         self.revision = revision
+        self.drawn = None
+
+    def record_drawn(self, identity: tuple) -> None:
+        """What the current revision draws (see Score.displayed_score)."""
+        self.drawn = identity

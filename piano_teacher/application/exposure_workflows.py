@@ -121,7 +121,7 @@ class ExposureWorkflows:
         selected_plan = self.lesson.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
-        shown = self.score.displayed_score()
+        shown = self.lesson.drawn_score
         effect = (None if exposure is not None
                   else self.lesson.manual_effect("practice", effect=effect))
         selected = exposure or self.lesson.install_command(effect)
@@ -141,7 +141,7 @@ class ExposureWorkflows:
         selected_plan = self.lesson.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
-        shown = self.score.displayed_score()
+        shown = self.lesson.drawn_score
         self.lesson.install_command(
             self.lesson.manual_effect("listen", effect=effect))
         self.install(prepare_listen(
@@ -172,6 +172,9 @@ class ExposureWorkflows:
             self.guided.install(prepared, reason=action_reason)
         else:
             self.timed.install(prepared, reason=action_reason)
+        # The installed exposure now draws exactly this; a later exposure
+        # with the same identity keeps the revision (no clear/re-engrave).
+        self.lesson.record_drawn(self.score.displayed_score())
         self.notices.publish(prepared.feedback, prepared.next_action)
         if isinstance(prepared, ListenPreparation):
             self.listen.prepare(prepared.selection)

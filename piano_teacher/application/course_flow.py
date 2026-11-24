@@ -108,7 +108,7 @@ class CourseFlow:
         if entry is not None:
             self.flow_execute(entry,reason=reason)
             return
-        shown = self.exposure_workflows.score.displayed_score()
+        shown = self.lesson.drawn_score
         selected = exposure or self.lesson.install_command(self.lesson.manual_effect(
             "learn",from_beat=from_beat,effect=effect))
         # Unchanged notes keep their revision: the drawn score stays (no

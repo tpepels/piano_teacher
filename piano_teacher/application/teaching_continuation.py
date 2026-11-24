@@ -4,8 +4,6 @@ This collaborator owns mechanical continuation. It never calls a generator,
 LearningPlan navigation, or the engine; mode/session owners execute its effects.
 """
 from dataclasses import dataclass
-from ..teaching_course import manual_progress
-from .score_artifacts import ScoreSelection
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,20 +189,12 @@ class TeachingContinuation:
 
     def choose_ahead(self, plan, *, fingerprint: str, revision: int,
                      offset: int = 1, decided=None):
-        """Select an exact future source without changing the active cursor."""
-        if decided is not None and offset == 1:
-            return decided
-        number = plan.lesson_step_number + offset
-        if number > len(plan.lesson_steps):
-            return None
-        future = manual_progress(
-            plan.course_state(),"select_step",number=number)
-        return ScoreSelection(
-            piece=future.piece,phrase=future.stage.variant.phrase,
-            hand=future.hand,stage_key=future.key,revision=revision+offset,
-            fingerprint=fingerprint,
-            transformed_rhythm=future.stage.transformed_rhythm,
-            display_name=str(future.stage.display_name or "")),number
+        """No next-step score is pre-engraved: Practice Flow enters every new
+        window or hand through Listen -> Free, never directly in Tempo, so a
+        prepared Tempo score would never be used. (Its predicted revision
+        number could also collide with a real one now that unchanged notes
+        keep their revision.)"""
+        return decided if decided is not None and offset == 1 else None
 
     @staticmethod
     def stage_label(step, display_name: str = "") -> str:

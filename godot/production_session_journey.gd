@@ -10,6 +10,7 @@ var started_ms := 0
 var phase_ms := 0
 var phase := "startup"
 var initial_revision := -1
+var initial_stage_key := ""
 var practice_requested := false
 var initial_transport := -1
 var restarted_transport := -1
@@ -145,6 +146,7 @@ func _process(_delta: float) -> bool:
                     practice_requested = true
                 return false
             initial_revision = int(state["revision"])
+            initial_stage_key = str(state.get("stage_key",""))
             if not bool(state.get("running",false)):
                 # An automatically scheduled take shows Pause while it is
                 # admitted; press Play only when the projected action is Play.
@@ -305,8 +307,11 @@ func _process(_delta: float) -> bool:
         "listen_load":
             if str(state.get("mode","")) != "listen" or not _ready_score():
                 return false
-            if int(state.get("revision",-1)) <= initial_revision:
-                _fail("Listen reused stale source revision")
+            # The revision identifies the drawn notes: Listen of the same
+            # window keeps it (no clear/re-engrave); it must be this stage.
+            if int(state.get("revision",-1)) < initial_revision or \
+                    str(state.get("stage_key","")) != initial_stage_key:
+                _fail("Listen is not on the practised window's score")
                 return true
             # A newly engraved Listen score can be ready before synthesis,
             # download, WAV decoding, and the audio-ready handshake complete.

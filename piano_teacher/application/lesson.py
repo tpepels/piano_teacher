@@ -47,6 +47,14 @@ class Lesson:
     def publish_revision(self, *args, **kwargs):
         return self._source.publish_revision(*args, **kwargs)
 
+    def record_drawn(self, identity: tuple) -> None:
+        self._source.record_drawn(identity)
+
+    @property
+    def drawn_score(self) -> tuple | None:
+        """What the published revision draws, as recorded when installed."""
+        return self._source.drawn
+
     def replace_plan(self, *args, **kwargs):
         return self._source.replace_plan(*args, **kwargs)
 
