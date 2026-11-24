@@ -69,11 +69,8 @@ func _process(_delta: float) -> bool:
             "flow_world":app.score_flow.project(Time.get_ticks_msec()),
             "world_sample":timeline.last_world,"world_ms":timeline.last_ms,
             "renderer_world":renderer.stream_world_beat,
-            "reservation_current":gateway.current,
-            "reservation_problem":gateway.last_problem(),
-            "reserved_pending":gateway.reserve_request.is_pending(),
-            "present_pending":gateway.present_request.is_pending(),
-            "prepared_destination":app.score_runway.has_prepared_destination(state)
+            "placed_segment":gateway.placed_segment,
+            "reservation_problem":gateway.last_problem()
         }))
         _fail("Production UI timed out phase=%s error=%s pending=%s" % [
             str(state.get("phase","missing")),
@@ -242,27 +239,13 @@ func _process(_delta: float) -> bool:
                 return true
         initial_transport = int(app.current_state().get("transport_id",-1))
         var original_survived := false
-        var new_ink_offscreen := true
         # The authorized take owns the original immutable source position.
         # No speculative READY copy is promoted or silently repositioned.
         for item in renderer.diagnostic_stream_snapshot():
             if int(item["serial"]) == ready_pass_serial:
                 original_survived = is_equal_approx(
                     float(item["world_origin"]),ready_world_origin)
-            elif int(item.get("take_owner",item["serial"])) != ready_take_owner and \
-                    str(item.get("kind","source")) == "source":
-                # Automatic successors can already be prepared during the
-                # first graded frame, but NEVER inside the visible viewport.
-                var physical: Dictionary = renderer.transport_preflight_facts(
-                    renderer.stream_world_beat,float(item["source_floor"]))
-                var leading: float = float(physical["header"])
-                var onset: float = float(item["world_origin"])+ \
-                    float(item["source_floor"])
-                var left: float = renderer.size.x*ScoreView.PLAYHEAD_FRACTION + \
-                    (onset-renderer.stream_world_beat-leading) * \
-                    renderer.timeline.pixels_per_beat
-                new_ink_offscreen = new_ink_offscreen and left > renderer.size.x
-        if not original_survived or not new_ink_offscreen:
+        if not original_survived:
             var diagnostic: Array = []
             for item in renderer.diagnostic_stream_snapshot():
                 diagnostic.append({
@@ -281,7 +264,6 @@ func _process(_delta: float) -> bool:
                 "world_beat":renderer.stream_world_beat,
                 "state_phase":app.current_state().get("phase"),
                 "original_survived":original_survived,
-                "successors_offscreen":new_ink_offscreen,
                 "passes":diagnostic
             }))
             _fail("Play shifted its existing world origin or admitted notes onscreen")

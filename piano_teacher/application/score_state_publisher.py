@@ -23,13 +23,6 @@ class ScoreProjectionFacts:
     paused: bool
     awaiting_score: bool
     bpm: float
-    presentation_bpm: float
-    run_at: float
-    play_from_beat: float
-    announced: tuple | None
-    announced_deadline: float | None
-    announcement_serial: int
-    scheduled_start: tuple | None
     timeline: dict
     next_count_in_beats: float
     next_count_in_meter: tuple[int, int]

@@ -1,26 +1,19 @@
 """Pure completion routing for post-performance practice decisions.
 
-A partial recovery never grants mastery. Explicit performance and section
-review routes take precedence over full-passage practice.
-No transport clocks, persistence, renderers or live engine state are accessed.
+A completed take of the final test (perform) is reviewed; every other
+take is a full passage of the selected window. No transport clocks,
+persistence, renderers or live engine state are accessed.
 """
 from __future__ import annotations
 
 from typing import Literal
 from dataclasses import dataclass
 
-CompletionRoute = Literal["perform", "section_review", "partial_recovery", "full_passage"]
+CompletionRoute = Literal["perform", "full_passage"]
 
 
-def completion_route(mode: str, review_end_beat: float | None,
-                     play_from_beat: float, *, full_from_beat: float = 0.0) -> CompletionRoute:
-    if mode == "perform":
-        return "perform"
-    if review_end_beat is not None:
-        return "section_review"
-    if play_from_beat > 1e-6 and abs(play_from_beat-full_from_beat) > 1e-6:
-        return "partial_recovery"
-    return "full_passage"
+def completion_route(mode: str) -> CompletionRoute:
+    return "perform" if mode == "perform" else "full_passage"
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,10 +24,4 @@ class CompletionEffect:
 
 def completion_effect(route: CompletionRoute, decision) -> CompletionEffect:
     """Dispatch one selected teaching consequence; never select another."""
-    if route == "partial_recovery":
-        if decision.continuation in ("stop","pause"):
-            return CompletionEffect("stop_review")
-        exposure = decision.next_exposure
-        return CompletionEffect("exposure" if exposure.mode == "learn"
-                                else "partial_recovery",exposure=exposure)
     return CompletionEffect(route)

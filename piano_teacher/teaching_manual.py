@@ -7,7 +7,6 @@ database, clock or renderer. Free always covers the whole selected window
 from dataclasses import dataclass
 from .teaching_course import manual_progress
 from .course_navigation import choose_source_opening
-from .measure_grid import phrase_grid
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,19 +45,6 @@ def choose_manual(event, state):
                 c = manual_progress(c, "hand", hand="both")
             c = c.with_progress(bpm=state.progress.bpm)
         mode = "perform"
-    elif action == "seek":
-        if not facts.paused:
-            raise ValueError("Pause before choosing a source bar")
-        phrase = c.stage.variant.phrase
-        if type(event.bar) is not int or not phrase.first_bar <= event.bar <= phrase.last_bar:
-            raise ValueError("Choose a whole bar number inside the active passage")
-        start = phrase_grid(phrase,c.piece.bar_boundaries)[event.bar-phrase.first_bar]
-        # A source-bar seek from Perform starts a graded *Practice* passage.
-        # The score-ready acknowledgement consumes this same exposure, so
-        # retaining mode="perform" here would silently re-enter Perform and
-        # award a performance review for a partial practice take.
-        mode = "learn" if route.mode == "learn" else "practice"
-        continuation = "guided" if mode == "learn" else "continue"
     elif action in ("learn", "learn_retry", "course_stage"):
         mode, continuation = "learn", "guided"
         start = event.from_beat if event.from_beat is not None else 0.

@@ -6,7 +6,6 @@ generator selects stages and tempo. LessonNavigation applies seek, open
 at a measure and stage/tempo changes, and answers the lesson read ports.
 """
 from __future__ import annotations
-from ..measure_grid import phrase_grid
 from ..remediation import RemedialAssignment
 from . import practice_flow
 from .exposure_preparation import prepare_guided
@@ -143,34 +142,6 @@ class LessonNavigation:
         return self.learner_progress.snapshot(
             self.lesson.plan, fingerprint=self.lesson.fingerprint, mode=self.transport.mode,
             guided_range=self.lesson.guided_beat_range, course_guided=self.lesson.course_guided)
-
-    def seek_grid(self) -> tuple[float, ...] | None:
-        if (self.lesson.plan is None or self.transport.mode not in ("learn", "practice", "perform")
-                or not self.lesson.plan.piece.bar_boundaries):
-            return None
-        try:
-            return phrase_grid(self.lesson.plan.active_phrase, self.lesson.plan.piece.bar_boundaries)
-        except ValueError:
-            return None
-
-    def seek(self, bar, *, effect=None):
-        # A seek must never guess a measure from synthetic/fallback bar
-        # numbering. Validate original source boundaries *before* preparing
-        # any command or cancelling a paused transport.
-        if self.seek_grid() is None:
-            raise ValueError("Seeking requires the original source measure grid")
-        effect = self.lesson.manual_effect(
-            "seek",values={"bar":bar},effect=effect)
-        selected = self.lesson.install_command(effect)
-        if selected.mode == "learn":
-            self.course.begin_learn(from_beat=selected.from_beat,exposure=selected,reason="seek")
-        else:
-            self.exposure_workflows.prepare_practice(exposure=selected,reason="seek")
-            self.transport.prepare_rewind(selected.from_beat)
-            self.take.prepare_section(start=selected.from_beat,
-                end=self.lesson.plan.active_phrase.end-self.lesson.plan.active_phrase.start,
-                first_bar=bar,last_bar=self.lesson.plan.active_phrase.last_bar)
-            self.notices.next_action = f"Get ready to play from bar {bar} at {selected.bpm} BPM."
 
     def open_selected_measure(self, kwargs: dict, *, effect=None):
         effect = self.lesson.manual_effect(

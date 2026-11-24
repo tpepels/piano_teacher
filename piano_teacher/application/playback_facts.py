@@ -65,20 +65,6 @@ class StartedTake:
 
 
 @dataclass(frozen=True, slots=True)
-class PreparationRequest:
-    source_model: dict
-    target: float
-    now: float
-    from_visual: float
-    reverse_seconds: float
-    bpm: float
-    horizon_beats: float
-    reading_lead_included: bool = False
-    announce: bool = True
-    short_deadline: float | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class ListenActivation:
     requested_count_in: float | None = None
     from_beat: float = 0.0
@@ -123,8 +109,6 @@ class FullPassageFacts:
 @dataclass(frozen=True, slots=True)
 class PassageCompletion:
     advance_feedback: bool = False
-    force_early: bool = False
-    update_clock: bool = False
     next_action: str | None = None
 
 
@@ -138,7 +122,6 @@ class PassageRuntimeFacts:
 @dataclass(frozen=True, slots=True)
 class PassageFinishPlan:
     action: str  # "stop" | "ready" | "announce"
-    deadline: float | None = None
     next_action: str | None = None
 
 
@@ -151,13 +134,6 @@ class ScheduledContinuation:
 class AppliedContinuation:
     start: ScheduledContinuation | None = None
     feedback: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class PreloadedFeedbackSource:
-    duration_beats: float
-    bpm: float
-    tempo: Any
 
 
 @dataclass(frozen=True, slots=True)

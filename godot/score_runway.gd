@@ -1,91 +1,28 @@
 extends Node
-## Prepare the exact next Coda/Fukuda score while the current one scrolls.
-## Only a fully retained and engine-acknowledged score can be promoted. Manual
-## navigation and unsuccessful attempts preserve their existing behavior.
-const Request := preload("res://inprocess_request.gd")
+## Outgoing score layers. When a new score revision replaces the shown one,
+## the old renderer keeps its already-visible ink scrolling on the same
+## world until its last strip leaves; the new renderer checks its ink
+## against every still-live predecessor layer.
 const NativeView := preload("res://notation/native/view.gd")
-const NativeAssets := preload("res://native_score_assets.gd")
 const ScoreSceneController := preload("res://score_scene_controller.gd")
-const StepTimeline := preload("res://score_step_timeline.gd")
-const MAX_PRELOAD_FAILURES := 3
 signal renderer_promoted(new_renderer)
-signal preload_problem(message: String)
 
 var stage
 var score_session
 var _scene_owner
-var _fetch: Node
-var _ack: Node
-var _report: Node
-var _future
 # Every outgoing score owns its retained ink until its last clip leaves.
 # Two quick lesson changes may overlap: there is no single-tail shortcut.
 var _tails: Array = []
-# During an unprepared manual revision, this outgoing renderer temporarily
-# owns the visible staff and playhead until replacement ink is published.
+# During a revision change, this outgoing renderer temporarily owns the
+# visible staff and playhead until replacement ink is published.
 var _manual_staff_tail
-var _bundle: Dictionary = {}
-var _layout: Dictionary = {}
-var _source_fingerprint := ""
-var _source_revision := -1
-var _source_step := -1
-var _next_poll_ms := 0
-var _acknowledged := false
-var _ack_waiting := false
-var _failure := ""
-var _reported_failure := ""
-var _native_failures := 0
-var _terminal_preload_failure := false
-var _report_accepted := false
-var _visual_beat := 0.0
-var _future_intro_offset := 0.0
 
-func configure(host: Node, practice_stage, session, bus: Node) -> void:
+func configure(_host: Node, practice_stage, session, _bus: Node) -> void:
     stage = practice_stage
     score_session = session
     _scene_owner = ScoreSceneController.new(stage,score_session)
     _scene_owner.renderer_promoted.connect(
         func(view): renderer_promoted.emit(view))
-    _fetch = Request.new()
-    _fetch.timeout = 90.0
-    host.add_child(_fetch)
-    _fetch.configure(bus)
-    _fetch.request_completed.connect(_on_future_reply)
-    _ack = Request.new()
-    _ack.timeout = 15.0
-    host.add_child(_ack)
-    _ack.configure(bus)
-    _ack.request_completed.connect(_on_ack_reply)
-    _report = Request.new()
-    _report.timeout = 15.0
-    host.add_child(_report)
-    _report.configure(bus)
-    _report.request_completed.connect(_on_report_reply)
-
-func _discard() -> void:
-    if stage != null and stage.renderer != null and is_instance_valid(stage.renderer):
-        stage.renderer.runway_cutoff_beat = INF
-    # Preload invalidation never retires music already moving offscreen.
-    _fetch.cancel_request()
-    _ack.cancel_request()
-    _report.cancel_request()
-    if _future != null and is_instance_valid(_future):
-        # A preloader contains only an unadmitted, reconstructible asset.
-        # Musical source plans are retained by the authoritative journal,
-        # never copied into a second in-memory ScoreRunway history.
-        _future.queue_free()
-    _future = null
-    _bundle.clear()
-    _layout.clear()
-    _acknowledged = false
-    _ack_waiting = false
-    _next_poll_ms = 0
-    _failure = ""
-    _reported_failure = ""
-    _future_intro_offset = 0.0
-    _native_failures = 0
-    _terminal_preload_failure = false
-    _report_accepted = false
 
 func _link_existing_layers(incoming) -> void:
     # All renderer layers live on one visual world axis. Queue ownership
@@ -100,7 +37,6 @@ func _link_existing_layers(incoming) -> void:
         if previous != incoming and previous is NativeView and \
                 is_instance_valid(previous):
             incoming.register_stream_predecessor(previous)
-
 
 func _retain_tail(old, keep_staff: bool = false) -> void:
     if old == null or not is_instance_valid(old) or _tails.has(old):
@@ -125,7 +61,6 @@ func _retain_tail(old, keep_staff: bool = false) -> void:
     if keep_staff:
         _manual_staff_tail = old
 
-
 func active_revision_published(_revision: int) -> void:
     # Called by ScoreAssetSession only once the replacement has completed
     # authentic engraving. This is the handoff of staff/cursor ownership.
@@ -136,7 +71,6 @@ func active_revision_published(_revision: int) -> void:
         _manual_staff_tail.set_transport_overlay_enabled(false)
         _manual_staff_tail.queue_redraw()
     _manual_staff_tail = null
-
 
 func _advance_tails(global_beat: float) -> void:
     # The renderer layers are ONE ordered FIFO of successive score sources.
@@ -156,239 +90,8 @@ func _advance_tails(global_beat: float) -> void:
         first.queue_free()
         _tails.pop_front()
 
-
-func _on_future_reply(code: int, body: PackedByteArray) -> void:
-    if code != 0:
-        _register_preload_failure(
-            "Next lesson preloading request failed (status %d)" % code)
-        return
-    var value: Variant = JSON.parse_string(body.get_string_from_utf8())
-    if not value is Dictionary:
-        _register_preload_failure("Invalid future score response")
-        return
-    if str(value.get("status","")) == "preparing":
-        _next_poll_ms = Time.get_ticks_msec() + 600
-        return
-    if str(value.get("status","")) == "none":
-        _next_poll_ms = Time.get_ticks_msec() + 3000
-        return
-    if str(value.get("status","")) != "ready":
-        _failure = str(value.get("error","Next score cannot be engraved"))
-        if str(value.get("status","")) == "error":
-            _terminal_preload_failure = true
-            _report_accepted = true # The Python preloader already owns this error.
-            if _failure != _reported_failure:
-                _reported_failure = _failure
-                preload_problem.emit("Next lesson score failed: " + _failure)
-        else:
-            _register_preload_failure(_failure)
-        return
-    if int(value.get("revision",-1)) != _source_revision + 1 or \
-            int(value.get("step_number",-1)) != _source_step + 1 or \
-            str(value.get("fingerprint","")) != _source_fingerprint:
-        return
-    # A future stage uses exactly the same source/semantic bundle check
-    # as the currently selected stage. The selected future stage_key is
-    # compared again at promotion, once the backend has installed it.
-    var problem: String = NativeAssets.bundle_error(value,{
-        "fingerprint":_source_fingerprint,"revision":_source_revision+1})
-    if not problem.is_empty():
-        _register_preload_failure(problem)
-        return
-    var layout_data: Dictionary = value["layout"]
-    var model_data: Dictionary = value["model"]
-    _future = NativeView.new()
-    # A future stage must use the same staff presentation and background
-    # as the active stage before its retained note ink is pre-engraved.
-    if is_instance_valid(stage.renderer):
-        _future.external_backdrop = stage.renderer.external_backdrop
-        # Use the NEXT stage's published hand, not the current stage's hand.
-        # Pre-engraving must already occupy the eventual single-staff lane.
-        _future.active_hand = str(value.get("hand","both"))
-    # Preserve the active learner's horizontal density setting across
-    # precompiled stages; retain native collision fitting if it needs more.
-    if is_instance_valid(stage.renderer):
-        _future.set_density(float(stage.renderer.configured_density))
-    _future.runway_overlay = true
-    _future.set_transport_overlay_enabled(false)
-    _future.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    stage.score_frame.add_child(_future)
-    # Retained score layers belong at the original notation z-order,
-    # underneath count-in, note feedback and practice controls.
-    stage.score_frame.move_child(_future,stage.renderer.get_index()+1)
-    _future.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    _future.modulate.a = 0.001
-    _future.visible = true
-    var installed: Dictionary = NativeAssets.install(_future,layout_data)
-    if not bool(installed.get("ok",false)) or not _future.load_score(model_data):
-        var message: String = str(installed.get("error",_future.failure_reason))
-        _future.queue_free()
-        _future = null
-        _register_preload_failure(message)
-        return
-    _warm_future_textures(_future)
-    _bundle = value
-    _layout = installed["layout"]
-    _future_intro_offset = StepTimeline.first_playable_beat(
-        model_data,str(value.get("hand","both")))
-    _native_failures = 0
-    _failure = ""
-    # The future stage's own notes and active hand are positioned on a
-    # local score axis; Main feeds it the global minus next-stage origin.
-    _future.present({
-        "running":true,"paused":false,"phase":"playing",
-        "play_from_beat":0.0,
-        "hand":str(value.get("hand","both"))},-50.0,-50.0)
-    _next_poll_ms = 0
-
-# Textures a prepared stage's ink draws, uploaded a few per frame while it
-# is still hidden: the first frame that showed a promoted stage otherwise
-# uploaded every template texture at once (67-148 ms inside the new stage's
-# count-in under the GL Compatibility renderer).
-const WARM_TEXTURES_PER_FRAME := 4
-const WARM_TEXTURE_SETS := ["note_textures","note_stem_textures",
-    "tie_textures","chord_textures","chord_heads_textures",
-    "chord_stem_textures","beam_textures","tuplet_textures","slur_textures"]
-
-func _warm_future_textures(view) -> void:
-    if view == null or not is_instance_valid(view) or view.get("glyphs") == null:
-        return
-    var pending: Array[Texture2D] = []
-    for set_name in WARM_TEXTURE_SETS:
-        var textures: Variant = view.glyphs.get(set_name)
-        if textures is Dictionary:
-            for texture in textures.values():
-                if texture is Texture2D:
-                    pending.append(texture)
-    if pending.is_empty():
-        return
-    var warm := Node2D.new()
-    warm.name = "TextureWarmup"
-    view.add_child(warm)
-    var batch: Array[Texture2D] = []
-    warm.draw.connect(func() -> void:
-        for texture in batch:
-            warm.draw_texture_rect(texture,Rect2(2,2,2,2),false,Color(1,1,1,0.004)))
-    while not pending.is_empty():
-        if not is_instance_valid(warm):
-            return
-        # Mutated in place: the draw callable captured this array.
-        batch.clear()
-        batch.append_array(pending.slice(0,WARM_TEXTURES_PER_FRAME))
-        pending = pending.slice(WARM_TEXTURES_PER_FRAME)
-        warm.queue_redraw()
-        await get_tree().process_frame
-    if is_instance_valid(warm):
-        warm.queue_free()
-
-func _on_ack_reply(code: int, body: PackedByteArray) -> void:
-    _ack_waiting = false
-    var value: Variant = JSON.parse_string(body.get_string_from_utf8())
-    _acknowledged = code == 0 and value is Dictionary and \
-            bool(value.get("accepted",false))
-    if not _acknowledged:
-        _register_preload_failure("Future score acknowledgement rejected")
-
-func _register_preload_failure(message: String) -> void:
-    _failure = message if not message.is_empty() else "Native next-step notation failed"
-    _native_failures += 1
-    var backoff_ms: int = 500 * (1 << mini(_native_failures - 1, 4))
-    _next_poll_ms = Time.get_ticks_msec() + backoff_ms
-    if _native_failures >= MAX_PRELOAD_FAILURES:
-        _terminal_preload_failure = true
-        if _failure != _reported_failure:
-            _reported_failure = _failure
-            preload_problem.emit("Next lesson score failed: " + _failure)
-        _report_if_needed(Time.get_ticks_msec())
-
-func _report_if_needed(now_ms: int) -> void:
-    if not _terminal_preload_failure or _report_accepted or \
-            _report.is_pending() or now_ms < _next_poll_ms:
-        return
-    if _report.request("score.stage_failed",{
-            "fingerprint":_source_fingerprint,
-            "step_number":_source_step+1,
-            "revision":_source_revision+1,
-            "error":_failure}) != OK:
-        _next_poll_ms = now_ms + 1000
-
-func _on_report_reply(code: int, body: PackedByteArray) -> void:
-    var value: Variant = JSON.parse_string(body.get_string_from_utf8())
-    # A valid rejection means the engine has already moved to a different
-    # source. That old failed score must not be reported repeatedly.
-    _report_accepted = code == 0 and value is Dictionary and \
-        value.has("accepted")
-    if not _report_accepted:
-        _next_poll_ms = Time.get_ticks_msec() + 1000
-
-func _request_if_needed(state: Dictionary, now_ms: int) -> void:
-    if _terminal_preload_failure:
-        _report_if_needed(now_ms)
-        return
-    if _future != null or _ack_waiting or now_ms < _next_poll_ms or \
-            _fetch.is_pending():
-        return
-    if str(state.get("mode","")) != "practice" or \
-            not score_session.is_ready() or \
-            int(state.get("lesson_step",0)) >= int(state.get("lesson_steps",0)):
-        return
-    if _fetch.request("score.next_stage") != OK:
-        _next_poll_ms = now_ms + 1000
-
-func _matches_prepared_identity(identity: Dictionary) -> bool:
-    # Both asset readiness and admission use this one exact source check.
-    # Revisions are local sequence numbers: Listen can independently select
-    # the same next revision/fingerprint as a different preloaded lesson.
-    if (_future == null or not is_instance_valid(_future) or
-            not _acknowledged or not _future.retained_ready() or
-            str(identity.get("mode","")) != "practice"):
-        return false
-    if (int(_bundle.get("revision",-1)) != int(identity.get("revision",-2))
-            or str(_bundle.get("fingerprint","")) != str(identity.get("fingerprint",""))
-            or str(_bundle.get("hand","")) != str(identity.get("hand",""))):
-        return false
-    # The authoritative state includes stage_key even before a timed
-    # playback intent exists. A matching ordinal is not sufficient:
-    # two course steps or saved sessions can share that number.
-    var key: String = str(identity.get("stage_key",""))
-    return not key.is_empty() and key == str(_bundle.get("stage_key",""))
-
-func prepared_renderer(intent: Dictionary):
-    # Every prepared admission supplies the canonical backend stage key.
-    if (str(intent.get("stage_key","")).is_empty() or
-            not _matches_prepared_identity(intent)):
-        return null
-    _link_existing_layers(_future)
-    return _future
-
-func owns_prepared_renderer(candidate) -> bool:
-    return _future != null and is_instance_valid(_future) and \
-        _future == candidate and _acknowledged
-
-
-func has_prepared_destination(state: Dictionary) -> bool:
-    if not bool(state.get("loaded",false)):
-        return false
-    var identity: Dictionary = {
-        "mode":str(state.get("mode","")),
-        "revision":int(state.get("revision",-1)),
-        "fingerprint":str(state.get("piece_fingerprint","")),
-        "hand":str(state.get("hand","")),
-        "stage_key":str(state.get("stage_key",""))}
-    var intent: Variant = state.get("playback_intent")
-    if intent is Dictionary:
-        # A stale intent cannot make another selected state look ready.
-        for field in ["mode","revision","fingerprint","hand","stage_key"]:
-            if intent.get(field) != identity[field]:
-                return false
-    return _matches_prepared_identity(identity)
-
 func preserve_unprepared_revision(state: Dictionary) -> bool:
-    if has_prepared_destination(state):
-        # Keep the old visible score until the new renderer is admitted.
-        return false
-    # Manual stage navigation, score reopening and other non-preloaded
-    # revisions still use the same forward-only stream. Swap the asset
+    # Every new revision uses the same forward-only stream. Swap the asset
     # destination BEFORE ScoreAssetSession.update_context() resets it.
     # Otherwise reset_assets() clears still-visible outgoing noteheads.
     if not bool(state.get("loaded",false)) or stage == null or \
@@ -416,79 +119,5 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
         _retain_tail(outgoing,true)
     return true
 
-
-func update_state(state: Dictionary, now_ms: int) -> void:
-    if has_prepared_destination(state):
-        return
-    var fingerprint: String = str(state.get("piece_fingerprint",""))
-    var revision: int = int(state.get("revision",-1))
-    var step: int = int(state.get("lesson_step",0))
-    if fingerprint != _source_fingerprint or revision != _source_revision or \
-            step != _source_step:
-        _discard()
-        _source_fingerprint = fingerprint
-        _source_revision = revision
-        _source_step = step
-    if not bool(state.get("loaded",false)):
-        return
-    _request_if_needed(state,now_ms)
-
 func present_frame(_state: Dictionary, global_beat: float) -> void:
-    _visual_beat = global_beat
     _advance_tails(global_beat)
-    # A future source is pre-ENGRAVED, but no source-local animation, ghost
-    # score, or second camera is permitted. Its source clip is positioned
-    # beyond the right edge once the engine authorizes promotion.
-    if _future == null or not is_instance_valid(_future):
-        return
-    _future.modulate.a = .001
-    if _future.retained_ready() and not _acknowledged and not _ack_waiting and \
-            not _terminal_preload_failure and \
-            Time.get_ticks_msec() >= _next_poll_ms:
-        # Preloading only proves compiled source availability. All physical
-        # clearance and the next absolute downbeat belong exclusively to
-        # ScoreAdmissionGateway + the backend MusicalScheduler.
-        _ack_waiting = _ack.request("score.stage_ready",{
-            "stage_key":_bundle["stage_key"],
-            "revision":_bundle["revision"]}) == OK
-
-
-
-func promote_reserved(state: Dictionary) -> bool:
-    if not has_prepared_destination(state):
-        return false
-    var new_renderer = _future
-    if not new_renderer.has_armed_reservation():
-        return false
-    var old = stage.renderer
-    _link_existing_layers(new_renderer)
-    if not _scene_owner.promote_admitted(old,new_renderer,state,_layout):
-        return false
-    _future = null
-    new_renderer.modulate.a = 1.0
-    new_renderer.runway_overlay = false
-    # The same retained source ink survives this promotion. Only the
-    # annotation overlay and ownership change; no camera transform resets.
-    if is_instance_valid(new_renderer.retained_annotations):
-        new_renderer.retained_annotations.queue_redraw()
-    new_renderer.runway_origin_beat = 0.0
-    new_renderer.runway_cutoff_beat = INF
-    new_renderer.set_transport_overlay_enabled(true)
-    new_renderer.mouse_filter = Control.MOUSE_FILTER_PASS
-    if old != null and is_instance_valid(old) and \
-            old.get_parent() == stage.score_frame:
-        stage.score_frame.move_child(new_renderer,old.get_index()+1)
-    if old != null and is_instance_valid(old):
-        _retain_tail(old)
-    _bundle.clear()
-    _layout.clear()
-    _future_intro_offset = 0.0
-    _acknowledged = false
-    _native_failures = 0
-    _terminal_preload_failure = false
-    _report_accepted = false
-    _source_revision = int(state.get("revision",-1))
-    _source_step = int(state.get("lesson_step",0))
-    _source_fingerprint = str(state.get("piece_fingerprint",""))
-    _next_poll_ms = Time.get_ticks_msec() + 500
-    return true

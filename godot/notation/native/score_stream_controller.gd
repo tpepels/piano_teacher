@@ -120,9 +120,6 @@ func has_take(owner_serial: int) -> bool:
 func bound_segment() -> String:
     return _binding.bound_segment()
 
-func has_armed_reservation() -> bool:
-    return _binding.has_armed_reservation()
-
 ## A peer can inspect immutable physical clearance facts, not this queue's
 ## live nodes, serials or rollback state.  This value is recomputed at
 ## preflight rather than retained across engraving/density changes.

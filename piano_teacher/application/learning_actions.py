@@ -30,8 +30,6 @@ class LearningActions:
             self.exposure_workflows.prepare_perform(
                 scope=str(kwargs.get("scope", "current")), effect=effect,
                 reason=action)
-        elif action == "seek":
-            self.navigation.seek(kwargs.get("bar"), effect=effect)
 
     def control_learning(self, action: str, kwargs: dict, *, effect=None) -> None:
         if action in ("learn", "learn_retry"):

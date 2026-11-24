@@ -61,7 +61,6 @@ class TickWorker:
         if self.lesson.plan is None or self.transport.paused:
             return 250
         if (self.transport.running
-                or self.transport.preparation_pending
                 or self.take.pending_result is not None
                 or self.transport.pending_rewind is not None
                 or self.transport.mode == "listen"):

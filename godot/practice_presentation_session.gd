@@ -149,16 +149,11 @@ func accept(state: Dictionary, request_midpoint_ms: int,
         # flow refuses to install it over already-authorized predecessor
         # epochs while the next source is still awaiting physical ACK.
         score_flow.sample_uncommitted(received_ms,_source_rate(state,beat))
-    var prepared_stage_waiting: bool = runway != null and \
-        runway.has_prepared_destination(state)
-    if runway != null and not prepared_stage_waiting:
+    if runway != null:
         runway.preserve_unprepared_revision(state)
     if demo_player != null and bool(state.get("loaded",false)):
         demo_player.synchronize(state,beat)
-    if not prepared_stage_waiting:
-        score_session.update_context(state,received_ms)
-    if runway != null:
-        runway.update_state(state,received_ms)
+    score_session.update_context(state,received_ms)
     if bool(state.get("loaded",false)) and practice_view.stage.renderer != null:
         var world: float = score_flow.project(received_ms)
         var current_renderer = practice_view.stage.renderer

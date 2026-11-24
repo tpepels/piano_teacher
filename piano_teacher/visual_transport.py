@@ -9,10 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 
-from .notation.practice_timeline import (
-    source_preparation_measure, UNLOADED_GAP_BEATS,
-)
-from .application.musical_scheduler import SCHEDULER, PassagePlan
+from .notation.practice_timeline import UNLOADED_GAP_BEATS
+from .application.musical_scheduler import SCHEDULER
 from .application.transport_commands import resume_timeline, resume_timing
 from .application.musical_timeline import MusicalTimeline
 
@@ -27,10 +25,6 @@ class VisualTransport:
 
     def finish_rewind(self) -> None:
         self.pending_rewind = None
-
-    def enter_preparation_phase(self, phase: str) -> None:
-        if self.practice_preparation is not None:
-            self.practice_preparation["phase"] = phase
 
     def install_timed_origin(self, *, from_beat: float, run_at: float,
                              gap_beats: float) -> None:
@@ -54,24 +48,12 @@ class VisualTransport:
     count_in_beats: float = 0.0
     count_in_bar_beats: float = 4.0
     count_in_meter: list[int] = field(default_factory=lambda: [4, 4])
-    next_at: float = 0.0
-    visual_offset_beats: float = 0.0
-    practice_preparation: dict | None = None
-    _preparation_pending: bool = False
-    _preparation_at: float = 0.0
+    # A take has settled and the next exposure follows it.
+    continuation_pending: bool = False
     visual_gap_beats: float = UNLOADED_GAP_BEATS
-    # The one announced automatic continuation: (source_from_beat, graded
-    # run_at, start BPM). Set when the engine schedules the next take of the
-    # same stage, published as an exact graphical playback intent, and started
-    # at exactly that run_at/BPM. Nothing adds a new lead or tempo decision.
-    announced_continuation: PassagePlan | None = None
     # Identity of the selected continuation. A new announcement is new ink;
     # a re-timed one keeps its admitted ink.
-    announce_serial: int = 0
-    _tempo_key: tuple | None = None
-    _tempo_epoch: float | None = None
     # Presentation schedule facts live with the one forward visual transport.
-    scheduled_start: tuple | None = None
     next_boundary_beat: float = 0.0
     # The declared musical timeline: every timed take is placed on it and
     # Godot draws and counts in from it.
@@ -86,82 +68,9 @@ class VisualTransport:
             raise ValueError("Invalid ink-ahead measurement")
         self.ink_ahead_beats = value
 
-    def bind_scheduled_start(
-        self, *, transport_id: int, from_beat: float, run_at: float,
-        stage_key: str, revision: int, serial: int | None = None,
-    ) -> None:
-        """Bind the accepted next strip to its actual transport and revision."""
-        self.scheduled_start = (
-            transport_id, from_beat, run_at, stage_key, revision, serial)
-
-    def clear_scheduled_start(self) -> None:
-        self.scheduled_start = None
-
     def advance_boundary(self, beat: float) -> None:
         """Install the next source checkpoint chosen by AttemptProgression."""
         self.next_boundary_beat = beat
-
-    @property
-    def tempo_epoch(self) -> float | None:
-        return self._tempo_epoch
-
-    def tempo_epoch_for(self, *, stage: str, bpm: float) -> float | None:
-        return self._tempo_epoch if self._tempo_key == (stage,float(bpm)) else None
-
-    def note_tempo(self, *, stage: str, bpm: float, now: float) -> None:
-        self._tempo_key,self._tempo_epoch = SCHEDULER.tempo_epoch(
-            stage=stage,bpm=bpm,now=now,
-            prior_key=self._tempo_key,prior_epoch=self._tempo_epoch)
-
-    @property
-    def preparation_pending(self) -> bool:
-        return self._preparation_pending
-
-    @property
-    def preparation_deadline(self) -> float:
-        """Only VisualTransport owns the pending rest/preparation epoch."""
-        return self._preparation_at
-
-
-    def finish_preparation_gate(self) -> None:
-        """Release only the pending preparation flag, retaining authored rest."""
-        self._preparation_pending = False
-
-    def announce_continuation(self, source_from_beat: float,
-                              deadline: float, bpm: float) -> None:
-        self.announce_serial += 1
-        self.announced_continuation = SCHEDULER.passage(
-            from_beat=source_from_beat,deadline=deadline,bpm=bpm)
-        self.next_at = float(deadline)
-
-    def retime_announcement(self, deadline: float) -> None:
-        """Keep the announced (already admitted) ink; move only its deadline
-        to where that ink now reaches the playhead (Resume in a rest)."""
-        self.announced_continuation = SCHEDULER.retime_passage(
-            self.announced_continuation,deadline=deadline)
-        self.next_at = float(deadline)
-
-    def cancel_continuation(self) -> None:
-        """Cancel an uncommitted next-take deadline and its announcement."""
-        self.next_at = 0.0
-        self.announced_continuation = None
-
-    def withdraw_announcement(self) -> None:
-        """Retire only the advertised successor, retaining a waiting rest."""
-        self.announced_continuation = None
-
-    def wait_for_continuation(self, deadline: float) -> None:
-        """Retain a selected unannounced boundary without creating new ink."""
-        self.next_at = float(deadline)
-
-
-    def announced_deadline(self, source_from_beat: float) -> float | None:
-        """The announced graded deadline of this source opening, if any."""
-        announced = self.announced_continuation
-        if (announced is None or abs(announced[0] - source_from_beat) > 1e-7
-                or not self.next_at or abs(announced[1] - self.next_at) > 1e-9):
-            return None
-        return announced[1]
 
     def reset_for_stop(self) -> None:
         """Forget the visible attempt but retain the loaded score's gap duration."""
@@ -169,95 +78,21 @@ class VisualTransport:
         self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
-        self.visual_offset_beats = 0.0
-        self.practice_preparation = None
-        self._preparation_pending = False
-        self._preparation_at = 0.0
-        self.next_at = 0.0
-        self.announced_continuation = None
+        self.continuation_pending = False
         self.pending_rewind = None
         self.play_from_beat = 0.0
         self.musical.reset()
 
-    def begin_take(self, *, loop_continuation: bool) -> None:
-        """Clear the former attempt while retaining its finished preparation."""
+    def begin_take(self) -> None:
+        """Clear the former attempt."""
         self._pause_floor = None
         self.paused = False
         self.paused_at = 0.0
-        self._preparation_pending = False
-        if loop_continuation and self.practice_preparation is not None:
-            self.practice_preparation["phase"] = "complete"
-        else:
-            self.practice_preparation = None
-        self.next_at = 0.0
-        self.announced_continuation = None
+        self.continuation_pending = False
         self.pending_rewind = None
-
-    def schedule_source_preparation(
-        self, source_model: dict, *, source_from_beat: float,
-        from_visual: float, now: float, reverse_seconds: float,
-        bpm: float, horizon_beats: float = 0.0,
-        short_deadline: float | None = None, announce: bool = True,
-        reading_lead_included: bool = True,
-    ) -> float:
-        """Derive the single written rest from the source's meter and staves.
-
-        Source-space placement, reverse animation and the absolute deadline
-        share this transport owner. No engine or second clock is involved.
-        """
-        measure = source_preparation_measure(
-            source_model,source_from_beat,0.0)
-        return self.schedule_preparation(
-            measure, source_from_beat=source_from_beat,
-            from_visual=from_visual, now=now,
-            reverse_seconds=reverse_seconds, bpm=bpm,
-            horizon_beats=horizon_beats,short_deadline=short_deadline,
-            announce=announce,reading_lead_included=reading_lead_included)
-
-    def schedule_preparation(
-        self, measure: dict, *, source_from_beat: float,
-        from_visual: float, now: float, reverse_seconds: float, bpm: float,
-        horizon_beats: float = 0.0,
-        short_deadline: float | None = None, announce: bool = True,
-        reading_lead_included: bool = True,
-    ) -> float:
-        """Reverse in-place, then traverse one authentic empty measure."""
-        measure["end_beat"] = self.visual_offset_beats + source_from_beat
-        measure["start_beat"] = measure["end_beat"] - measure["duration_beats"]
-        self.practice_preparation = {
-            "pass_start_beat": self.visual_offset_beats,
-            "source_from_beat": source_from_beat,
-            "measure": measure, "phase": "reverse",
-        }
-        self._preparation_pending = True
-        self.pending_rewind = source_from_beat
-        plan = SCHEDULER.prepare(
-            now=now,reverse_seconds=reverse_seconds,
-            rest_beats=measure["duration_beats"],
-            horizon_beats=horizon_beats,bpm=bpm,
-            include_reading=reading_lead_included or not announce,
-            short_deadline=short_deadline,announce=announce)
-        self._preparation_at = plan.prepare_at
-        self.next_at = plan.run_at
-        return self.next_at
-
-    def cancel_preparation(self) -> None:
-        """End a failed warm-up's automatic retry without erasing the score."""
-        self._preparation_pending = False
-        self.practice_preparation = None
-        self.pending_rewind = None
-        self.announced_continuation = None
 
     def clear_grading_floor(self) -> None:
         self._pause_floor = None
-
-    def adopt_committed_stage(self, committed, *, preserved: bool) -> None:
-        """Idempotently retain the outgoing source after durable settlement."""
-        from .application.musical_scheduler import SETTLEMENT_SECONDS
-        self.visual_offset_beats = (
-            committed.previous_visual_offset+committed.previous_duration+
-            SCHEDULER.seconds_beats(SETTLEMENT_SECONDS,committed.receipt.previous_bpm)
-            if preserved else 0.0)
 
     def musical_seconds(self, at: float, *, grading_after: float) -> float:
         """Source time freezes for a held key through Pause and reading lead."""
@@ -300,13 +135,6 @@ class VisualTransport:
             raise ValueError("Transport is not paused")
         duration = now - self.paused_at
         self.run_at = SCHEDULER.shift_epoch(self.run_at,duration,active=shift_run_at)
-        self.next_at = SCHEDULER.shift_epoch(
-            self.next_at,duration,active=bool(self.next_at))
-        if self.announced_continuation is not None:
-            self.announced_continuation = SCHEDULER.shift_passage(
-                self.announced_continuation,seconds=duration)
-        self._preparation_at = SCHEDULER.shift_epoch(
-            self._preparation_at,duration,active=self._preparation_pending)
         self.paused_at = 0.0
         self.paused = False
         self.musical.resume(now)
@@ -341,3 +169,11 @@ class VisualTransport:
         self.run_at = timing.origin
         return previous_origin,shift,timing
 
+
+    def await_continuation(self) -> None:
+        """A settled take's next exposure follows it."""
+        self.continuation_pending = True
+
+    def cancel_continuation(self) -> None:
+        """Nothing follows the settled take."""
+        self.continuation_pending = False

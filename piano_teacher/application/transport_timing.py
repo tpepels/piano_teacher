@@ -5,7 +5,7 @@ chosen source, its exact authored tempo map and the established
 PlaybackSession/VisualTransport state for command or read-side use.
 """
 from __future__ import annotations
-from .playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts, PreparationRequest
+from .playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts
 from .musical_scheduler import SCHEDULER
 from .musical_timeline import TakeSpec, take_spans, rest_to_barline
 
@@ -83,6 +83,30 @@ class TransportTiming:
             return None
         return self.score.tempo_map(self.lesson.plan.active_stage, self.lesson.plan.bpm)
 
+    def graded_tempo_map(self):
+        """The running take's tempo as placed on the musical timeline: the
+        source map before its opening beat, then the take's own spans.
+        Grading and live marks time every note with it."""
+        source = self.active_tempo_map()
+        if source is None:
+            return None
+        start = self.transport.play_from_beat
+        take = self.transport.musical_timeline.take_from(start)
+        if take is None or not all(span.constant for span in take.spans):
+            return source
+        from ..exercise_contracts import TempoMap, TempoSegment
+        segments = [TempoSegment(s.start_beat, min(s.end_beat, start), s.bpm)
+                    for s in source.segments if s.start_beat < start - 1e-9]
+        cursor = start
+        for span in take.spans:
+            if span.beats > 1e-9:
+                segments.append(TempoSegment(cursor, cursor+span.beats, span.start_bpm))
+                cursor += span.beats
+        if cursor < source.duration_beats - 1e-9:
+            segments.append(TempoSegment(cursor, source.duration_beats,
+                                         source.bpm_at(cursor)))
+        return TempoMap(source.name, tuple(segments))
+
     def elapsed_beat(self, elapsed_seconds: float) -> float:
         """Source beats played `elapsed_seconds` after run_at, read from the
         running take on the musical timeline (its inverse) when it is there."""
@@ -135,16 +159,6 @@ class TransportTiming:
 
     def next_count_in_meter(self) -> list[int]:
         return list(self.next_count_in()[1])
-
-    def schedule_preparation(self, target: float, *, now: float,
-                              from_visual: float, reverse_seconds: float,
-                              reading_lead_included: bool = False,
-                              announce: bool = True,
-                              short_deadline: float | None = None):
-        self.transport.schedule_preparation(PreparationRequest(
-            self.score.source_model(),target,now,from_visual,reverse_seconds,
-            self.presentation_bpm(),0.0,
-            reading_lead_included,announce,short_deadline))
 
     def update_placement_facts(self, kwargs: dict) -> None:
         """Godot's measurement sent with a command: the beats of printed ink

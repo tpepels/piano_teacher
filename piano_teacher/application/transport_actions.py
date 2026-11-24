@@ -156,12 +156,6 @@ class PlaybackAuthorization:
                     loop_continuation=authorized.action == "auto",
                     scheduled_deadline=authorized.deadline,
                     count_in_plan=intent.count_in,reason=authorized.action)
-                self.transport.bind_scheduled_start(
-                    transport_id=self.transport.transport_id,
-                    from_beat=self.transport.play_from_beat,
-                    run_at=self.transport.run_at,
-                    stage_key=self.lesson.plan.identity,
-                    revision=self.lesson.revision)
             elif authorized.action == "listen":
                 self.transport.start_listen(revision=self.lesson.revision,
                     count_in=intent.count_in,deadline=authorized.deadline)

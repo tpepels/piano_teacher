@@ -49,7 +49,6 @@ class TakeProgression:
             phrase=phrase, boundaries=self.lesson.plan.piece.bar_boundaries,
             now=now, score_beat=score_beat, from_beat=self.transport.play_from_beat,
             run_at=self.transport.run_at, next_boundary=self.transport.next_boundary_beat,
-            review_end=self.take.review_end_beat,
             auto=self.transport.auto, mode=self.transport.mode,
             bpm=self.lesson.plan.bpm, gap_beats=self.transport.visual_gap_beats),
             self.checkpoint, self.transport_timing.elapsed_seconds)

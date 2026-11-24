@@ -148,42 +148,6 @@ func update_context(state: Dictionary, now_ms: int) -> void:
         # repeats it, just as the accepted snapshot presentation path does.
         action_requested.emit({"action":"score_ready","revision":revision})
 
-func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dictionary) -> void:
-    # The exact future score was compiled before the current take ended.
-    # Reuse it without clearing the viewport or requesting the same ink.
-    _generation += 1
-    _requests.clear()
-    replace_renderer(prepared_renderer)
-    _loaded = bool(state.get("loaded",false))
-    _fingerprint = str(state.get("piece_fingerprint",""))
-    _stage_key = str(state.get("stage_key",""))
-    _rendered_stage_key = _stage_key
-    _rendered_hand = str(state.get("hand",""))
-    _state = state.duplicate(true)
-    revision = int(state.get("revision",-1))
-    _layout = prepared_layout.duplicate(true)
-    layout_revision = revision
-    rendered_revision = revision
-    _published_retained_generation = _renderer.retained_generation()
-    native_score_piece_fingerprint = _fingerprint
-    _retained_started_ms = -1
-    _preparing_since_ms = -1
-    score_error = ""
-    _last_native_failure = ""
-    _retry_attempted = false
-    _identical_failure_repeats = 0
-    _renderer.visible = true
-    if is_instance_valid(_feedback):
-        _feedback.bind_score(_renderer,revision)
-        _feedback.present(_state)
-    # Reset source-ID-scoped hit overlays without hiding the already
-    # compiled notation or blanking the score viewport.
-    assets_invalidated.emit(revision)
-    layout_published.emit(revision,layout_snapshot())
-    score_published.emit(revision)
-    _publish_status()
-
-
 func layout_snapshot() -> Dictionary:
     return _layout.duplicate(true)
 

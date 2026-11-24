@@ -42,13 +42,13 @@ class SettlementContinuation:
         self.advance_pending_feedback(now)
         return False
 
-    def advance_pending_feedback(self, now: float, *, force_early: bool = False):
+    def advance_pending_feedback(self, now: float):
         if not self.transport.auto:
             return
         transaction = self.score.begin_feedback(
             self.take.pending, now=now,
             automatic=self.transport.auto,
-            force_early=force_early, revision=self.lesson.revision,
+            revision=self.lesson.revision,
             fingerprint=self.lesson.fingerprint)
         if isinstance(transaction,FeedbackWaiting):
             if transaction.message:
@@ -59,8 +59,6 @@ class SettlementContinuation:
             return
         try:
             self.commit_pending(now)
-            self.transport.note_tempo(
-            stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         except Exception as exc:
             self.publish_feedback_fault(self.score.settlement_failure(exc),now)
             self.take.cancel_settlement(reason="save_failed", now=now)
@@ -110,8 +108,6 @@ class SettlementContinuation:
         pending = publication.pending
         total_beats,duration = publication.total_beats,publication.duration
         self.take.checkpoint_failed_streak(pending,plan=self.lesson.plan,now=now)
-        self.transport.note_tempo(
-            stage=self.lesson.plan.identity,bpm=self.transport_timing.presentation_bpm(),now=now)
         completion = self.transport.finish_full_passage(FullPassageFacts(
             pending=pending,stage_key=self.lesson.plan.identity,bpm=self.lesson.plan.bpm,
             target_bpm=self.lesson.plan.target_bpm,
@@ -120,10 +116,7 @@ class SettlementContinuation:
         if completion.next_action is not None:
             self.notices.next_action = completion.next_action
         if completion.advance_feedback:
-            self.advance_pending_feedback(now,force_early=completion.force_early)
-        elif completion.update_clock:
-            self.take.finish_full_completion(publication)
-            return True
+            self.advance_pending_feedback(now)
         self.take.finish_full_completion(publication)
         return False
 
@@ -172,25 +165,13 @@ class SettlementContinuation:
         committed = self.take.commit_full_passage(
             plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
             continuation=self.score,
-            score_revision=self.lesson.revision,
-            visual_offset=self.transport.visual_offset_beats)
+            score_revision=self.lesson.revision)
         outcome = committed.receipt
         self.take.apply_settlement(committed,plan=self.lesson.plan)
         if outcome.stage_changed:
             self.lesson.select_opening(0.0)
             self.lesson.publish_revision(committed.selection.revision)
             self.transport.wait_for_player()
-            prebuilt = self.score.consume_committed_asset(
-                committed.prepared,changed=True,auto=self.transport.auto,
-                selection=committed.selection)
-            if prebuilt is not None:
-                self.score.adopt_artifacts(prebuilt)
-            else:
-                self.score.current_artifacts.invalidate()
-            self.transport.adopt_committed_stage(
-                committed,preserved=prebuilt is not None)
-        else:
-            self.score.consume_committed_asset(
-                None,changed=False,auto=self.transport.auto,selection=None)
+            self.score.current_artifacts.invalidate()
         self.take.effects_applied(pending)
         return outcome.message

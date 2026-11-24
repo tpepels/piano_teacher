@@ -98,7 +98,6 @@ class PlaybackContinuation:
         self.transport_timing.request_playback(
             action="auto", mode=self.transport.mode,
             from_beat=from_beat)
-        self.transport.clear_scheduled_start()
         self.notices.feedback = "Preparing the next passage"
 
 class PauseResume:

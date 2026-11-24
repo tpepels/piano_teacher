@@ -140,10 +140,7 @@ def test_guided_plan_deadline_changes_only_with_authenticated_source():
     template = ScoreProjectionFacts(
         fingerprint="piece", stage_key="window:1", revision=1,
         transport_id=10, mode="learn", running=False, paused=False,
-        awaiting_score=False, bpm=40.0, presentation_bpm=40.0,
-        run_at=0.0, play_from_beat=0.0, announced=None,
-        announced_deadline=None, announcement_serial=0,
-        scheduled_start=None, timeline={}, next_count_in_beats=4.0,
+        awaiting_score=False, bpm=40.0, timeline={}, next_count_in_beats=4.0,
         next_count_in_meter=(4, 4),
         duration_beats=4.0, has_source=True)
     state = {"phase": "guided_wait"}
@@ -177,10 +174,7 @@ def test_backend_publishes_hold_target_and_running_motion_without_ui_phase_polic
     facts = ScoreProjectionFacts(
         fingerprint="piece", stage_key="window:1", revision=1,
         transport_id=1, mode="learn", running=False, paused=False,
-        awaiting_score=False, bpm=40.0, presentation_bpm=40.0,
-        run_at=0.0, play_from_beat=0.0, announced=None,
-        announced_deadline=None, announcement_serial=0,
-        scheduled_start=None, timeline={}, next_count_in_beats=4.0,
+        awaiting_score=False, bpm=40.0, timeline={}, next_count_in_beats=4.0,
         next_count_in_meter=(4,4),
         duration_beats=4.0, has_source=True)
 
@@ -230,7 +224,7 @@ def test_real_state_contract_includes_authoritative_motion_directive(practice_se
     from piano_teacher.state_contract import VERSION, problems
     session = practice_session(bars=1)
     result = session.snapshot()
-    assert VERSION == 8
+    assert VERSION == 10
     assert "presentation_directive" in result
     assert result["presentation_directive"]["kind"] in (
         "hold", "target", "retain", "run")

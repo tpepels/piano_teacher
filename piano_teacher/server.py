@@ -13,7 +13,7 @@ from .application.composition import compose_application
 from .application.session_events import (
     PlaybackFailed, SourceCommitted,
     FingeringCorrectionCommitted, SettingsChanged,
-    DeviceSelected, MidiPortsRequested, PreloadReady, PreloadFailed, SessionClosed,
+    DeviceSelected, MidiPortsRequested, SessionClosed,
     HardwareRequested, HistoryExported,
     PieceHistoryDeleted, LearnerHistoryDeleted)
 from .clock import Clock
@@ -152,17 +152,6 @@ class PracticeEngine:
         for key in state_contract.STATIC_KEYS:
             state.pop(key, None)
         return state
-
-    def next_stage_score(self) -> bytes:
-        return self.score_preload.next_stage_score()
-
-    def report_preload_failure(self, *, fingerprint: str, step_number: int,
-                               revision: int, error: str) -> dict:
-        return self.practice_session.apply(
-            PreloadFailed(fingerprint, step_number, revision, error))
-
-    def acknowledge_preloaded_stage(self, *, stage_key: str, revision: int) -> dict:
-        return self.practice_session.apply(PreloadReady(stage_key, revision))
 
     def semantic_score(self) -> dict:
         return self.score.semantic_score()

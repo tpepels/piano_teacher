@@ -155,7 +155,7 @@ def _base_decision(event, state):
                 c, accepted=passed, quality=result.timing_quality,
                 attacks=result.attacks)
         if (not route.automatic or flow_outcome is Outcome.PIECE_DONE
-                or route.scope in ("perform", "section_review")):
+                or route.scope == "perform"):
             continuation = "stop"
         elif chosen.key != c.key:
             continuation = "advance"

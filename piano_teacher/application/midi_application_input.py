@@ -70,14 +70,13 @@ class MidiDelivery:
     def midi_transport_facts(self) -> InputTransportFacts:
         """Snapshot only the transport gates needed by the one MIDI router."""
         return InputTransportFacts(
-            next_at=self.transport.next_at,
+            continuation_pending=self.transport.continuation_pending,
             pending_teaching_result=self.take.pending_result is not None,
             pending_rewind=self.transport.pending_rewind is not None,
             automatic=self.transport.auto,
             visual_gap_beats=self.transport.visual_gap_beats,
             awaiting_score=self.transport.awaiting_score_revision is not None,
             exercise_kind=(self.lesson.plan.exercise.kind if self.lesson.plan else ""),
-            review_end_beat=self.take.review_end_beat,
             successor_action=(self.transport.intent.action
                 if self.transport.intent is not None else None))
 

@@ -29,17 +29,13 @@ class PreAssessmentTransitions:
             has_plan=self.lesson.plan is not None,
             learning=self.transport.mode == "learn" and self.lesson.guided_controller is not None,
             paused=self.transport.paused, listening=self.transport.mode == "listen",
-            preparation_pending=self.transport.preparation_pending,
             feedback_pending=self.take.feedback_pending,
             awaiting_score=self.transport.awaiting_score_revision is not None,
             rewind_pending=self.transport.pending_rewind is not None,
             running=self.transport.running, run_at=self.transport.run_at)
         decision = decide_transition(
-            context, now=now, next_at=self.transport.next_at,
-            preparation_at=self.transport.preparation_deadline)
+            context, now=now)
         followup = False
-        if decision.preparation_phase is not None:
-            self.transport.enter_preparation_phase(decision.preparation_phase)
         if decision.action == "learning":
             self.lesson.advance_guided(connected=self.midi_input.connected, now=now)
             self.course.save_guided_preparation()

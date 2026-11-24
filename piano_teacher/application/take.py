@@ -36,9 +36,6 @@ class Take:
     def finish_review(self, *args, **kwargs):
         return self._runtime.finish_review(*args, **kwargs)
 
-    def finish_section_review(self, *args, **kwargs):
-        return self._runtime.finish_section_review(*args, **kwargs)
-
     @property
     def guided_recovery_pending(self):
         return self._runtime.guided_recovery_pending
@@ -46,12 +43,6 @@ class Take:
     @property
     def performance_summary(self):
         return self._runtime.performance_summary
-
-    def prepare_full_retry(self, *args, **kwargs):
-        return self._runtime.prepare_full_retry(*args, **kwargs)
-
-    def prepare_section(self, *args, **kwargs):
-        return self._runtime.prepare_section(*args, **kwargs)
 
     def prepare_timed_exposure(self, *args, **kwargs):
         return self._runtime.prepare_timed_exposure(*args, **kwargs)
@@ -82,10 +73,6 @@ class Take:
     @property
     def retry_range(self):
         return self._runtime.retry_range
-
-    @property
-    def review_end_beat(self):
-        return self._runtime.review_end_beat
 
     @property
     def review_session_complete(self):

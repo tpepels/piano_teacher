@@ -80,20 +80,6 @@ class DeviceSelected:
 
 
 @dataclass(frozen=True, slots=True)
-class PreloadReady:
-    stage_key: str
-    revision: int
-
-
-@dataclass(frozen=True, slots=True)
-class PreloadFailed:
-    fingerprint: str
-    step_number: int
-    revision: int
-    error: str
-
-
-@dataclass(frozen=True, slots=True)
 class HardwareRequested:
     action: str
 
@@ -125,7 +111,6 @@ PracticeEvent = (UserCommand | ClockAdvanced |
                  PlaybackFailed | SourceCommitted |
                  FingeringCorrectionCommitted | SettingsChanged |
                  MidiPortsRequested | DeviceSelected |
-                 PreloadReady | PreloadFailed |
                  SessionClosed | HardwareRequested |
                  HistoryExported | PieceHistoryDeleted | LearnerHistoryDeleted)
 

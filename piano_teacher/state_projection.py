@@ -71,15 +71,10 @@ def project_phase(state: PhaseSnapshot, *, mode: str, now: float) -> str:
 @dataclass(frozen=True)
 class ActivitySnapshot(_Snapshot):
     sampled_at: float = 0.0
-    transition_now: float = 0.0
     notice_now: float = 0.0
     midi_now: float = 0.0
-    next_at: float = 0.0
-    pending_transition: bool = False
-    review_pending: bool = False
+    transition_pending: bool = False
     learner: Mapping | None = None
-    seek_available: bool = False
-    seek_range: Mapping | None = None
     next_action: str = ""
     retry_range: Mapping | None = None
     recovery_notice: Mapping | None = None
@@ -156,7 +151,6 @@ class TimingSnapshot(_Snapshot):
     play_from_beat: float = 0.0
     open_from_beat: float = 0.0
     pending_rewind: float | None = None
-    review_end_beat: float | None = None
     awaiting_score_revision: int | None = None
     count_in_beats: float = 0.0
     count_in_bar_beats: float = UNLOADED_GAP_BEATS
@@ -207,11 +201,8 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
     result = {
         "clock_sampled_at_ms": activity.sampled_at * 1000.0,
         "learner": _payload(activity.learner),
-        "seek_available": activity.seek_available,
-        "seek_range": _payload(activity.seek_range),
         "next_action": activity.next_action,
-        "transition_in_seconds": (max(0.0, activity.next_at-activity.transition_now)
-            if activity.next_at and activity.pending_transition else None),
+        "transition_in_seconds": 0.0 if activity.transition_pending else None,
         "retry_range": _payload(activity.retry_range),
         "recovery_notice": ({key: _payload(value) for key, value in notice.items()
                              if key != "expires_at"}
@@ -220,7 +211,6 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "pause_context": activity.pause_context,
         "demo": _payload(activity.demo),
         "performance_summary": _payload(activity.performance_summary),
-        "review_range": _payload(activity.retry_range) if activity.review_pending else None,
         "midi_input_count": activity.midi_input_count,
         "midi_input_note": activity.midi_input_note,
         "midi_input_age": (max(0.0, activity.midi_now-activity.midi_input_at)
@@ -242,8 +232,8 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         raise ValueError("A loaded session snapshot needs captured timing")
     tempo = lesson.tempo
     total_beats = lesson.duration_beats
-    practice_end = min(total_beats, timing.review_end_beat) if timing.review_end_beat is not None else total_beats
-    start_beat = timing.play_from_beat if timing.review_end_beat is not None else 0.0
+    practice_end = total_beats
+    start_beat = 0.0
     elapsed = timing.now-timing.run_at
     active_beat = (timing.mapped_clock_beat if timing.mapped_clock_beat is not None
                    else SCHEDULER.seconds_beats(elapsed,tempo.bpm))

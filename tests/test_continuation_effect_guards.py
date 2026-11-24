@@ -77,16 +77,16 @@ def test_obsolete_continuations_cannot_execute(mutation):
 def test_failed_feedback_keeps_selected_transaction_when_auto_stops():
     pending = SimpleNamespace()
     continuation = TeachingContinuation(
-        future_score=None, transport=SimpleNamespace(next_at=0.0))
-    selected = FeedbackTransaction(pending, "selected", 99.0, 7)
+        transport=SimpleNamespace(continuation_pending=False))
+    selected = FeedbackTransaction(pending, "selected", 7)
     continuation._feedback_transaction = selected
     assert continuation.begin_feedback(
-        pending, now=110.0, automatic=False, force_early=False,
+        pending, now=110.0, automatic=False,
         revision=9, fingerprint="score-sha") is selected
     with pytest.raises(ValueError, match="Another selected decision"):
         continuation.begin_feedback(
             SimpleNamespace(), now=110.0, automatic=False,
-            force_early=True, revision=9, fingerprint="score-sha")
+            revision=9, fingerprint="score-sha")
 
 
 def test_stopped_auto_worker_does_not_spin_on_failed_effect():
@@ -95,4 +95,4 @@ def test_stopped_auto_worker_does_not_spin_on_failed_effect():
     owner.score = SimpleNamespace(
         begin_feedback=lambda *args, **kwargs: pytest.fail(
             "Stopped playback must require explicit user Retry"))
-    owner.advance_pending_feedback(now=120.0, force_early=True)
+    owner.advance_pending_feedback(now=120.0)

@@ -70,26 +70,12 @@ class EngineCommands:
                 return self._reply(OK, engine.score_bundle())
             if operation == "score.native_layout":
                 return self._reply(OK, engine.geometry())
-            if operation == "score.next_stage":
-                if values:
-                    raise ValueError("score.next_stage takes no input")
-                # Heavy JSON was already encoded by the background prefetch
-                # worker. The musical clock only transfers these bytes.
-                return OK, engine.next_stage_score()
             if operation == "playback.status":
                 if values:
                     raise ValueError("playback.status takes no input")
                 return self._reply(OK, engine.playback_status())
             if operation == "playback.failure":
                 return self._reply(OK, engine.report_playback_failure(**values))
-            if operation == "score.stage_ready":
-                return self._reply(OK, engine.acknowledge_preloaded_stage(
-                    stage_key=values["stage_key"], revision=values["revision"]))
-            if operation == "score.stage_failed":
-                return self._reply(OK, engine.report_preload_failure(
-                    fingerprint=values["fingerprint"],
-                    step_number=values["step_number"],
-                    revision=values["revision"], error=values["error"]))
             if operation == "listen.audio":
                 return OK, engine.demo_audio(values.get("token", "")).read_bytes()
             if operation == "learning.export":

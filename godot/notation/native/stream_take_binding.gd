@@ -223,9 +223,6 @@ func restore_live(owner: int) -> void:
 func admitted(owner: int) -> void:
     live_serial = owner
 
-func has_armed_reservation() -> bool:
-    return armed_serial >= 0 and arm_acknowledged
-
 func bound_segment() -> String:
     return live_segment_id
 

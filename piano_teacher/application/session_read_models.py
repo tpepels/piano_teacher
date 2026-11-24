@@ -57,7 +57,7 @@ class SessionCapture:
             teaching_active=self.lesson.guided_controller is not None,
             mode=self.transport.mode,
             next_action=self.notices.next_action,
-            next_at=self.transport.next_at,
+            continuation_pending=self.transport.continuation_pending,
             open_from_beat=self.lesson.opening_beat,
             pause_context=self.transport.pause_context,
             paused=self.transport.paused,
@@ -75,7 +75,6 @@ class SessionCapture:
             play_from_beat=self.transport.play_from_beat,
             recovery_notice=self.take.recovery_notice,
             retry_range=self.take.retry_range,
-            review_end_beat=self.take.review_end_beat,
             run_at=self.transport.run_at,
             running=self.transport.running,
             score_revision=self.lesson.revision,
@@ -101,7 +100,6 @@ class ScorePresentation:
         self.clock = clock
 
     def score_facts(self, pending, timeline) -> ScoreProjectionFacts:
-        announced = self.transport.announced_continuation
         plan = self.lesson.plan
         return ScoreProjectionFacts(
             fingerprint=self.lesson.fingerprint,
@@ -113,14 +111,6 @@ class ScorePresentation:
             paused=self.transport.paused,
             awaiting_score=self.transport.awaiting_score_revision is not None,
             bpm=float(plan.bpm) if plan is not None else 0.0,
-            presentation_bpm=float(self.timing.presentation_bpm()),
-            run_at=self.transport.run_at,
-            play_from_beat=self.transport.play_from_beat,
-            announced=announced,
-            announced_deadline=(self.transport.announced_deadline(
-                announced[0]) if announced is not None else None),
-            announcement_serial=self.transport.announce_serial,
-            scheduled_start=self.transport.scheduled_start,
             timeline={"intent":pending,"current":timeline},
             next_count_in_beats=self.timing.next_count_in_beats(),
             next_count_in_meter=tuple(self.timing.next_count_in_meter()),
@@ -153,11 +143,6 @@ class SnapshotExtras:
     def add(self, state: dict, now: float) -> None:
         if self.take.pending_result is not None:
             state["bpm"] = self.timing.presentation_bpm()
-        if self.lesson.plan is not None:
-            epoch = self.transport.tempo_epoch_for(
-                stage=self.lesson.plan.identity,bpm=self.timing.presentation_bpm())
-            if epoch is not None:
-                state["tempo_epoch_ms"] = epoch*1000.0
         if self.lesson.plan is not None:
             beat = self.lesson.plan.active_phrase.start + self.transport.play_from_beat
             if self.transport.running and now >= self.transport.run_at:

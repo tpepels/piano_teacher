@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from ..lesson_timing import preparation_meter
-from .musical_scheduler import SCHEDULER, SETTLEMENT_SECONDS
+from .musical_scheduler import SCHEDULER
 from .playback_transitions import CountInPlan
 from .playback_facts import (
     FullPassageFacts, PassageRuntimeFacts, PassageFinishPlan,
@@ -42,7 +42,6 @@ class AttemptTick:
     from_beat: float
     run_at: float
     next_boundary: float
-    review_end: float | None
     auto: bool
     mode: str
     bpm: float
@@ -164,22 +163,8 @@ class AttemptProgression:
             return PassageFinishPlan("stop",next_action=notice)
         if not same_timed:
             return PassageFinishPlan("ready",next_action=notice)
-        from ..notation.practice_timeline import retry_preparation_rest_beats
-        bar = retry_preparation_rest_beats(facts.source_model,exposure.from_beat)
-        # This printed rest is a continuation of the OUTGOING immutable
-        # source and runs at that source's tempo. The incoming faster BPM
-        # would shorten it, placing the next first header into still-visible
-        # old rest ink. The incoming tempo begins at the authorized downbeat.
-        deadline = SCHEDULER.repeat(run_at=runtime.run_at,
-            source_seconds=facts.duration,gap_beats=bar,bpm=facts.bpm)
-        return PassageFinishPlan("announce",deadline=deadline,next_action=notice)
-
-    @staticmethod
-    def preloaded_feedback_due(source, *, now: float, run_at: float,
-                               from_beat: float) -> bool:
-        finish = (run_at+SCHEDULER.source_seconds(source.tempo,source.duration_beats,source.bpm)
-            - SCHEDULER.source_seconds(source.tempo,from_beat,source.bpm)+SETTLEMENT_SECONDS)
-        return now >= finish-1e-7
+        # The musical timeline places the repeat after this take.
+        return PassageFinishPlan("announce",next_action=notice)
 
     def inspect(self, tick: AttemptTick,
                 checkpoint: Callable[[float], None],
@@ -188,7 +173,7 @@ class AttemptProgression:
         grid = self.grid_for(tick.phrase,tick.boundaries)
         boundary = tick.next_boundary
         total_beats = tick.phrase.sounding_end-tick.phrase.start
-        while (tick.mode == "practice" and tick.review_end is None
+        while (tick.mode == "practice"
                and boundary and tick.score_beat >= boundary):
             # Persist the played prefix at each bar (evidence durability).
             checkpoint(boundary)
@@ -197,8 +182,7 @@ class AttemptProgression:
             if boundary <= previous_boundary+1e-7:
                 boundary = 0.0
 
-        ending = (min(total_beats,tick.review_end)
-                  if tick.review_end is not None else total_beats)
+        ending = total_beats
         duration = seconds_at(ending)-seconds_at(tick.from_beat)
         if tick.now < tick.run_at+duration:
             return AttemptStep("waiting",boundary,grid)

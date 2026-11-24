@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-VERSION = 8
+VERSION = 10
 
 # Values that do not change frame to frame. They travel in command replies
 # (library.open, practice.command, ...) and are omitted from state.snapshot.
@@ -126,13 +126,10 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "recovery_notice": ('dict', 'null'),
     "required_notes": ('number',),
     "retry_range": ('dict', 'null'),
-    "review_range": ('dict', 'null'),
     "revision": ('number',),
     "running": ('bool',),
     "schema_version": ('number',),
     "scoring_available": ('bool',),
-    "seek_available": ('bool',),
-    "seek_range": ('dict', 'null'),
     "selected_start_bar": ('number',),
     "stage_change": ('string',),
     "stage_family": ('string',),
@@ -149,7 +146,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "title": ('string',),
     "transition_in_seconds": ('null', 'number'),
     "transport_id": ('number',),
-    "tempo_epoch_ms": ('number',),
 }
 
 

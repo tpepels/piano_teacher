@@ -39,14 +39,13 @@ class MidiInputFacts:
 @dataclass(frozen=True, slots=True)
 class InputTransportFacts:
     """Immutable backend facts; the ingress never inspects PracticeEngine."""
-    next_at: float
+    continuation_pending: bool
     pending_teaching_result: bool
     pending_rewind: bool
     automatic: bool
     visual_gap_beats: float
     awaiting_score: bool
     exercise_kind: str
-    review_end_beat: float | None
     successor_action: str | None
 
 
@@ -178,13 +177,11 @@ class MidiIngress:
                 facts.phrase is None or facts.mode not in ("practice","perform")
                 or facts.paused or transport.awaiting_score):
             return False
-        due = (not facts.running and transport.next_at
-               and received_at >= transport.next_at
+        due = (not facts.running and transport.continuation_pending
                and (transport.pending_teaching_result and transport.automatic or
                     transport.pending_rewind))
         if (facts.running and facts.mode == "practice"
                 and transport.exercise_kind != "perform"
-                and transport.review_end_beat is None
                 and transport.automatic):
             duration = SCHEDULER.source_seconds(
                 facts.tempo_map,

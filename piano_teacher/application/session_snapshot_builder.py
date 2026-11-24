@@ -46,7 +46,7 @@ class SnapshotValues:
     teaching_active: bool
     mode: str
     next_action: str
-    next_at: float
+    continuation_pending: bool
     open_from_beat: float
     pause_context: str | None
     paused: bool
@@ -60,7 +60,6 @@ class SnapshotValues:
     play_from_beat: float
     recovery_notice: Any
     retry_range: Any
-    review_end_beat: float | None
     run_at: float
     running: bool
     score_revision: int
@@ -70,7 +69,6 @@ class SnapshotValues:
 @dataclass(frozen=True)
 class SnapshotReadPorts:
     """Named read operations, sampled under the engine lock."""
-    seek_grid: Callable[..., Any]
     learner_snapshot: Callable[..., Any]
     elapsed_beat: Callable[..., Any]
     phase: Callable[..., Any]
@@ -94,18 +92,12 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     """
     sampled_at = reads.clock()
     p = state.plan
-    seek_grid = reads.seek_grid()
     activity = ActivitySnapshot(
         sampled_at=sampled_at,
         learner=reads.learner_snapshot() if p is not None else None,
-        seek_available=state.paused and seek_grid is not None,
-        seek_range=({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
-                    if seek_grid is not None else None),
         next_action=state.next_action,
-        transition_now=((state.paused_at if state.paused else sampled_at)
-            if state.next_at and (state.pending_result is not None or state.pending_rewind is not None) else 0.0),
-        next_at=state.next_at,
-        pending_transition=state.pending_result is not None or state.pending_rewind is not None,
+        transition_pending=(state.continuation_pending
+            and (state.pending_result is not None or state.pending_rewind is not None)),
         retry_range=state.retry_range,
         notice_now=sampled_at if state.recovery_notice is not None else 0.0,
         recovery_notice=state.recovery_notice,
@@ -113,7 +105,6 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         pause_context=state.pause_context,
         demo=reads.listen_snapshot(),
         performance_summary=state.performance_summary,
-        review_pending=state.review_end_beat is not None,
         midi_input_count=state.midi_input_count,
         midi_input_note=state.midi_input_note,
         midi_now=sampled_at if state.midi_input_at is not None else 0.0,
@@ -171,7 +162,6 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         running=state.running, paused=state.paused, auto=state.auto,
         play_from_beat=state.play_from_beat,
         open_from_beat=state.open_from_beat, pending_rewind=state.pending_rewind,
-        review_end_beat=state.review_end_beat,
         awaiting_score_revision=state.awaiting_score_revision,
         count_in_beats=state.count_in_beats,
         count_in_bar_beats=state.count_in_bar_beats, count_in_meter=state.count_in_meter,

@@ -3,7 +3,7 @@ extends RefCounted
 ## piano_teacher/state_contract.py. Do not edit by hand.
 ## The versioned contract of the per-frame state snapshot.
 
-const VERSION := 8
+const VERSION := 10
 const STATIC_KEYS := ["import_warnings"]
 const REQUIRED := ["schema_version", "loaded", "controls"]
 const LOADED_REQUIRED := ["mode", "phase", "running", "paused", "revision", "transport_id", "piece_fingerprint", "stage_key", "presentation_directive", "playback_timeline"]
@@ -97,14 +97,11 @@ const SCHEMA := {
     "recovery_notice": ["dict", "null"],
     "required_notes": ["number"],
     "retry_range": ["dict", "null"],
-    "review_range": ["dict", "null"],
     "revision": ["number"],
     "running": ["bool"],
     "schema_version": ["number"],
     "scoring_available": ["bool"],
     "screen": ["dict"],
-    "seek_available": ["bool"],
-    "seek_range": ["dict", "null"],
     "selected_start_bar": ["number"],
     "stage_change": ["string"],
     "stage_family": ["string"],
@@ -116,7 +113,6 @@ const SCHEMA := {
     "take_result": ["dict", "null"],
     "target_bpm": ["number"],
     "teaching": ["dict", "null"],
-    "tempo_epoch_ms": ["number"],
     "tempo_rungs": ["list"],
     "tempo_segments": ["list"],
     "title": ["string"],

@@ -10,7 +10,7 @@ from .session_events import (
     UserCommand, ClockAdvanced, MidiShortcut, PhysicalMidi,
     PlaybackFailed,
     SourceCommitted, FingeringCorrectionCommitted, SettingsChanged,
-    DeviceSelected, MidiPortsRequested, PreloadReady, PreloadFailed,
+    DeviceSelected, MidiPortsRequested,
     HardwareRequested, HistoryExported, PieceHistoryDeleted,
     LearnerHistoryDeleted, SessionClosed,
 )
@@ -57,7 +57,7 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
 def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
                    midi_device, midi_callback,
                    settings_workflows, pause_resume, playback_authorization,
-                   source_installation, library, lesson, course, score_preload,
+                   source_installation, library, lesson, course,
                    device_workflows, history_management, history_reads,
                    lifecycle):
     """Event type -> handler(event)."""
@@ -115,11 +115,6 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
             e.changes, pause_current=pause_resume.pause),
         MidiPortsRequested: lambda e: midi_device.ports(),
         DeviceSelected: lambda e: midi_device.connect(e.name),
-        PreloadReady: lambda e: score_preload.acknowledge_preloaded_stage(
-            stage_key=e.stage_key, revision=e.revision),
-        PreloadFailed: lambda e: score_preload.report_preload_failure(
-            fingerprint=e.fingerprint, step_number=e.step_number,
-            revision=e.revision, error=e.error),
         HardwareRequested: lambda e: device_workflows.hardware_action(e.action),
         HistoryExported: lambda e: history_reads.export(
             e.path, include_detail=e.include_detail),

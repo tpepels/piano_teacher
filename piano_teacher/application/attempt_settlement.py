@@ -50,10 +50,8 @@ class SettlementReceipt:
 class CommittedAttempt:
     receipt: SettlementReceipt
     selection: ScoreSelection | None
-    prepared: object
     source_revision: int
     previous_duration: float
-    previous_visual_offset: float
     committed_at: float
 
 
@@ -226,8 +224,7 @@ class AttemptSettlement:
         self.authority_revision += 1
 
     def commit_full_passage(self, *, plan, binding, now: float,
-                            continuation, score_revision: int,
-                            visual_offset: float) -> CommittedAttempt:
+                            continuation, score_revision: int) -> CommittedAttempt:
         """Freeze successor publication before committing any progress.
 
         A failed post-commit publication retries this same receipt, source
@@ -273,15 +270,12 @@ class AttemptSettlement:
             fingerprint=state.binding.fingerprint,
             transformed_rhythm=chosen.stage.transformed_rhythm,
             display_name=str(chosen.stage.display_name or "")) if changed else None)
-        prepared = continuation.reserved_asset(
-            pending,changed=changed,revision=score_revision,
-            fingerprint=state.binding.fingerprint)
         source = state.course.stage.variant.phrase
         duration = source.sounding_end-source.start
         outcome = self.settle(pending,plan=plan,binding=binding,now=now,
                               continuation=continuation)
         pending.publication = CommittedAttempt(
-            outcome,selection,prepared,score_revision,duration,visual_offset,now)
+            outcome,selection,score_revision,duration,now)
         return pending.publication
 
     def complete_take(
@@ -289,7 +283,6 @@ class AttemptSettlement:
         played: Sequence[PlayedNote], from_beat: float, end_beat: float,
         tempo: TempoMap | None, policies: PracticeAssessmentPolicies,
         layout_for_feedback: Callable[[], dict], mode: str,
-        review_end_beat: float | None,
         performance_review: Callable[[Phrase, Assessment], dict],
         prepare_decision: Callable, plan,
         binding: TeachingBinding, now: float,
@@ -309,8 +302,7 @@ class AttemptSettlement:
                 from_beat=from_beat,end_beat=end_beat,tempo=tempo,
                 policies=policies,layout_for_feedback=layout_for_feedback)
             result = assessed.result
-            route = completion_route(mode,review_end_beat,from_beat,
-                full_from_beat=phrase.first_attack_beat)
+            route = completion_route(mode)
             summary = performance_review(phrase,result)
             if route == "full_passage":
                 pending = prepare_decision("full_result",result)
@@ -411,8 +403,6 @@ class AttemptSettlement:
             raise ValueError("Stale teaching progress at settlement")
         before = plan.capture_teaching_state()
         continuation_before = continuation.capture_successor_state() if continuation is not None else None
-        if continuation is not None:
-            continuation.validate_reservation(pending)
         try:
             with self.capture.atomic():
                 self.capture.decision({"version": 1, "trigger": pending.event.kind,
@@ -433,8 +423,6 @@ class AttemptSettlement:
                         stage_key=state.binding.stage_key,unit=unit,assisted_count=pending.event.assisted_count)
                 plan.apply_teaching_progress(decision.progress_after,
                     definition=decision.definition_after, expected=expected)
-                if continuation is not None:
-                    continuation.validate_reservation(pending)
                 self.repository.save(plan, state.binding.fingerprint)
                 if self.capture.attempt_id is not None:
                     self.capture.event("progression", {

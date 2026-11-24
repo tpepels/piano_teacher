@@ -15,7 +15,6 @@ class TransitionContext:
     learning: bool
     paused: bool
     listening: bool
-    preparation_pending: bool
     feedback_pending: bool
     awaiting_score: bool
     rewind_pending: bool
@@ -27,7 +26,6 @@ class TransitionContext:
 class TransitionDecision:
     action: str
     consumed: bool
-    preparation_phase: str | None = None
 
 
 def phase(context: TransitionContext, now: float) -> str:
@@ -51,14 +49,8 @@ def phase(context: TransitionContext, now: float) -> str:
     return "performing"
 
 
-def decide_transition(context: TransitionContext, *, now: float,
-                      next_at: float, preparation_at: float) -> TransitionDecision:
+def decide_transition(context: TransitionContext, *, now: float) -> TransitionDecision:
     selected = phase(context, now)
-    # Earlier branches return without changing preparation presentation.
-    preparation = None
-    if context.preparation_pending and selected not in (
-            "no_plan", "learning", "paused", "listening"):
-        preparation = "reverse" if now < preparation_at else "preparing"
     if selected == "rewind":
-        selected = "rewind_due" if now >= next_at else "rewind_wait"
-    return TransitionDecision(selected, selected != "performing", preparation)
+        selected = "rewind_due"
+    return TransitionDecision(selected, selected != "performing")

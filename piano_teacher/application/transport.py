@@ -17,12 +17,6 @@ class Transport:
         self._session = session
         self._admission = admission
 
-    def halt_continuation(self) -> None:
-        """Stop automatic flow and drop any scheduled preparation or next take."""
-        self._session.stop_automatic()
-        self._timeline.cancel_preparation()
-        self._timeline.cancel_continuation()
-
     def reset_for_stop(self) -> None:
         """Return timeline and session intent to idle after Stop."""
         self._timeline.reset_for_stop()
@@ -31,13 +25,6 @@ class Transport:
 
     # --- Timeline ----------------------------------------------------
 
-    @property
-    def announce_serial(self):
-        return self._timeline.announce_serial
-
-    @property
-    def announced_continuation(self):
-        return self._timeline.announced_continuation
 
     @property
     def musical_timeline(self):
@@ -52,8 +39,11 @@ class Transport:
 
 
     @property
-    def next_at(self):
-        return self._timeline.next_at
+    def continuation_pending(self) -> bool:
+        return self._timeline.continuation_pending
+
+    def await_continuation(self) -> None:
+        self._timeline.await_continuation()
 
     @property
     def next_boundary_beat(self):
@@ -76,64 +66,22 @@ class Transport:
         return self._timeline.play_from_beat
 
     @property
-    def practice_preparation(self):
-        return self._timeline.practice_preparation
-
-    @property
-    def preparation_deadline(self):
-        return self._timeline.preparation_deadline
-
-    @property
-    def preparation_pending(self):
-        return self._timeline.preparation_pending
-
-    @property
     def run_at(self):
         return self._timeline.run_at
-
-    @property
-    def scheduled_start(self):
-        return self._timeline.scheduled_start
-
-    @property
-    def tempo_epoch(self):
-        return self._timeline.tempo_epoch
 
     @property
     def visual_gap_beats(self):
         return self._timeline.visual_gap_beats
 
-    @property
-    def visual_offset_beats(self):
-        return self._timeline.visual_offset_beats
-
-    def adopt_committed_stage(self, *args, **kwargs):
-        return self._timeline.adopt_committed_stage(*args, **kwargs)
-
     def advance_boundary(self, *args, **kwargs):
         return self._timeline.advance_boundary(*args, **kwargs)
-
-    def announced_deadline(self, *args, **kwargs):
-        return self._timeline.announced_deadline(*args, **kwargs)
-
-    def bind_scheduled_start(self, *args, **kwargs):
-        return self._timeline.bind_scheduled_start(*args, **kwargs)
 
     def cancel_continuation(self, *args, **kwargs):
         return self._timeline.cancel_continuation(*args, **kwargs)
 
-    def cancel_preparation(self, *args, **kwargs):
-        return self._timeline.cancel_preparation(*args, **kwargs)
-
     def clear_grading_floor(self, *args, **kwargs):
         return self._timeline.clear_grading_floor(*args, **kwargs)
 
-
-    def clear_scheduled_start(self, *args, **kwargs):
-        return self._timeline.clear_scheduled_start(*args, **kwargs)
-
-    def enter_preparation_phase(self, *args, **kwargs):
-        return self._timeline.enter_preparation_phase(*args, **kwargs)
 
     def finish_rewind(self, *args, **kwargs):
         return self._timeline.finish_rewind(*args, **kwargs)
@@ -144,23 +92,11 @@ class Transport:
     def musical_seconds(self, *args, **kwargs):
         return self._timeline.musical_seconds(*args, **kwargs)
 
-    def note_tempo(self, *args, **kwargs):
-        return self._timeline.note_tempo(*args, **kwargs)
-
     def prepare_rewind(self, *args, **kwargs):
         return self._timeline.prepare_rewind(*args, **kwargs)
 
     def select_opening(self, *args, **kwargs):
         return self._timeline.select_opening(*args, **kwargs)
-
-    def tempo_epoch_for(self, *args, **kwargs):
-        return self._timeline.tempo_epoch_for(*args, **kwargs)
-
-    def withdraw_announcement(self, *args, **kwargs):
-        return self._timeline.withdraw_announcement(*args, **kwargs)
-
-
-    # --- Session intent and take lifecycle ---------------------------
 
     @property
     def auto(self):
@@ -197,9 +133,6 @@ class Transport:
     @property
     def transport_id(self):
         return self._session.transport_id
-
-    def activate_preloaded_feedback(self, *args, **kwargs):
-        return self._session.activate_preloaded_feedback(*args, **kwargs)
 
     def apply_continuation(self, *args, **kwargs):
         return self._session.apply_continuation(*args, **kwargs)
@@ -261,9 +194,6 @@ class Transport:
 
     def resume_timeline(self, *args, **kwargs):
         return self._session.resume_timeline(*args, **kwargs)
-
-    def schedule_preparation(self, *args, **kwargs):
-        return self._session.schedule_preparation(*args, **kwargs)
 
     def score_acknowledged(self, *args, **kwargs):
         return self._session.score_acknowledged(*args, **kwargs)

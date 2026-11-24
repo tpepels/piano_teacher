@@ -35,18 +35,14 @@ class TakeGrading:
             played=(self.take.recorder.presses
                     if self.take.recorder else ()),
             from_beat=self.transport.play_from_beat,end_beat=ending,
-            tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
+            tempo=self.transport_timing.graded_tempo_map(),policies=self.policy_registry.grading,
             layout_for_feedback=self.score.completed_take_layout,
-            mode=self.transport.mode,review_end_beat=self.take.review_end_beat,
+            mode=self.transport.mode,
             performance_review=self.performance_review,
             prepare_decision=self.lesson.prepare_decision,
             plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
             score_revision=self.lesson.revision)
         assessed = completed.assessed
-        if completed.settled:
-            self.transport.note_tempo(
-                stage=self.lesson.plan.identity,
-                bpm=self.transport_timing.presentation_bpm(),now=now)
         self.take.publish_completion(
             marks=assessed.marks,unmapped=assessed.unmapped)
         # The completed take's settled grades, before any transition can
@@ -59,7 +55,7 @@ class TakeGrading:
 
     def performance_review(self, phrase: Phrase, result) -> dict:
         """Retained engine API; assessment service owns report construction."""
-        tempo = self.transport_timing.active_tempo_map()
+        tempo = self.transport_timing.graded_tempo_map()
         elapsed_to_beat = (None if tempo is None else
             lambda seconds: tempo.beat_at(tempo.seconds_at(self.transport.play_from_beat)+seconds))
         return self.assessment.review(

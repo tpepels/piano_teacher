@@ -266,6 +266,11 @@ class MusicalTimeline:
     def last_take(self) -> TimelineSegment | None:
         return next((s for s in reversed(self.segments) if s.kind == "take"), None)
 
+    def take_from(self, source_from_beat: float) -> TimelineSegment | None:
+        """The latest take placed from this source opening."""
+        return next((s for s in reversed(self.segments) if s.kind == "take"
+                     and abs(s.source_from_beat - source_from_beat) < 1e-7), None)
+
     def take(self, take_id: str) -> TimelineSegment | None:
         if not take_id:
             return None

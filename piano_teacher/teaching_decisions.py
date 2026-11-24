@@ -63,7 +63,6 @@ class TeachingRouteFacts:
     course_guided: bool = False
     guided_return: tuple[str, float] | None = None
     guided_range: tuple[float, float] | None = None
-    review_end_beat: float | None = None
     remediation_active: bool = False
     parent_decision_id: str | None = None
     episode_action_count: int = 0
@@ -135,7 +134,7 @@ def full_target_take(event, state) -> bool:
     route, result = state.route, event.assessment
     return (event.kind == "full_result" and route.mode == "practice"
         and not route.assistance_used
-        and full_source_opening(state) and route.review_end_beat is None
+        and full_source_opening(state)
         and bool(result and result.notes))
 
 

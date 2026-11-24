@@ -87,7 +87,7 @@ static func _identity(state: Dictionary, current: Dictionary) -> Dictionary:
 func _matching_renderer(identity: Dictionary):
     if score_session != null and score_session.matches_ready_source(identity):
         return stage.renderer
-    return runway.prepared_renderer(identity) if runway != null else null
+    return null
 
 static func _assets_cover_window(view, state: Dictionary) -> bool:
     # The renderer must hold the selected window (including a cross-bar
@@ -171,12 +171,6 @@ func _place(state: Dictionary, current: Dictionary, segment_id: String) -> Strin
     if not view.bind_stream_segment(segment_id) or not view.acknowledge_stream_arm():
         view.cancel_stream_arm()
         return "wait"
-    if runway != null and runway.owns_prepared_renderer(view):
-        if not runway.promote_reserved(state):
-            view.cancel_stream_arm()
-            _report_authorized_failure(str(current.get("take_id","")),
-                segment_id,"prepared_stage_promotion_failed")
-            return "wait"
     var count_in: float = float(current.get("count_in_beats",0.0))
     if count_in > 0.0:
         var backend_now: float = _backend_ms()

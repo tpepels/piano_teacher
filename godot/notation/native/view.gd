@@ -91,20 +91,6 @@ func stream_peer_clearance_facts() -> Dictionary:
         maxf(1.0,float(timeline.pixels_per_beat)),float(staff_gap()),
         float(timeline.sounding_duration_beats),size.x*PLAYHEAD_FRACTION)
 
-func transport_preflight_facts(world: float, opening: float) -> Dictionary:
-    var facts: Dictionary = _stream_controller.preflight_facts(
-        maxf(world,stream_world_beat),opening,
-        has_source_windows_at(opening),_stream_right_beats(),
-        _stream_header_beats(opening),
-        maxf(1.0,timeline.pixels_per_beat),staff_gap(),
-        timeline.sounding_duration_beats,size.x,size.x*PLAYHEAD_FRACTION)
-    facts.merge({"ready":native_ready and retained_ready(),
-        "duration":timeline.sounding_duration_beats,"density":timeline.pixels_per_beat,
-        "gap":staff_gap(),"width":size.x,"playhead":size.x*PLAYHEAD_FRACTION,
-        "rest_gap":float(practice_timeline.get("gap",{}).get("duration_beats",0.0)),
-        "bpm":bpm})
-    return facts
-
 func stream_pass_count() -> int:
     return _stream_controller.online_size()
 
@@ -346,9 +332,6 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
     _sync_painter()
     painter.paint_retained_annotations(canvas)
 
-func has_source_windows_at(opening: float) -> bool:
-    return not engraving.source_windows(opening).is_empty()
-
 func _stream_right_beats() -> float:
     return size.x*(1.0-PLAYHEAD_FRACTION)/maxf(1.0,timeline.pixels_per_beat)
 
@@ -401,9 +384,6 @@ func unscored_take_status() -> String:
 
 func bound_segment_id() -> String:
     return _stream_controller.bound_segment()
-
-func has_armed_reservation() -> bool:
-    return _stream_controller.has_armed_reservation()
 
 func bind_stream_segment(segment_id: String) -> bool:
     return _stream_controller.bind_segment(segment_id)

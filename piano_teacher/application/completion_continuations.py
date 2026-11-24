@@ -7,7 +7,6 @@ A full passage is handed to SettlementContinuation, which settles it at
 its durable successor boundary.
 """
 from __future__ import annotations
-from ..lesson_settings import SETTINGS
 from ..music import Phrase
 from .passage_outcome_presenter import performance_next_action
 
@@ -50,15 +49,8 @@ class TakeCompletion:
         """
         if effect.action == "perform":
             self.finish_performance_review(phrase,result)
-        elif effect.action == "section_review":
-            self.finish_section_review(result)
-        elif effect.action == "stop_review":
-            self.transport.halt_continuation()
-            self.notices.next_action = "Review this section before starting another take."
         elif effect.action == "exposure":
             self.course.enter_selected_exposure(effect.exposure)
-        elif effect.action == "partial_recovery":
-            self.finish_partial_recovery(result,now,exposure=effect.exposure)
         elif effect.action == "full_passage":
             return False
         else:
@@ -71,29 +63,4 @@ class TakeCompletion:
         self.notices.next_action = performance_next_action(
             summary=self.take.performance_summary)
         self.transport.stop_automatic()
-
-    def finish_section_review(self, result):
-        """Complete finish section review after a scored take."""
-        # Section reviews are deliberate, bounded practice. Stop at the
-        # selected boundary, preserve detailed feedback, and never
-        # auto-advance to a different passage.
-        self.transport.stop_automatic()
-        self.take.finish_section_review()
-        self.transport.finish_rewind()
-        self.lesson.select_opening(0.0)
-        self.notices.feedback = "Section review finished · " + result.summary
-        self.notices.next_action = "Review the notes or press Start for the whole passage."
-
-    def finish_partial_recovery(self, result, now: float, *, exposure=None):
-        """Complete finish partial recovery after a scored take."""
-        # A clean *partial* recovery cannot confer full passage mastery.
-        # Clear the bounded review before the scheduled full-pass retry.
-        self.take.prepare_full_retry()
-        self.lesson.select_opening(exposure.from_beat if exposure is not None else 0.0)
-        self.transport_timing.schedule_preparation(self.lesson.opening_beat, now=now,
-            from_visual=self.transport.visual_offset_beats + self.transport.play_from_beat
-                + self.transport_timing.elapsed_beat(now-self.transport.run_at),
-            reverse_seconds=SETTINGS.feedback_seconds)
-        self.notices.feedback = "Selected section finished · " + result.summary
-        self.notices.next_action = "Next: play the whole passage from its beginning to earn mastery."
 

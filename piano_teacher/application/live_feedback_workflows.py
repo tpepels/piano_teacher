@@ -53,7 +53,7 @@ class LiveFeedbackWorkflows:
         marks = self.live_feedback(elapsed)
         scope, _ = live_scope(self.lesson.plan.active_phrase,
             from_beat=self.transport.play_from_beat,elapsed_seconds=elapsed,
-            bpm=self.lesson.plan.bpm,tempo=self.transport_timing.active_tempo_map())
+            bpm=self.lesson.plan.bpm,tempo=self.transport_timing.graded_tempo_map())
         self.live_assessment.publish(marks, self.feedback_take(),scope_start_beat=scope)
 
     def live_feedback(self, elapsed_seconds: float) -> list[dict]:
@@ -70,5 +70,5 @@ class LiveFeedbackWorkflows:
             from_beat=self.transport.play_from_beat,
             elapsed_seconds=elapsed_seconds,
             bar_boundaries=plan.piece.bar_boundaries,
-            layout=engraved.layout, tempo=self.transport_timing.active_tempo_map())
+            layout=engraved.layout, tempo=self.transport_timing.graded_tempo_map())
 

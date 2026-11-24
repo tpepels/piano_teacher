@@ -16,16 +16,15 @@ from .playback_transitions import CountInPlan
 from .musical_scheduler import SCHEDULER
 from .playback_facts import (
     PlaybackRuntimeFacts, PlaybackSourceFacts,
-    TimedTakeSource, TimedStartRequest, StartedTake, PreparationRequest,
+    TimedTakeSource, TimedStartRequest, StartedTake,
     ListenActivation, ResumeRequest, ResumedTimeline,
     ResumeCompletion, FullPassageFacts, PassageCompletion, PlaybackAuthorization,
     PassageRuntimeFacts, ScheduledContinuation, AppliedContinuation,
-    PreloadedFeedbackSource,
 )
 from .score_ack import ScoreAckState, choose_score_ack_action
 from .transport_commands import require_pausable
 from .teaching_continuation import (
-    FeedbackFault, HandoffScore, ContinueSelectedScore, AwaitSelectedScore,
+    FeedbackFault, ContinueSelectedScore, AwaitSelectedScore,
     StopSelectedContinuation,
 )
 
@@ -114,7 +113,7 @@ class PlaybackSession:
         self._transport.clear_grading_floor()
         self.mode = request.mode
         self._take.begin_timed_review()
-        self._transport.begin_take(loop_continuation=request.loop_continuation)
+        self._transport.begin_take()
         self.open_take(phrase=source.phrase,recording=True)
         self._transport.running = True
         self.auto = request.automatic
@@ -139,10 +138,9 @@ class PlaybackSession:
         self._transport.install_timed_origin(from_beat=scheduled.from_beat,
             run_at=deadline,gap_beats=source.visual_gap_beats)
         scope = ("perform" if request.mode == "perform" else
-            "section_review" if self._take.review_end_beat is not None else
             "partial" if scheduled.from_beat > source.phrase.first_attack_beat+1e-7 else "full")
         return StartedTake(scope,scheduled.from_beat,
-            self._take.review_end_beat or source.phrase.sounding_end-source.phrase.start,
+            source.phrase.sounding_end-source.phrase.start,
             scheduled.next_boundary_beat,deadline,scheduled.next_action)
 
     def capture_start(self, context: dict) -> None:
@@ -247,27 +245,6 @@ class PlaybackSession:
             self.awaiting_score_revision = None
         return decision
 
-    def schedule_preparation(self, request: PreparationRequest) -> None:
-        self._transport.schedule_source_preparation(request.source_model,
-            source_from_beat=request.target,from_visual=request.from_visual,
-            now=request.now,reverse_seconds=request.reverse_seconds,bpm=request.bpm,
-            horizon_beats=request.horizon_beats,
-            reading_lead_included=request.reading_lead_included,
-            short_deadline=request.short_deadline,announce=request.announce)
-        if request.announce:
-            pending = self._take.pending
-            if pending is not None and pending.receipt is None:
-                self._score.announce_successor(pending,deadline=self._transport.next_at)
-            else:
-                self._transport.announce_continuation(
-                    request.target,self._transport.next_at,request.bpm)
-        else:
-            self._transport.withdraw_announcement()
-        self._transport.running = False
-        self._take.suspend_recording()
-        self._transport.count_in_beats = 0.0
-        self._measurement.phase_changed("preparation",request.now)
-
     def resume_suspended_admission(self) -> None:
         """Release the stationary clock only after physical source validation."""
         if not self._transport.paused or self.running:
@@ -300,25 +277,7 @@ class PlaybackSession:
 
     def prepare_admitted_continuation(self) -> None:
         self._transport.cancel_continuation()
-        self._transport.finish_preparation_gate()
         self._transport.finish_rewind()
-
-    def activate_preloaded_feedback(self, source: PreloadedFeedbackSource | None, *,
-                                    revision: int, fingerprint: str) -> float | None:
-        if (source is None or self._take.pending_result is None or not self.auto
-                or self.running or self._transport.paused):
-            return None
-        if self._score.successor_selection(self._take.pending,
-                revision=revision,fingerprint=fingerprint) is None:
-            return None
-        now = self._clock()
-        if not self._progression.preloaded_feedback_due(source,now=now,
-                run_at=self._transport.run_at,from_beat=self._transport.play_from_beat):
-            return None
-        # Readiness releases the existing settlement boundary; the next
-        # take still requires its independently admitted score deadline.
-        self._transport.wait_for_continuation(now)
-        return now
 
     def freeze_after_fault(self, now: float) -> None:
         """Hold the timeline after a failed save or transition, like Pause.
@@ -358,10 +317,6 @@ class PlaybackSession:
         return ResumedTimeline(now,request.learning,previous,shift)
 
     def finish_resume(self, resumed: ResumedTimeline) -> ResumeCompletion:
-        pending = self._take.pending
-        announced = self._transport.announced_continuation
-        if pending is not None and self._score.successor_schedule is not None and announced is not None:
-            self._score.announce_successor(pending,deadline=announced[1])
         self._measurement.event("timeline_resume",{
             "scheduled_origin_before":resumed.previous_origin-self._measurement.origin,
             "scheduled_origin_after":self._transport.run_at-self._measurement.origin,
@@ -388,16 +343,15 @@ class PlaybackSession:
             # after its rest to the barline.
             self._transport.musical.close()
         if plan.action == "ready":
-            self._transport.wait_for_continuation(facts.now)
+            self._transport.await_continuation()
             result = PassageCompletion(advance_feedback=True,next_action=plan.next_action)
         elif plan.action == "stop":
             self._transport.cancel_continuation()
             result = PassageCompletion(next_action=plan.next_action)
         else:
-            self._score.announce_successor(facts.pending,deadline=plan.deadline)
-            early = bool(self._transport.next_at)
-            result = PassageCompletion(advance_feedback=early,force_early=early,
-                update_clock=not early and facts.now >= self._transport.next_at,
+            self._score.announce_successor(facts.pending)
+            self._transport.await_continuation()
+            result = PassageCompletion(advance_feedback=True,
                 next_action=plan.next_action)
         self._full_completion = (identity,result)
         return result
@@ -413,7 +367,7 @@ class PlaybackSession:
         """Execute one typed, source-bound publication without reselecting it."""
         if self._applied_continuation is not None and self._applied_continuation[0] == effect.identity:
             return self._applied_continuation[1]
-        if isinstance(effect,(HandoffScore,ContinueSelectedScore)):
+        if isinstance(effect,ContinueSelectedScore):
             # The musical timeline places the next take after this one.
             result = AppliedContinuation(ScheduledContinuation(
                 effect.exposure.from_beat))

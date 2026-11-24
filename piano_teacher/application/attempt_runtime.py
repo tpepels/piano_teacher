@@ -18,7 +18,6 @@ class AttemptRuntime:
     feedback_unmapped: int = 0
     performance_summary: dict | None = None
     review_stage_identity: str | None = None
-    review_end_beat: float | None = None
     review_session_complete: bool = False
     retry_range: dict | None = None
     recovery_notice: dict | None = None
@@ -47,16 +46,8 @@ class AttemptRuntime:
         self.retry_range = dict(selected) if selected is not None else None
 
     def prepare_timed_exposure(self, prepared) -> None:
-        self.review_end_beat = prepared.end_beat
         if prepared.return_context is not None:
             self.restore_retry(prepared.retry_range)
-
-    def prepare_section(self, *, start: float, end: float,
-                        first_bar=None, last_bar=None) -> None:
-        self.review_end_beat = end
-        self.retry_range = {"start_beat": start, "end_beat": end}
-        if first_bar is not None:
-            self.retry_range.update(first_bar=first_bar, last_bar=last_bar)
 
     def reset_source_presentation(self) -> None:
         self.clear_feedback()
@@ -84,16 +75,6 @@ class AttemptRuntime:
         self.performance_summary = summary
         self.review_stage_identity = stage_key
 
-    def finish_section_review(self) -> None:
-        self.review_end_beat = None
-        self.review_session_complete = True
-        self.retry_range = None
-
-    def prepare_full_retry(self) -> None:
-        self.review_end_beat = None
-        self.retry_range = None
-
-
     def reset_for_stop(self) -> None:
         """Reset every attempt/review/recovery field in one stable owner."""
         self.recorder = None
@@ -101,7 +82,6 @@ class AttemptRuntime:
         self.feedback_unmapped = 0
         self.performance_summary = None
         self.review_stage_identity = None
-        self.review_end_beat = None
         self.review_session_complete = False
         self.retry_range = None
         self.recovery_notice = None

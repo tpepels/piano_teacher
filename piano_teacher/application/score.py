@@ -29,9 +29,6 @@ class Score:
 
     # --- score_artifact_registry
 
-    def adopt_artifacts(self, *args, **kwargs):
-        return self._artifacts.adopt(*args, **kwargs)
-
     @property
     def current_artifacts(self):
         return self._artifacts.current
@@ -70,33 +67,14 @@ class Score:
 
     # --- teaching_continuation
 
-    def acknowledge_successor_stage(self, *args, **kwargs):
-        return self._successor.acknowledge_stage(*args, **kwargs)
-
     def begin_feedback(self, *args, **kwargs):
         return self._successor.begin_feedback(*args, **kwargs)
 
     def capture_successor_state(self, *args, **kwargs):
         return self._successor.capture_state(*args, **kwargs)
 
-    def choose_ahead(self, *args, **kwargs):
-        return self._successor.choose_ahead(*args, **kwargs)
-
-    def consume_committed_asset(self, *args, **kwargs):
-        return self._successor.consume_committed_asset(*args, **kwargs)
-
-
-    def ensure_next_score(self, *args, **kwargs):
-        return self._successor.ensure_next(*args, **kwargs)
-
     def finish_feedback(self, *args, **kwargs):
         return self._successor.finish_feedback(*args, **kwargs)
-
-    def report_native_failure(self, *args, **kwargs):
-        return self._successor.report_native_failure(*args, **kwargs)
-
-    def reserved_asset(self, *args, **kwargs):
-        return self._successor.reserved_asset(*args, **kwargs)
 
     def restore_successor_state(self, *args, **kwargs):
         return self._successor.restore_state(*args, **kwargs)
@@ -104,19 +82,8 @@ class Score:
     def settlement_failure(self, *args, **kwargs):
         return self._successor.settlement_failure(*args, **kwargs)
 
-    def successor_selection(self, *args, **kwargs):
-        return self._successor.selection(*args, **kwargs)
-
     def validate_announcement(self, *args, **kwargs):
         return self._successor.validate_announcement(*args, **kwargs)
-
-    def validate_reservation(self, *args, **kwargs):
-        return self._successor.validate_reservation(*args, **kwargs)
-
-    def warm_more(self, *args, **kwargs):
-        return self._successor.warm_more(*args, **kwargs)
-
-    # --- score_state_publisher
 
     def prepare_guided_score(self, *args, **kwargs):
         return self._publisher.prepare_guided(*args, **kwargs)

@@ -38,7 +38,6 @@ from .device_workflows import DeviceWorkflows
 from .exposure_workflows import (
     ExposureWorkflows, GuidedExposureInstall, TimedExposureInstall)
 from .flow_course_session import PracticeFlowCourseSession
-from .future_score import FutureScore
 from .guided_session import GuidedSession
 from .history_management import HistoryManagement, HistoryReads, PlanReinstallation
 from .learner_progress import LearnerProgress
@@ -71,7 +70,6 @@ from .practice_timeline import PracticeTimeline
 from .recovery_workflows import SelectedRecovery
 from .score_artifact_registry import ScoreArtifactRegistry
 from .score_artifacts import ScoreArtifacts
-from .score_preload_workflow import ScorePreloadWorkflow
 from .score_read_services import ScoreReadServices
 from .score_state_publisher import ScoreStatePublisher
 from .session_evidence_context import SessionEvidenceContext
@@ -165,8 +163,7 @@ def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
     r.fingering = FingeringService(data_dir / "fingering")
     r.preprocessing = PreprocessingCache(data_dir / "preprocessed")
     r.score_artifact_registry = ScoreArtifactRegistry(ScoreArtifacts(r.preprocessing))
-    future_score = FutureScore(data_dir / "preprocessed", clock=r.now)
-    r.teaching_continuation = TeachingContinuation(future_score,r.visual_transport)
+    r.teaching_continuation = TeachingContinuation(r.visual_transport)
     # The untimed guided engine owns repeat presentation epochs; no
     # Godot-side guess about missed notes or lesson progression.
     r.score_state_publisher = ScoreStatePublisher()
@@ -338,16 +335,10 @@ def _transport_and_completion(r) -> None:
         course=r.course, grading=r.take_grading,
         settlement=r.settlement)
 
-    r.score_preload = ScorePreloadWorkflow(
-        lesson=r.lesson, lock=r.lock, transport=r.transport, score=r.score,
-        take=r.take, transport_timing=r.transport_timing,
-        settlement=r.settlement)
-
     r.session_capture = SessionCapture(
         lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
         library=r.library, midi_input=r.midi_input, score=r.score,
         ports=SnapshotReadPorts(
-            seek_grid=r.navigation.seek_grid,
             learner_snapshot=r.navigation.learner_snapshot,
             elapsed_beat=r.transport_timing.elapsed_beat,
             phase=r.session_phase.at,
@@ -473,7 +464,7 @@ def _event_boundary(r) -> None:
         playback_authorization=r.playback_authorization,
         source_installation=r.source_installation,
         library=r.library, lesson=r.lesson,
-        course=r.course, score_preload=r.score_preload,
+        course=r.course,
         device_workflows=r.device_workflows,
         history_management=r.history_management,
         history_reads=r.history_reads,

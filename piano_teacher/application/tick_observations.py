@@ -37,6 +37,5 @@ class TickObservations:
                 self.midi_input.resume_grading_after),
             mode=self.transport.mode,
             pending_result=self.take.pending_result is not None,
-            preparation_pending=self.transport.preparation_pending,
             performance_complete=self.take.performance_summary is not None),now)
         return now

@@ -51,9 +51,7 @@ class TeachingDecisions:
             assisted_count=assisted_count, completed=completed, reason=values.get("reason"),
             bar=values.get("bar"), first_bar=values.get("first_bar"), last_bar=values.get("last_bar"),
             scope=values.get("scope"), requested_stage=values.get("stage_key"), requested_mode=values.get("mode"))
-        scope = completion_route(self.transport.mode, self.take.review_end_beat,
-            self.transport.play_from_beat,
-            full_from_beat=p.active_phrase.first_attack_beat)
+        scope = completion_route(self.transport.mode)
         state = TeachingState(1, self.binding(), p.course_state(),
             TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto,
                 assistance_used=self.measurement.assistance_used,
@@ -61,7 +59,7 @@ class TeachingDecisions:
                 from_beat=self.transport.play_from_beat,
                 end_beat=end_beat if end_beat is not None else p.active_phrase.sounding_end-p.active_phrase.start,
                 course_guided=self.lesson_cursor.course_guided, guided_return=self.guided_session.return_context,
-                guided_range=self.guided_session.beat_range, review_end_beat=self.take.review_end_beat,
+                guided_range=self.guided_session.beat_range,
                 remediation_active=self.flow_session.aid is not None,
                 parent_decision_id=self.measurement.parent_decision),
             ManualFacts(paused=self.transport.paused,
