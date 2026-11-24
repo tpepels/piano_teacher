@@ -364,11 +364,11 @@ func _process(_delta: float) -> bool:
                 return false
             if (int(state.get("transport_id",-1)) != initial_transport+2 or
                     not failed_take_seen or not played_first or not played_second or
-                    # A clean take steps +10% (48); a secure one (every onset
-                    # inside half its window) skips a step (56).
-                    not int(state.get("bpm",0)) in [48,56] or
+                    # A clean take is faster: the step grows with timing
+                    # quality and shrinks with the window's attack count.
+                    int(state.get("bpm",0)) <= 40 or int(state.get("bpm",0)) > 80 or
                     int(state.get("lesson_steps_mastered",0)) != 0):
-                _fail("Two real MIDI attacks did not produce a clean faster repeat (48 or 56 BPM)")
+                _fail("Two real MIDI attacks did not produce a clean faster repeat (above 40 BPM)")
                 return true
             # End an already accepted take through the production UI port.
             # Pending auto-continuations must be invalidated; no late score
