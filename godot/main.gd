@@ -213,6 +213,7 @@ func _ready() -> void:
         countin_audio.practice_click,countin_audio.click)
     command_coordinator.configure(practice_view,settings_view,metronome_frame,
         action_request,command_failure_presenter,score_session)
+    metronome_frame.score_flow = score_flow
     score_admission = ScoreAdmissionGateway.new()
     add_child(score_admission)
     score_admission.configure(self,inprocess_bus,practice_view.stage,

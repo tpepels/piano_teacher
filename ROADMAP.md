@@ -77,7 +77,7 @@ evaluated identically by both sides:
 | T1 | Exact constant/eased timing maths, Python + Godot | Done `c2a262b1` |
 | T2 | Python `MusicalTimeline` model, built alongside today's transport and published in state; journeys log its agreement with today's deadlines | Done: today's admitted repeats start 1.4–14 s after bar arithmetic in the 4/4, 2/4 and Moonlight journeys |
 | T3 | Godot scroll position from the published timeline (replaces presentation epochs); ramps visible | Done with T5: the world follows the published timeline during a run |
-| T4 | Count-in bubbles and clicks from timeline segments | |
+| T4 | Count-in bubbles and clicks from timeline segments | Done: count-in numbers and clicks read their beat from the timeline take, so the eased bar is counted as it moves |
 | T5 | Continuations and Start/Resume append segments at bar positions; remove reserve/present admission for them; late decision = extra rest bar | Done with T3: every timed take is placed and started by Python; Godot draws it at its world start (pop-in allowed), no reserve/present; an unplayed abandoned take is withdrawn |
 | T6 | Grading via the timeline inverse; remove fixed deadlines, reservation and clearance machinery; tests and journeys on the new contract | |
 

@@ -104,6 +104,18 @@ static func engine_count_in_deadline_ms(state: Dictionary, action: String,
     return float(state.get("visual_run_at_ms",NAN))+offset_ms
 
 
+## Beats from a take's first note at local `now_ms`, read from the musical
+## timeline the take was placed on (negative during its count-in), so an
+## eased count-in bar is counted and clicked exactly as it moves. Without
+## the timeline: the constant-tempo distance from `deadline_ms`.
+func _take_beat(segment_id: String, now_ms: int, deadline_ms: float,
+        bpm: float) -> float:
+    if score_flow != null and score_flow.following and not segment_id.is_empty():
+        var beat: float = score_flow.take_beat(segment_id,now_ms)
+        if is_finite(beat):
+            return beat
+    return TempoTimeline.beats_from_milliseconds(float(now_ms)-deadline_ms,bpm)
+
 func _reserved_count_in(state: Dictionary, state_tick_ms: int,
         now_ms: int) -> bool:
     if _reserved.is_empty():
@@ -164,7 +176,8 @@ func _reserved_count_in(state: Dictionary, state_tick_ms: int,
             return false
     var deadline: float = float(_reserved["deadline_ms"])
     var bpm: float = float(_reserved["bpm"])
-    var beat: float = TempoTimeline.beats_from_milliseconds(float(now_ms)-deadline,bpm)
+    var beat: float = _take_beat(str(_reserved.get("segment_id","")),
+        now_ms,deadline,bpm)
     if beat >= 0.0:
         # For one beat the same take's own transport (running or resumed
         # countdown of this transport) may still report a count-in beat:
@@ -228,6 +241,9 @@ func _count_in(token: String, beat: float, bar_beats: float, meter: Variant,
     _dispatch_cue(token,float(units[0]),int(units[1]),use_raw_click,
         float(units[2]),drop_late)
 
+
+# The score world; during a run it follows the musical timeline.
+var score_flow
 
 func _init(calibration, practice, visual_clock, at_beat: Callable,
         on_count: Callable, on_raw: Callable) -> void:
@@ -297,9 +313,8 @@ func update(state: Dictionary, state_tick_ms: int,
                 if is_finite(deadline_ms) and clock.has_backend_offset:
                     var tempo: float = maxf(1.0,float(plan.get("bpm",60.0)))
                     var beat_ms: float = deadline_ms+float(clock.backend_offset_ms)
-                    var before: float = TempoTimeline.beats_from_milliseconds(
-                        float(now_ms)-beat_ms,tempo)
                     var segment: String = str(active.get("segment_id",""))
+                    var before: float = _take_beat(segment,now_ms,beat_ms,tempo)
                     var token: String = ("authorized:"+segment
                         if not segment.is_empty() else "authorized:"+take)
                     if bool(active.get("reused_count_in",false)) and \

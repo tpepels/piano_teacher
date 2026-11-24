@@ -55,6 +55,17 @@ func _leave_run(at_ms: int) -> void:
     last_ms = timeline.last_ms
     hold_world = timeline.hold_world
 
+## Beats from the first note of take `segment_id` at local `at_ms`
+## (negative in its count-in); NAN when the take is not on the timeline.
+func take_beat(segment_id: String, at_ms: int) -> float:
+    if not following:
+        return NAN
+    for segment in musical.segments:
+        if str(segment.get("kind","")) == "take" and \
+                str(segment.get("take_id","")) == segment_id:
+            return musical.world_at(_backend_ms(at_ms))-float(segment["world_start"])
+    return NAN
+
 ## World position of a run-relative timeline world beat.
 func run_world(world: float) -> float:
     return run_offset+world
