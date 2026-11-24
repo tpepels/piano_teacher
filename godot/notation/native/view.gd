@@ -34,7 +34,6 @@ func set_transport_overlay_enabled(enabled: bool) -> void:
 
 const ScoreEngraving := preload("res://notation/native/score_engraving.gd")
 const RenderPass := preload("res://notation/native/render_pass.gd")
-const StreamAdmissionExecutor := preload("res://notation/native/stream_admission_executor.gd")
 const ScoreStreamController := preload("res://notation/native/score_stream_controller.gd")
 const RetainedNotationPool := preload("res://notation/native/retained_notation_pool.gd")
 var engraving = ScoreEngraving.new(timeline)
@@ -359,25 +358,6 @@ func _first_source_header_spaces() -> float:
 func _stream_header_beats(opening: float) -> float:
     return (_first_source_header_spaces() if opening <= .0001 else 1.6)* \
         staff_gap()/maxf(1.0,timeline.pixels_per_beat)
-
-func reserve_transport_action(action: String, world: float,
-        opening: float, count_in_beats: float, display_context: bool = false,
-        exact_start_world: float = NAN) -> Dictionary:
-    stream_world_beat = maxf(stream_world_beat,world)
-    return StreamAdmissionExecutor.reserve_action(_stream_controller,
-        _stream_facts(stream_world_beat),transport_preflight_facts(world,opening),
-        action,world,opening,count_in_beats,_stream_right_beats(),
-        _stream_header_beats(opening),bpm,exact_start_world,display_context)
-
-## Consume the coordinator's exact deadline through the same physical
-## preflight and immutable commit used for user transport actions.
-func reserve_continuation_at(world: float, opening: float,
-        start_world: float, count_in_beats: float) -> Dictionary:
-    stream_world_beat = maxf(stream_world_beat,world)
-    return StreamAdmissionExecutor.reserve_action(_stream_controller,
-        _stream_facts(stream_world_beat),transport_preflight_facts(world,opening),
-        "auto",world,opening,count_in_beats,_stream_right_beats(),
-        _stream_header_beats(opening),bpm,start_world)
 
 func short_rest_geometry() -> Dictionary:
     var geometry: Dictionary = _stream_controller.rest_geometry(

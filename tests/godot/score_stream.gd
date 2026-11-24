@@ -6,7 +6,6 @@ const Controller := preload("res://notation/native/score_stream_controller.gd")
 const Pool := preload("res://notation/native/retained_notation_pool.gd")
 const Geometry := preload("res://notation/native/stream_geometry.gd")
 const Lifecycle := preload("res://notation/native/stream_lifecycle.gd")
-const Reservation := preload("res://score_transport_reservation.gd")
 const Admission := preload("res://score_stream_admission.gd")
 var failures := 0
 
@@ -46,52 +45,10 @@ func run() -> void:
     var windows: Array[Vector2] = [Vector2(0.0,4.0)]
     pool.install(canvas,windows)
     controller.bind_surface(canvas,pool,func(_opening: float) -> Array[Vector2]: return windows)
-    var plan: Dictionary = Reservation.plan_facts(facts(controller,0.0),"start",0.0,0.0,4.0)
-    check(bool(plan.get("ok",false)) and float(plan.start_world) >= 4.0,"Play reserves a complete count-in before the first note")
-    # A preliminary prepared READY source may have been placed before
-    # the backend computes its final, later musical deadline. Only an
-    # unexposed prepared strip may be replaced; no authorized/paused
-    # source may be repositioned. The pure preflight uses actual queue
-    # snapshots, with no second teaching or transport implementation.
-    var prepared: Dictionary = {
-        "kind":"source", "world_origin":12.0,"source_floor":0.0,
-        "source_ceiling":4.0,"pending":true,"armed":false,
-        "take_key":"prepared","serial":42,"take_owner":42}
-    var prepared_facts: Dictionary = facts(controller,0.0)
-    prepared_facts["online"] = [prepared]
-    prepared_facts["withdrawn"] = {"remaining":[],"owners":[42]}
-    # An earlier peer source occupies the empty-strip route, so the
-    # intentionally prepared offscreen source is the reuse candidate.
-    prepared_facts["peer_floor"] = 8.0
-    var same_prepared: Dictionary = Reservation.plan_facts(
-        prepared_facts,"start",0.0,0.0,4.0,12.0)
-    check(bool(same_prepared.get("ok",false)) and
-        str(same_prepared.get("mode","")) == "reuse",
-        "A prepared source is reused when the backend selects its exact existing slot")
-    var later_prepared: Dictionary = Reservation.plan_facts(
-        prepared_facts,"start",0.0,0.0,4.0,20.0)
-    check(bool(later_prepared.get("ok",false)) and
-        str(later_prepared.get("mode","")) == "append" and
-        absf(float(later_prepared.get("start_world",0.0))-20.0) < .0001 and
-        int(later_prepared.get("withdraw_owners",[]).size()) == 1,
-        "A retractable READY strip yields to the exact later backend deadline")
-    var paused_mismatch: Dictionary = prepared_facts.duplicate(true)
-    paused_mismatch["online"] = [prepared.duplicate(true)]
-    paused_mismatch["online"][0]["pending"] = false
-    paused_mismatch["online"][0]["armed"] = true
-    paused_mismatch["online"][0]["take_key"] = "active"
-    paused_mismatch["was_paused"] = true
-    paused_mismatch["last_take"] = "active"
-    paused_mismatch["paused_owner"] = 42
-    var paused_relocate: Dictionary = Reservation.plan_facts(
-        paused_mismatch,"resume_fresh",0.0,0.0,4.0,20.0)
-    check(not bool(paused_relocate.get("ok",false)) or
-        str(paused_relocate.get("mode","")) != "reuse",
-        "A genuinely paused authorized source cannot be moved to a new backend deadline")
-
-    var armed: Dictionary = controller.arm_take(geometry(0.0),0.0,0.0,6.7,0.4,
-        float(plan.start_world),false,4.0)
-    check(not armed.is_empty(),"The physical source accepts the planned start")
+    # The musical timeline put the first note one count-in bar ahead.
+    var armed: Dictionary = controller.place_timeline_take(geometry(0.0),0.0,4.0,6.7,0.4,4.0)
+    check(not armed.is_empty() and absf(float(armed.get("start_world",0.0))-4.0) < .0001,
+        "A take is drawn exactly at its timeline world start")
     acknowledge(controller,0.0,"piece|7|10|practice","first")
     var original: Array = controller.online_snapshot()
     var music: Array = fixed_music(original)
@@ -100,42 +57,35 @@ func run() -> void:
         item.segment.compiled = true
     controller.attach_compiled()
     for item in controller.queue.online:
-        Lifecycle.project(item,2.0,330.0,100.0,20.0,Vector2(1000,600),4.0)
+        Lifecycle.project(item,5.0,330.0,100.0,20.0,Vector2(1000,600),4.0)
     var first: Dictionary = controller.queue.online[0]
     check(bool(first.get("ever_visible",false)),"The admitted source reaches the visible score")
     var before_x: float = first.clip.position.x+first.segment.position.x
-    controller.observe_transport(geometry(2.0),2.0,0.0,0.0,"piece|7|10|practice","paused",true,false,true,"first",true)
-    controller.observe_transport(geometry(2.5),2.5,0.0,0.0,"piece|7|10|practice","paused",true,false,true,"first",true)
+    controller.observe_transport(geometry(5.0),5.0,0.0,0.0,"piece|7|10|practice","paused",true,false,true,"first",true)
+    controller.observe_transport(geometry(5.5),5.5,0.0,0.0,"piece|7|10|practice","paused",true,false,true,"first",true)
     check(fixed_music(controller.online_snapshot()) == music,"Pause preserves every committed source and release boundary")
-    Lifecycle.project(first,2.5,330.0,100.0,20.0,Vector2(1000,600),4.0)
+    Lifecycle.project(first,5.5,330.0,100.0,20.0,Vector2(1000,600),4.0)
     # This is a raw geometric projection at a later supplied world beat.
     # The owning presentation session freezes that input beat on Pause.
     check(first.clip.position.x+first.segment.position.x < before_x,
         "Source projects forward for increasing world time without moving its binding")
-    var resume: Dictionary = Reservation.plan_facts(facts(controller,2.5),"resume_fresh",2.5,0.0,4.0)
-    check(bool(resume.get("ok",false)) and str(resume.get("mode","")) == "append",
-        "A frozen Resume reserves fresh future ink rather than retiming the paused take")
-    controller.trim(geometry(2.5),"user_resume_fresh_replace_unseen",-1,
-        int(resume.get("protected_strip",-1)))
-    var resumed: Dictionary = controller.arm_take(geometry(2.5),2.5,0.0,6.7,0.4,
-        float(resume.start_world),false,
-        4.0 if bool(resume.get("empty_strip",false)) else 0.0,true)
-    check(not resumed.is_empty(),"Resume commits its reserved source")
-    acknowledge(controller,2.5,"piece|7|10|practice","resume")
+    # Resume while playing continues after the ink still ahead, plus a bar.
+    var ahead: float = controller.ink_end(geometry(5.5))
+    check(is_finite(ahead) and ahead >= 8.0,
+        "The printed ink still ahead of the playhead is reported to Python")
+    var resumed: Dictionary = controller.place_timeline_take(geometry(5.5),0.0,
+        ahead+4.0,6.7,0.4,4.0)
+    check(not resumed.is_empty(),"Resume draws the continuation where the timeline put it")
+    acknowledge(controller,5.5,"piece|7|10|practice","resume")
     var after_resume: Array = controller.online_snapshot()
     check(fixed_music(after_resume).slice(0,1) == music.slice(0,1),
         "Resume preserves the original paused source while replacing its invisible rest")
     check(controller.visible_take_keys().has("piece|7|10|practice"),"Resume retains the attempt's performance identity")
-    # Retry always allocates a future copy; it cannot re-anchor the old one.
-    var retry: Dictionary = Reservation.plan_facts(facts(controller,3.0),"restart",3.0,0.0,4.0)
-    check(bool(retry.get("ok",false)) and float(retry.first_pixel_x) > 1000.0
-        and float(retry.start_world) >= 7.0,"Retry enters from the right after its count-in")
-    controller.trim(geometry(3.0),"retry")
-    controller.retry_placement_enabled(true)
-    var restarted: Dictionary = controller.arm_take(geometry(3.0),3.0,0.0,6.7,0.4,
-        float(retry.start_world),true,0.0,false,false,float(retry.get("leading_rest_beats",0.0)))
-    check(not restarted.is_empty(),"Retry commits the future reservation")
-    acknowledge(controller,3.0,"piece|7|11|practice","retry")
+    # Retry draws a new copy after the ink ahead; it never re-anchors the old one.
+    var restarted: Dictionary = controller.place_timeline_take(geometry(6.0),0.0,
+        controller.ink_end(geometry(6.0))+4.0,6.7,0.4,4.0)
+    check(not restarted.is_empty(),"Retry draws its new take")
+    acknowledge(controller,6.0,"piece|7|11|practice","retry")
     check(fixed_music(controller.online_snapshot()).slice(0,1) == music.slice(0,1),
         "Retry preserves the original exposed source without relocating it")
     check(controller.visible_take_keys().has("piece|7|10|practice")
@@ -158,49 +108,34 @@ func run() -> void:
         float(authored_rest.get("source_ceiling",INF)) < 4.0,
         "Count-in rest reserves physical header space without changing the musical bar")
     # Source sounds from world 4 through 8. Its one-bar count-in rest
-    # occupies the musical interval [8,12); the next attack is at 12.
-    var auto_facts: Dictionary = facts(automatic_controller,9.0)
-    var auto_plan: Dictionary = Reservation.plan_facts(
-        auto_facts,"auto",9.0,0.0,4.0,12.0)
-    check(bool(auto_plan.get("ok",false)),
-        "Fixed one-bar repeat clears real retained written-rest ink")
-    if bool(auto_plan.get("ok",false)):
-        var next_armed: Dictionary = automatic_controller.arm_take(
-            geometry(9.0),9.0,0.0,6.7,0.4,12.0,
-            false,4.0,true)
-        check(not next_armed.is_empty(),
-            "A fixed one-bar repeat that passes physical preflight commits")
+    # occupies [8,12); the repeat's first note is at 12.
+    var next_armed: Dictionary = automatic_controller.place_timeline_take(
+        geometry(9.0),0.0,12.0,6.7,0.4,4.0)
+    check(not next_armed.is_empty(),
+        "A one-bar repeat after the written rest is drawn at its timeline place")
+    var overlapping: Dictionary = automatic_controller.place_timeline_take(
+        geometry(13.0),0.0,14.0,6.7,0.4,4.0)
+    check(overlapping.is_empty(),"A take may never overlap ink already drawn")
     automatic_canvas.free()
 
-    # An already-printed rest is physical queue ink. A fixed Tempo repeat
-    # must refuse overlap at preflight instead of passing the backend's
-    # deadline to a queue that cannot commit it. The deadline cannot move.
-    var repeat_facts := facts(controller,8.0)
-    repeat_facts.online = [{"kind":"rest","world_origin":8.0,"source_floor":0.0,"source_ceiling":20.0}]
-    repeat_facts.withdrawn = {"remaining":repeat_facts.online,"owners":[]}
-    repeat_facts.peer_source_floor = -INF
-    var repeat: Dictionary = Reservation.plan_facts(repeat_facts,"auto",8.0,0.0,4.0,12.0)
-    check(not bool(repeat.get("ok",false)),
-        "An exact Tempo repeat must refuse overlap with an admitted rest")
-    repeat_facts.withdrawn.remaining = [{"kind":"source","world_origin":10.0,
-        "source_floor":0.0,"source_ceiling":4.0}]
-    check(not bool(Reservation.plan_facts(repeat_facts,"auto",8.0,0.0,4.0,12.0).get("ok",false)),
-        "A direct repeat refuses overlap with exposed source ink")
-    # Preserve the owner's 2026-11-18 Pathétique regression as measured
-    # preflight facts, without a second renderer/queue implementation.
-    var slow_world := 18.3153996732027
-    var slow_header := 0.82415522875817
-    var outgoing_rest_end := 18.5358163398694+2.0
-    var slow_facts := {"ready":true,"duration":8.0,"density":288.0,"gap":22.0,
-        "width":1256.0,"playhead":1256.0*0.33,"rest_gap":2.0,"bpm":16.0,
-        "source_exists":true,"online":[],"withdrawn":{"remaining":[],"owners":[]},
-        "peer_floor":outgoing_rest_end,"right":1256.0*0.67/288.0,
-        "header":slow_header,"preview_world":slow_world}
-    var slow: Dictionary = Reservation.plan_facts(slow_facts,"start",slow_world,0.0,2.0+0.4*16.0/60.0)
-    check(bool(slow.get("ok",false)) and float(slow.first_pixel_x) > 1256.0
-        and float(slow.start_world)-slow_header > outgoing_rest_end
-        and float(slow.start_world) > 20.4215330065361,
-        "First slow Tempo entry clears the outgoing written rest instead of using the refused deadline")
+    # A take whose first note never reached the playhead is withdrawn when
+    # a new run places its own take (e.g. Listen abandoned for Tempo).
+    var abandon_controller := Controller.new()
+    var abandon_pool := Pool.new()
+    var abandon_canvas := Control.new()
+    root.add_child(abandon_canvas)
+    abandon_pool.install(abandon_canvas,windows)
+    abandon_controller.bind_surface(abandon_canvas,abandon_pool,
+        func(_beat: float) -> Array[Vector2]: return windows)
+    check(not abandon_controller.place_timeline_take(geometry(0.0),0.0,4.0,6.7,0.4,4.0).is_empty(),
+        "The first exposure is drawn")
+    check(abandon_controller.ink_end(geometry(0.5)) == -INF,
+        "Unplayed ink does not delay the next run")
+    check(not abandon_controller.place_timeline_take(geometry(0.5),0.0,5.0,6.7,0.4,4.0).is_empty()
+        and abandon_controller.online_snapshot().filter(
+            func(i): return str(i.get("kind","")) == "source").size() == 1,
+        "The abandoned unplayed take makes way for the new one")
+    abandon_canvas.free()
     var flow := Flow.new()
     flow.sample(1000,60.0)
     var previous: float = flow.sample(2000,60.0)

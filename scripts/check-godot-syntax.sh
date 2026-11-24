@@ -16,7 +16,6 @@ for script in \
   res://notation/native/view.gd \
   res://notation/native/stream_take_binding.gd \
   res://notation/native/score_stream_controller.gd \
-  res://score_transport_reservation.gd \
   res://score_stream_queue.gd \
   res://main.gd \
   res://practice_screen.gd \

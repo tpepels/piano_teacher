@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from .session_events import (
     UserCommand, ClockAdvanced, MidiShortcut, PhysicalMidi,
-    PlaybackReserved, PlaybackPresented, PlaybackWithdrawn, PlaybackFailed,
+    PlaybackFailed,
     SourceCommitted, FingeringCorrectionCommitted, SettingsChanged,
     DeviceSelected, MidiPortsRequested, PreloadReady, PreloadFailed,
     HardwareRequested, HistoryExported, PieceHistoryDeleted,
@@ -107,9 +107,6 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
         PhysicalMidi: physical,
         ClockAdvanced: lambda e: tick.advance(),
         MidiShortcut: shortcut,
-        PlaybackReserved: lambda e: playback_authorization.reserve_physical(**e.receipt),
-        PlaybackPresented: lambda e: playback_authorization.present_physical(**e.receipt),
-        PlaybackWithdrawn: lambda e: playback_authorization.withdraw_physical(**e.receipt),
         PlaybackFailed: lambda e: playback_authorization.fail_physical(**e.failure),
         SourceCommitted: source,
         FingeringCorrectionCommitted: lambda e:

@@ -1,6 +1,6 @@
 # Piano Teacher — roadmap
 
-**Updated 2026-11-24 · MIDI input only**
+**Updated 2026-11-24 · MIDI input only · Timeline rebuild T1–T6 in software (`HEAD`); piano acceptance pending**
 
 [Practice flow](docs/practice-flow.md) is the learner-visible contract.
 [Architecture](docs/architecture.md), [development](docs/development.md) and
@@ -79,7 +79,7 @@ evaluated identically by both sides:
 | T3 | Godot scroll position from the published timeline (replaces presentation epochs); ramps visible | Done with T5: the world follows the published timeline during a run |
 | T4 | Count-in bubbles and clicks from timeline segments | Done: count-in numbers and clicks read their beat from the timeline take, so the eased bar is counted as it moves |
 | T5 | Continuations and Start/Resume append segments at bar positions; remove reserve/present admission for them; late decision = extra rest bar | Done with T3: every timed take is placed and started by Python; Godot draws it at its world start (pop-in allowed), no reserve/present; an unplayed abandoned take is withdrawn |
-| T6 | Grading via the timeline inverse; remove fixed deadlines, reservation and clearance machinery; tests and journeys on the new contract | |
+| T6 | Grading via the timeline inverse; remove fixed deadlines, reservation and clearance machinery; tests and journeys on the new contract | Done: live take position reads the timeline take; reserve/present/withdraw, physical admission evidence, fixed deadlines and the Godot reservation preflight removed. Remaining: the outgoing-rest geometry and continuation deadline arithmetic in MusicalScheduler no longer decide anything and can go next |
 
 Each stage keeps the 4/4 and 2/4 synthetic journeys, the test suite and the
 full desktop check green before it is committed.

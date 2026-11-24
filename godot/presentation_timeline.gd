@@ -120,39 +120,6 @@ func _trim_after(frontier: float) -> void:
     while not epochs.is_empty() and float(epochs[-1]["at_ms"]) > frontier:
         epochs.pop_back()
 
-func authorize_source_epoch(deadline_ms: float, opening: float,
-        nominal_bpm: float, authored_segments: Array,
-        segment_id: String) -> void:
-    if (segment_id.is_empty() or not is_finite(deadline_ms)
-            or not is_finite(nominal_bpm) or nominal_bpm <= 0.0):
-        return
-    if epochs.is_empty():
-        initialize(Time.get_ticks_msec(),nominal_bpm)
-    if segment_id == active_segment:
-        return
-    var frontier: float = float(last_ms)
-    if deadline_ms < frontier:
-        # A delayed worker response cannot retroactively move a note that
-        # has already passed the playhead. Preserve painted position and
-        # apply its remaining tempo map at the current forward frontier.
-        deadline_ms = frontier
-    _trim_after(frontier)
-    active_segment = segment_id
-    var initial_rate: float = TempoTimeline.bpm_at_beat(
-        opening,nominal_bpm,authored_segments)
-    _install(deadline_ms,initial_rate,segment_id)
-    var from_seconds: float = TempoTimeline.seconds_at_beat(
-        opening,nominal_bpm,authored_segments)
-    for entry in authored_segments:
-        var offset: float = float(entry.get("start_beat",0.0))
-        if offset <= opening + .000001:
-            continue
-        var mapped: float = TempoTimeline.seconds_at_beat(
-            offset,nominal_bpm,authored_segments)-from_seconds
-        if mapped > 0.0 and is_finite(mapped):
-            _install(deadline_ms+mapped*1000.0,
-                float(entry.get("bpm",nominal_bpm)),segment_id)
-
 func physical_travel_ms_to(target_world: float, sampled_ms: int,
         source_beat: float, nominal_bpm: float,
         authored_segments: Array) -> float:

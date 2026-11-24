@@ -80,12 +80,6 @@ class EngineCommands:
                 if values:
                     raise ValueError("playback.status takes no input")
                 return self._reply(OK, engine.playback_status())
-            if operation == "playback.reserve":
-                return self._reply(OK, engine.reserve_playback(**values))
-            if operation == "playback.present":
-                return self._reply(OK, engine.present_playback(**values))
-            if operation == "playback.withdraw":
-                return self._reply(OK, engine.withdraw_playback(**values))
             if operation == "playback.failure":
                 return self._reply(OK, engine.report_playback_failure(**values))
             if operation == "score.stage_ready":

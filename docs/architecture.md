@@ -31,7 +31,7 @@ One Godot 4.7 desktop process with embedded CPython:
 
 `PracticeSession.apply(event)` is the single write path. Events are typed
 (`session_events.py`): user commands, clock ticks, physical MIDI and MIDI
-shortcuts, playback reserve/present/withdraw/failure, source and fingering
+shortcuts, playback (display) failure, source and fingering
 commits, settings, device, preload and history events. Each event is
 validated against fresh state under the application lock, executed by the
 owning domain, and published as one versioned state snapshot
@@ -66,7 +66,7 @@ Every state change enters `PracticeSession.apply` as one typed event:
 | Learner gesture, MIDI shortcut | `practice.command` | `UserCommand` / `MidiShortcut` |
 | Native worker | `tick` | `ClockAdvanced` |
 | MIDI callback | arrival-stamped message | `PhysicalMidi` |
-| Score admission | `playback.reserve` / `present` / `withdraw` / `failure` | `PlaybackReserved` / `Presented` / `Withdrawn` / `Failed` |
+| Score display | `playback.failure` | `PlaybackFailed` |
 | Library, fingering | `library.open`, `fingering.correct` | `SourceCommitted`, `FingeringCorrectionCommitted` |
 | Settings, devices | `settings.update`, `midi.devices`, `midi.device.select`, `hardware.action` | `SettingsChanged`, `MidiPortsRequested`, `DeviceSelected`, `HardwareRequested` |
 | Successor score | `score.stage_ready` / `score.stage_failed` | `PreloadReady` / `PreloadFailed` |

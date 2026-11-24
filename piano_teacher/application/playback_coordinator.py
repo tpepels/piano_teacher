@@ -14,13 +14,11 @@ from enum import Enum
 import math
 
 from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
-from .physical_admission import PhysicalAdmissionEvidence, choose_admission_deadline
 from .playback_transitions import CountInPlan, PlaybackTransition
 
 
-# The backend owns the retry/timeout budget. A native renderer must never
-# leave a session waiting for notation admission indefinitely.
-MAX_ADMISSION_ATTEMPTS = 3
+# A requested take waits at most this long (e.g. while paused) before the
+# session reports that it could not start.
 MAX_ADMISSION_WAIT_SECONDS = 120.0
 
 
@@ -54,10 +52,8 @@ class PlaybackIntent:
     bpm: float
     tempo_segments: tuple[tuple[float, float, float], ...]
     count_in: CountInPlan
-    earliest_deadline_ms: float
     requested_at: float
     transition: PlaybackTransition | None = None
-    fixed_deadline_ms: float | None = None
 
     @property
     def count_in_beats(self) -> float:
@@ -82,10 +78,6 @@ class ScoreReceipt:
     segment_id: str
     deadline_ms: float
     world_origin: float
-    queue_generation: int
-    renderer_generation: int
-    evidence_sampled_at_ms: float
-    evidence_travel_ms: float
 
 
 class PlaybackCoordinator:
@@ -224,10 +216,8 @@ class PlaybackCoordinator:
                 and intent.generation == self.generation)
 
     def request(self, facts: PlaybackRuntimeFacts, *, action: str, mode: str,
-                from_beat: float, earliest_deadline: float | None = None,
-                count_in_beats: float | None = None,
-                transition: PlaybackTransition | None = None,
-                fixed_deadline: float | None = None) -> PlaybackIntent:
+                from_beat: float, count_in_beats: float | None = None,
+                transition: PlaybackTransition | None = None) -> PlaybackIntent:
         source = facts.source
         if source is None:
             raise ValueError("Open a piece before starting")
@@ -281,16 +271,6 @@ class PlaybackCoordinator:
         bpm = source.bpm
         count_plan = CountInPlan.create(bar_beats=bar,meter=meter,bpm=bpm,beats=count_in)
         source_segments = source.tempo_segments
-        # Admission must complete before the ENTIRE last bar begins. A
-        # longer preceding silent runway is allowed, never an extra bar.
-        earliest = max(
-            now + SCHEDULER.beats_seconds(count_in, bpm)
-            + SNAPSHOT_LATENCY_SECONDS,
-            earliest_deadline if earliest_deadline is not None else 0.0)
-        if fixed_deadline is not None:
-            if action != "auto" or not math.isfinite(fixed_deadline) or fixed_deadline <= now:
-                raise ValueError("An automatic continuation requires its future exact deadline")
-            earliest = fixed_deadline
         if action in ("start", "restart", "resume"):
             # Clear the terminal latch ONLY after all source, transition,
             # meter and countdown inputs have been validated. A malformed
@@ -312,10 +292,8 @@ class PlaybackCoordinator:
             end_beat=float(source.end_beat), bpm=bpm,
             tempo_segments=source_segments,
             count_in=count_plan,
-            earliest_deadline_ms=earliest * 1000.0,
             requested_at=now,
-            transition=transition,
-            fixed_deadline_ms=None if fixed_deadline is None else fixed_deadline*1000.0)
+            transition=transition)
         self.receipt = None
         self.state = PlaybackState.AWAITING_ADMISSION
         self.failure = ""
@@ -341,145 +319,6 @@ class PlaybackCoordinator:
             raise ValueError("Stale or cancelled playback intent")
         return intent
 
-    def _expire(self, *, message: str) -> None:
-        if self.intent is None:
-            return
-        intent = self.intent
-        # A pre-announced automatic repeat cannot have another deadline.
-        # Retrying its expired world slot would silently add another bar.
-        # Other physical failures have a bounded number of new attempts.
-        if (intent.fixed_deadline_ms is not None or
-                intent.attempt + 1 >= MAX_ADMISSION_ATTEMPTS):
-            self._fail_terminally(intent, message)
-            return
-        from dataclasses import replace
-        self.intent = replace(intent, attempt=intent.attempt + 1)
-        self.receipt = None
-        self.state = PlaybackState.AWAITING_ADMISSION
-        self.failure = message
-
-    def reserve(self, facts: PlaybackRuntimeFacts, *, intent_id: str, attempt: int,
-                take_id: str, fingerprint: str, stage_key: str,
-                revision: int, hand: str, source_from_beat: float,
-                source_end_beat: float, sampled_at_ms: float, travel_ms: float,
-                world_origin: float, queue_generation: int,
-                renderer_generation: int) -> dict:
-        """Reserve the backend-chosen musical deadline *before* ink is armed.
-
-        This physical witness is a read-only earliest-feasible position.
-        The renderer must arm the exact selected deadline on receipt,
-        then attest its committed queue/world in playback.present.
-        No grading, voice or Listen audio starts from this reservation.
-        """
-        intent = self._require_intent(facts, intent_id, attempt)
-        if (take_id != intent.take_id or fingerprint != intent.fingerprint
-                or stage_key != intent.stage_key or revision != intent.revision
-                or hand != intent.hand
-                or abs(float(source_from_beat)-intent.from_beat) > 1e-7
-                or abs(float(source_end_beat)-intent.end_beat) > 1e-7):
-            raise ValueError("Score reservation has the wrong musical source")
-        evidence = PhysicalAdmissionEvidence(
-            sampled_at_ms=float(sampled_at_ms), travel_ms=float(travel_ms),
-            world_origin=float(world_origin),
-            queue_generation=queue_generation,
-            renderer_generation=renderer_generation)
-        if self.receipt is not None:
-            raise ValueError("This intent already has a score reservation")
-        deadline_ms = choose_admission_deadline(intent, facts, evidence)
-        self.receipt = ScoreReceipt(
-            intent_id=intent_id, attempt=attempt, take_id=take_id,
-            fingerprint=fingerprint, stage_key=stage_key, revision=revision,
-            hand=hand,source_from_beat=intent.from_beat,
-            source_end_beat=intent.end_beat,
-            segment_id=f"{intent_id}:segment:{attempt}",
-            deadline_ms=deadline_ms, world_origin=evidence.world_origin,
-            queue_generation=evidence.queue_generation,
-            renderer_generation=evidence.renderer_generation,
-            evidence_sampled_at_ms=evidence.sampled_at_ms,
-            evidence_travel_ms=evidence.travel_ms)
-        self.state = PlaybackState.RESERVED
-        return self._receipt_response(self.receipt)
-
-    @staticmethod
-    def _receipt_response(receipt: ScoreReceipt) -> dict:
-        """Immutable reservation identity and physical witness.
-
-        Both the direct reserve reply and the read-only transaction ledger
-        expose this same payload. A native client recovering a lost reply
-        must prove it still holds exactly the source the backend reserved,
-        including its physical queue generation and original measurement.
-        """
-        return {
-            "intent_id": receipt.intent_id,
-            "attempt": receipt.attempt,
-            "segment_id": receipt.segment_id,
-            "take_id": receipt.take_id,
-            "deadline_ms": receipt.deadline_ms,
-            "world_origin": receipt.world_origin,
-            "queue_generation": receipt.queue_generation,
-            "renderer_generation": receipt.renderer_generation,
-            "sampled_at_ms": receipt.evidence_sampled_at_ms,
-            "travel_ms": receipt.evidence_travel_ms,
-            "reserved": True,
-        }
-
-    def present(self, facts: PlaybackRuntimeFacts, *, intent_id: str,
-                attempt: int, segment_id: str, commit: Callable,
-                capture: Callable[[], PlaybackRuntimeFacts],
-                abort: Callable[[str], None],
-                physical_world_origin: float | None = None,
-                physical_sampled_at_ms: float | None = None,
-                physical_travel_ms: float | None = None,
-                physical_queue_generation: int | None = None,
-                physical_renderer_generation: int | None = None) -> dict:
-        intent = self._require_intent(facts, intent_id, attempt)
-        receipt = self.receipt
-        if (receipt is None or receipt.segment_id != segment_id
-                or receipt.intent_id != intent_id or receipt.attempt != attempt):
-            raise ValueError("No matching score reservation to present")
-        now = facts.now
-        remaining = (0.0 if intent.fixed_deadline_ms is not None
-                     else intent.count_in_beats)
-        count_in_seconds = SCHEDULER.beats_seconds(remaining, intent.bpm)
-        if receipt.deadline_ms / 1000.0 < now + count_in_seconds - 1e-4:
-            self._expire(message="Score admission expired before its count-in")
-            raise ValueError("Score reservation expired; admit the new attempt")
-        # A reservation is only the backend's musical proposal. Physical
-        # arming must have happened *after* it. Require a new authenticated
-        # native measurement at the committed source/queue, and refuse
-        # the authorization unless the ink reaches the downbeat exactly.
-        if (physical_world_origin is None or
-                physical_sampled_at_ms is None or
-                physical_travel_ms is None or
-                physical_queue_generation is None or
-                physical_renderer_generation is None):
-            raise ValueError("Physical score arm attestation required for playback")
-        committed = PhysicalAdmissionEvidence(
-            sampled_at_ms=float(physical_sampled_at_ms),
-            travel_ms=float(physical_travel_ms),
-            world_origin=float(physical_world_origin),
-            queue_generation=physical_queue_generation,
-            renderer_generation=physical_renderer_generation)
-        arrived_ms = committed.physical_deadline(
-            now_ms=facts.now * 1000.0, revision=intent.revision)
-        # The preliminary world was measured BEFORE the native queue was
-        # armed. During an authorized frozen canvas its hypothetical
-        # future destination shrinks as real time advances, even though the
-        # exact musical deadline does not move. Comparing the later world
-        # coordinate against the earlier feasibility coordinate was
-        # therefore invalid and rejected every genuinely correct native
-        # Listen/Start admission. Physical arrival time, source revision,
-        # queue generation and the native bound segment are the checks.
-        if (abs(arrived_ms-receipt.deadline_ms) > 5.0
-                or committed.queue_generation < receipt.queue_generation):
-            raise ValueError("Physical score arm does not match reserved downbeat")
-        from dataclasses import replace
-        receipt = replace(
-            receipt, world_origin=committed.world_origin,
-            queue_generation=committed.queue_generation)
-        return self._commit(intent, receipt, commit=commit, capture=capture,
-                            abort=abort)
-
     def authorize(self, facts: PlaybackRuntimeFacts, *, deadline: float,
                   world_origin: float, segment_id: str, commit: Callable,
                   capture: Callable[[], PlaybackRuntimeFacts],
@@ -496,9 +335,7 @@ class PlaybackCoordinator:
             hand=intent.hand, source_from_beat=intent.from_beat,
             source_end_beat=intent.end_beat,
             segment_id=segment_id,
-            deadline_ms=float(deadline)*1000.0, world_origin=float(world_origin),
-            queue_generation=0, renderer_generation=intent.revision,
-            evidence_sampled_at_ms=facts.now*1000.0, evidence_travel_ms=0.0)
+            deadline_ms=float(deadline)*1000.0, world_origin=float(world_origin))
         self.receipt = receipt
         return self._commit(intent, receipt, commit=commit, capture=capture,
                             abort=abort)
@@ -587,14 +424,6 @@ class PlaybackCoordinator:
             "transport_id": post.transport_id, "authorized": True}
         return result
 
-    def withdraw(self, facts: PlaybackRuntimeFacts, *, intent_id: str, attempt: int,
-                 reason: str) -> dict:
-        self._require_intent(facts, intent_id, attempt)
-        self._expire(message=reason)
-        return {"withdrawn": True, "intent_id": intent_id,
-                "abandoned": self.intent is None,
-                "next_attempt": self.intent.attempt if self.intent else None}
-
     def fail(self, *, take_id: str, segment_id: str, reason: str,
              notify_failure: Callable[[str], None]) -> None:
         if self.active_take_id != take_id or self.active_segment_id != segment_id:
@@ -674,10 +503,6 @@ class PlaybackCoordinator:
             "intents_issued": self.sequence,
             "intent_id": intent.intent_id if intent else "",
             "attempt": intent.attempt if intent else -1,
-            "reserved_segment_id": receipt.segment_id if receipt else "",
-            # Read-only recovery from a lost playback.reserve response.
-            # Do not issue a second admission offer or infer one from state.
-            "reservation": self._receipt_response(receipt) if receipt else None,
             "active_segment_id": self.active_segment_id,
             "active_take_id": self.active_take_id,
             "active_deadline_ms": self.active_deadline_ms,
@@ -703,8 +528,6 @@ class PlaybackCoordinator:
             "count_in_beats": intent.count_in_beats,
             "count_in_meter": list(intent.count_in_meter),
             "count_in_plan": intent.count_in.snapshot(),
-            "earliest_deadline_ms": intent.earliest_deadline_ms,
-            "fixed_deadline_ms": intent.fixed_deadline_ms,
             "status": observed.value,
         }
         timeline = {"state": observed.value, "take_id": self.active_take_id,

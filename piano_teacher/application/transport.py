@@ -338,6 +338,10 @@ class Transport:
     def intent(self):
         return self._admission.intent
 
+    @property
+    def active_segment_id(self) -> str:
+        return self._admission.active_segment_id
+
     def advance(self, *args, **kwargs):
         return self._admission.advance(*args, **kwargs)
 
@@ -356,14 +360,8 @@ class Transport:
     def invalidate(self, *args, **kwargs):
         return self._admission.invalidate(*args, **kwargs)
 
-    def present(self, *args, **kwargs):
-        return self._admission.present(*args, **kwargs)
-
     def request(self, *args, **kwargs):
         return self._admission.request(*args, **kwargs)
-
-    def reserve(self, *args, **kwargs):
-        return self._admission.reserve(*args, **kwargs)
 
     def snapshot(self, *args, **kwargs):
         return self._admission.snapshot(*args, **kwargs)
@@ -377,5 +375,3 @@ class Transport:
     def take_suspended(self, *args, **kwargs):
         return self._admission.take_suspended(*args, **kwargs)
 
-    def withdraw(self, *args, **kwargs):
-        return self._admission.withdraw(*args, **kwargs)

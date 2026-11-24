@@ -98,8 +98,7 @@ class PlaybackContinuation:
         self.transport.prepare_admitted_continuation()
         self.transport_timing.request_playback(
             action="auto", mode=self.transport.mode,
-            from_beat=from_beat, earliest_deadline=deadline,
-            fixed_deadline=deadline)
+            from_beat=from_beat)
         self.transport.clear_scheduled_start()
         self.notices.feedback = "Preparing the next passage"
 

@@ -11,8 +11,7 @@ from pathlib import Path
 
 from .application.composition import compose_application
 from .application.session_events import (
-    PlaybackReserved, PlaybackPresented,
-    PlaybackWithdrawn, PlaybackFailed, SourceCommitted,
+    PlaybackFailed, SourceCommitted,
     FingeringCorrectionCommitted, SettingsChanged,
     DeviceSelected, MidiPortsRequested, PreloadReady, PreloadFailed, SessionClosed,
     HardwareRequested, HistoryExported,
@@ -37,15 +36,6 @@ class PracticeEngine:
     def playback_status(self) -> dict:
         with self.lock:
             return self.transport.status(self.transport_timing.playback_facts())
-
-    def reserve_playback(self, **values) -> dict:
-        return self.practice_session.apply(PlaybackReserved(values))
-
-    def present_playback(self, **values) -> dict:
-        return self.practice_session.apply(PlaybackPresented(values))
-
-    def withdraw_playback(self, **values) -> dict:
-        return self.practice_session.apply(PlaybackWithdrawn(values))
 
     def report_playback_failure(self, **values) -> dict:
         return self.practice_session.apply(PlaybackFailed(values))

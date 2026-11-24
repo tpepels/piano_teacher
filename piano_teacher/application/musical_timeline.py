@@ -284,6 +284,12 @@ class MusicalTimeline:
     def last_take(self) -> TimelineSegment | None:
         return next((s for s in reversed(self.segments) if s.kind == "take"), None)
 
+    def take(self, take_id: str) -> TimelineSegment | None:
+        if not take_id:
+            return None
+        return next((s for s in self.segments
+                     if s.kind == "take" and s.take_id == take_id), None)
+
     def segment_at(self, t: float) -> TimelineSegment | None:
         return self._segment_at(self.musical(t)) if self.segments else None
 

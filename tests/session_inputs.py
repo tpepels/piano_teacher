@@ -146,20 +146,6 @@ class PracticeSession:
             time.sleep(0.005)
         raise AssertionError("Real Listen audio did not prepare within five seconds")
 
-    def physical_offer(self, intent, **changes):
-        """The native renderer's immutable physical witness, never a deadline."""
-        values = {key: intent[key] for key in (
-            "intent_id", "attempt", "take_id", "fingerprint", "stage_key", "revision", "hand")}
-        sampled_ms = self.clock() * 1000.0
-        physical_ms = (intent["fixed_deadline_ms"] if intent["fixed_deadline_ms"] is not None
-                       else intent["earliest_deadline_ms"])
-        values.update(source_from_beat=intent["from_beat"], source_end_beat=intent["end_beat"],
-                      sampled_at_ms=sampled_ms, travel_ms=physical_ms-sampled_ms,
-                      world_origin=100.0, queue_generation=1,
-                      renderer_generation=intent["revision"])
-        values.update(changes)
-        return values
-
     def admit(self, state=None):
         """A requested take is placed on the musical timeline and started by
         the engine itself; Godot only draws it. Record its downbeat."""

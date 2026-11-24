@@ -84,6 +84,15 @@ class TransportTiming:
         return self.score.tempo_map(self.lesson.plan.active_stage, self.lesson.plan.bpm)
 
     def elapsed_beat(self, elapsed_seconds: float) -> float:
+        """Source beats played `elapsed_seconds` after run_at, read from the
+        running take on the musical timeline (its inverse) when it is there."""
+        transport = self.transport
+        take = transport.musical_timeline.take(transport.active_segment_id)
+        if take is not None:
+            at = transport.run_at+elapsed_seconds
+            world = transport.musical_timeline.world_at(at)
+            return (take.source_from_beat-transport.play_from_beat
+                    +world-take.world_start)
         return SCHEDULER.elapsed_beats(
             self.active_tempo_map(),self.transport.play_from_beat,
             elapsed_seconds,self.lesson.plan.bpm)

@@ -49,21 +49,6 @@ class PhysicalMidi:
 
 
 @dataclass(frozen=True, slots=True)
-class PlaybackReserved:
-    receipt: dict
-
-
-@dataclass(frozen=True, slots=True)
-class PlaybackPresented:
-    receipt: dict
-
-
-@dataclass(frozen=True, slots=True)
-class PlaybackWithdrawn:
-    receipt: dict
-
-
-@dataclass(frozen=True, slots=True)
 class PlaybackFailed:
     failure: dict
 
@@ -137,8 +122,7 @@ class SessionClosed:
 
 PracticeEvent = (UserCommand | ClockAdvanced |
                  PhysicalMidi | MidiShortcut |
-                 PlaybackReserved | PlaybackPresented |
-                 PlaybackWithdrawn | PlaybackFailed | SourceCommitted |
+                 PlaybackFailed | SourceCommitted |
                  FingeringCorrectionCommitted | SettingsChanged |
                  MidiPortsRequested | DeviceSelected |
                  PreloadReady | PreloadFailed |

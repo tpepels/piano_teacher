@@ -84,19 +84,6 @@ class PlaybackAuthorization:
         timeline.cut_take(paused_at)
         return None
 
-    def reserve_physical(self, **values) -> dict:
-        return self.transport.reserve(self.transport_timing.playback_facts(), **values)
-
-    def present_physical(self, **values) -> dict:
-        return self.transport.present(
-            self.transport_timing.playback_facts(),
-            commit=self.commit_playback_intent,
-            capture=self.transport_timing.playback_facts,
-            abort=self.abort_playback, **values)
-
-    def withdraw_physical(self, **values) -> dict:
-        return self.transport.withdraw(self.transport_timing.playback_facts(), **values)
-
     def fail_physical(self, **values) -> dict:
         self.transport.fail(notify_failure=self.on_playback_failure, **values)
         return {"accepted": True}
