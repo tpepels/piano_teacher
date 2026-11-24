@@ -1,6 +1,6 @@
 # Piano Teacher — roadmap
 
-**Updated 2026-11-23 · MIDI input only**
+**Updated 2026-11-24 · MIDI input only**
 
 [Practice flow](docs/practice-flow.md) is the learner-visible contract.
 [Architecture](docs/architecture.md), [development](docs/development.md) and
@@ -37,6 +37,7 @@ The separate final examination uses the whole original piece.
 | 2026-11-21 | The PracticeEngine redesign may introduce or replace architectural layers, boundaries and interfaces. File-size limits are diagnostic goals, not mandatory constraints. |
 | 2026-11-21 | Pause freezes the visible score even in Free/Listen/count-in; render only the selected practice measure window, retaining full sounding tails but no visible neighboring bars. |
 | 2026-11-22 | Adopt A0–A7 architectural unification: one serialized PracticeSession; cohesive lesson, assessment, transport and score domains; one score preparation pipeline; physical Godot adapters; and complete migration/removal of redundant orchestration. Preserve supported features and real physical invariants; CI remains manual. |
+| 2026-11-23 | Practice Flow is the only course. Remove the other courses and strategies, the warm-up course, lesson-screen extras, the no-piano timing preview, save-failure recovery and lost-reply recovery. |
 
 ## Structural decoupling plan (R1–R8, adopted 2026-11-23)
 
@@ -60,7 +61,7 @@ event handlers that depend on domains, not on their internals.
 | --- | --- | --- |
 | Transport | timeline (`VisualTransport`), session intent (`PlaybackSession`), physical admission (`PlaybackCoordinator`) | `visual_transport`, `playback_session`, `playback` |
 | Lesson | source/plan identity, lesson cursor, teaching decisions, flow, guided selection | `source_identity`, `lesson_cursor`, `teaching_decisions`, `flow_session`, `guided_session` |
-| Take | attempt runtime, recorder, settlement, rolling and completion receipts | `attempt`, `attempt_settlement` |
+| Take | attempt runtime, recorder, settlement and completion receipts | `attempt`, `attempt_settlement` |
 | Score | artifacts, bundle, successor preparation, read services | `score_artifact_registry`, `teaching_continuation` (assets), `score_read` |
 | Session | event boundary, tick worker, notices, read model | `PracticeSession`, `PracticeTimeline`, `SessionReadModels` |
 
@@ -95,6 +96,28 @@ event handlers that depend on domains, not on their internals.
   review to Godot admission/stream orchestration.
 - **R8 Verification and docs.** Same-HEAD gates, coupling measurements,
   docs/architecture.md.
+
+### Practice Flow only — 2026-11-23/24 (`aa0caace`…`50c8e46c`)
+
+Owner decision 2026-11-23: remove what is not wired into Practice Flow.
+Removed: alternate courses and exercise/diagnosis/mistake-response
+strategies, the warm-up course, lesson-screen extras, rolling (mid-take)
+recovery, the no-piano timing preview, save-failure replay (a failed save
+now shows the fault and discards the take) and lost-reply recovery in
+score admission (a failed reply cancels the provisional admission).
+vulture was iterated until clean and the coverage report was checked for
+uncovered code that nothing references; live but untested features (seek,
+section review, Perform, fingering correction, device diagnostics) stay.
+
+Structure: every "what happens next" rule is in one module,
+`practice_flow_course` (`decide`, `graded_progress`), over the pure ladder
+reducer `application/practice_flow.py`. The always-true `flow_active`
+switch and its dead branches are gone; a finished take plans one of
+stop / ready / announce. Without a piano, choosing Practice waits visibly
+("Connect your MIDI piano to play in tempo.") instead of a stuck exposure.
+
+LOC since `223fc503`: Python 34,235 → 29,078 (application 14,681 →
+12,821); GDScript 25,674 → 25,369. Nothing here is tested at the piano.
 
 ### R1–R8 exit criteria met — 2026-11-23 (same-HEAD gates on `223fc503`)
 

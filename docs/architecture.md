@@ -51,8 +51,8 @@ Adding an event or command family means adding its type and one entry in
   through `TickPublisher` and chooses the next tick interval.
   `PracticeTimeline` only orders one tick: `TickObservations` (device,
   calibration, Listen failure, evidence phase), `TakeProgression`
-  (rolling replay, boundary inspection, completion) and
-  `PreAssessmentTransitions` (Free, Listen end, preview, feedback, rewind).
+  (bar checkpoints, completion) and `PreAssessmentTransitions` (Free,
+  Listen end, feedback, rewind).
 - `MidiEpoch` is the stale-key gate: a physical key counts only for the
   device, source, revision, stage, hand, take and cancellation it arrived
   in (or a later automatic repeat of the same source after its start).
@@ -100,8 +100,8 @@ Pure policy and services outside these domains:
 
 | Concern | Owner | Owns |
 | --- | --- | --- |
-| Course rules | `lesson_settings.course_rules` | per-course mastery count, focus and recovery thresholds |
-| Practice Flow tempo | `practice_flow.take_graded` | repeat / faster (+10%, or +20% after a secure clean take) / slower / Free / done |
+| Practice Flow course | `practice_flow_course` | the window/hand structure and **every "what happens next" rule**: `decide(event, state)` maps a graded take, a completed Free or a learner command to the next exposure, tempo and progress; `graded_progress` maps the ladder onto saved progress |
+| Practice Flow ladder | `practice_flow.take_graded` (pure) | repeat / faster (+10%, or +20% after a secure clean take) / slower / Free / done |
 | Assessment | `practice.py`, `AssessmentService`, `practice_assessment` | original-note matching, onset/release evidence, verdict, `secure` timing |
 | Scheduling | `MusicalScheduler` (`SCHEDULER`), `CountInPlan` | every deadline/count-in/rest calculation; count-in pulse (subdivided when a click would exceed 1.5 s) |
 | Persistence | `ProgressRepository`, `LearningLedger`, `LearnerProgress` on one SQLite connection | progress, evidence, history; migrations at the load boundary only |
@@ -116,9 +116,9 @@ has at most 10 constructor collaborators):
 | Course and navigation | `CourseFlow` (Listen → Free → Tempo, Free, guided preparation, selected exposure); `LessonNavigation` (skip, place, trouble, section review, weak spots, seek, open measure, stage/tempo change) |
 | Exposures | `ExposureWorkflows` (prepare Practice/Listen/Perform), `GuidedExposureInstall`, `TimedExposureInstall`, `ListenOutcomes` (Listen finished/failed) |
 | Physical playback | `PlaybackAuthorization` (reserve/present/withdraw/fail, authorized commit, score/audio ACKs, resume); `TimedStart`, `PlaybackContinuation`, `PauseResume` |
-| After a take | `TakeGrading` (assess, publish final marks); `TakeCompletion` (preview, immediate consequences); `SettlementContinuation` (full passage: feedback, commit, exactly-once effect); `RetainedResultReplay` |
-| Recovery | `SelectedRecovery` (chosen response/remediation); `RollingRecovery` (mid-take checkpoint, durable effects) |
-| Teaching | `TeachingDecisions` (inside Lesson) with `LearnerEvidence` (stored history and learning policies); one mistake-policy callable |
+| After a take | `TakeGrading` (assess, publish final marks); `TakeCompletion` (immediate consequences of focused/performance takes); `SettlementContinuation` (full passage: feedback, commit, exactly-once effect) |
+| Recovery | `SelectedRecovery` (the aid on the second return to Free) |
+| Teaching | `TeachingDecisions` (inside Lesson) captures the facts and calls `practice_flow_course.decide` |
 | Source | `SourcePreparationWorkflow` (off-lock), `SourceInstallation`, `LibraryOpening`, `PlanReinstallation` (adopt a plan at its first step) |
 | MIDI | `MidiCallback` (arrival stamp), `MidiDelivery` (ingress routing), `MidiDeviceConnection`, `MidiEpoch` |
 | History, settings, devices | `HistoryManagement`, `HistoryReads`, `SettingsWorkflows`, `DeviceWorkflows` |
@@ -141,8 +141,9 @@ Production has exactly one transport: physical score presentation.
    rate map and transport epoch, then starts the take
    (`PlaybackAuthorization.commit_playback_intent` → `TimedStart.start`).
 4. Grading is enabled only for the presented segment. Stale, duplicated or
-   reordered replies fail closed; lost ACKs reconcile through
-   `playback.status`; three failed admissions end in a visible failure.
+   reordered replies fail closed: a failed reply cancels the provisional
+   admission, and the next state frame decides whether another attempt
+   exists; three failed admissions end in a visible failure.
 
 Resume of a running take, automatic repeats, Listen and score-ready starts
 all use the same intent → reserve → present path.
@@ -155,11 +156,17 @@ progress in one SQLite savepoint and restores the in-memory plan on
 failure. The plan's progress after a durable save equals the decision's
 `progress_after`; persistence never edits lesson state.
 
-If saving fails, nothing is credited and Play replays the same retained
-result. If saving succeeds but installing the next stage fails, the
-learner is told progress was saved and Play continues from the same
-receipt without regrading. Stop or opening other music discards an
-unsaved result.
+If saving fails, nothing is credited: the fault is shown and the take is
+discarded, so the learner plays it again. If saving succeeds but starting
+the next step fails, automatic playback stops, the learner is told
+"Progress saved, but the next step could not start", and Play continues
+from the saved lesson. Stop or opening other music discards an unsaved
+result.
+
+A finished full take plans exactly one continuation
+(`AttemptProgression.plan_full_passage`): **stop** (not automatic),
+**ready** (Free, next hand/window, done) or **announce** (the same step
+again, after the printed one-bar rest at the outgoing tempo).
 
 ## Controls
 
@@ -214,6 +221,7 @@ constructor dependencies; no service locator is injected.
 drive the engine exactly as the desktop does (presentation protocol, real
 MIDI callbacks, score and audio ACKs), then Godot syntax and behaviour
 scenarios. `bash scripts/verify-embedded-production-local.sh` builds the
-native bridge, runs the real scene with synthetic MIDI, lost-ACK recovery
-and the relocated package. Neither certifies physical MIDI, audio or
+native bridge, runs the real scene with synthetic MIDI, the Moonlight
+navigation journey, 16 repertoire pieces, the Pathétique and the
+relocated package. Neither certifies physical MIDI, audio or
 visual acceptance at the piano.
