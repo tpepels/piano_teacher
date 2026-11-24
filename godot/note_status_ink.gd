@@ -1,18 +1,14 @@
 extends RefCounted
-## Single authentic-notehead recoloring painter. All light is drawn using the
-## exact Verovio notehead alpha mask, never a circle, arc, badge, particle,
-## ColorRect or separate bloom positioned near the note.
+## Single authentic-notehead status painter. All light uses the exact
+## Verovio notehead alpha mask, never a circle, badge, particle or ColorRect.
 ##
-## A status head is recolored IN PLACE, inside the retained source strip that
-## owns the note, with three passes of the same head mask:
-##   ERASE  blend SUB: subtract the exact ink the strip painted for this head
-##          (the template's own head texels, same rectangle, staff space and
-##          ink color -- see glyphs.gd head_cutout);
-##   CORE   blend ADD: add the status tint with the same coverage;
-##   GLOW   blend MIX: two barely larger copies at very low alpha.
-## For coverage a over background b, the strip held b(1-a)+ink*a. ERASE+CORE
-## leave exactly b(1-a)+tint*a: the white head is replaced, not overpainted,
-## so no white contour survives under or around the colored one.
+## The status colour seeps out of the head rather than being drawn over it
+## (owner request 2026-11-24), in passes of the same head mask:
+##   BLEED  blend ADD: widening, fading copies of the head: light spreading
+##          into the dark stage around the note, strongest at its contour;
+##   CORE   blend MIX: a translucent tint over the authentic white head, so
+##          the head reads coloured yet stays lit from within;
+##   FILL   blend MIX: a soft wash inside hollow (half/whole) heads.
 const Status := preload("res://note_status_registry.gd")
 const Design := preload("res://practice_theme.gd")
 const EARLY_ONSET := Color("#F08FCB")
@@ -27,25 +23,23 @@ const COLORS := {
     "early_release": Color("#53E7B7"),
     "early_onset": Color("#F17978"),
 }
-const PASSES := ["erase", "core", "fill", "glow"]
-## C5: hollow (half, whole) heads also get their enclosed interior softly
-## tinted, inside the head's own glyph region, so the status reads without a
-## ring. Solid heads have no interior and are unaffected.
-const INTERIOR_ALPHA := 0.55
-const CORE_ALPHA := 1.0
-const INNER_GLOW_ALPHA := 0.105
-const OUTER_GLOW_ALPHA := 0.045
-const INNER_SCALE := 1.024
-const OUTER_SCALE := 1.052
+const PASSES := ["bleed", "core", "fill"]
+## Core: a paler full-head tint plus a denser inner copy, so colour is
+## strongest at the centre and thins toward the head's own edge.
+const CORE_ALPHA := 0.38
+const CORE_INNER := [0.72, 0.34]
+const INTERIOR_ALPHA := 0.32
+## (scale about the head centre, alpha): a gradual falloff, no hard ring.
+const BLEED := [[1.08, .24], [1.18, .17], [1.3, .12], [1.45, .08],
+    [1.62, .05], [1.85, .03], [2.1, .015]]
 
 static func color_for(status: String) -> Color:
     return COLORS.get(status,Design.SCORE_INK)
 
 static func material_for(pass_name: String) -> CanvasItemMaterial:
     var material := CanvasItemMaterial.new()
-    material.blend_mode = (CanvasItemMaterial.BLEND_MODE_SUB if pass_name == "erase"
-        else CanvasItemMaterial.BLEND_MODE_ADD if pass_name == "core"
-        else CanvasItemMaterial.BLEND_MODE_MIX)  # fill and glow are plain mixes
+    material.blend_mode = (CanvasItemMaterial.BLEND_MODE_ADD if pass_name == "bleed"
+        else CanvasItemMaterial.BLEND_MODE_MIX)
     return material
 
 ## Paint one pass for one physical head. ``instance`` is the immutable record
@@ -60,18 +54,16 @@ static func paint(canvas: CanvasItem, glyphs, instance: Dictionary,
         return false
     var tint: Color = COLORS[status]
     match pass_name:
-        "erase":
-            # Exactly the ink the strip painted for this head, subtracted.
-            return bool(glyphs.paint_head(canvas,instance,instance["ink"]))
+        "bleed":
+            var painted := false
+            for ring in BLEED:
+                painted = bool(glyphs.paint_head(canvas,instance,
+                    Color(tint,float(ring[1])),float(ring[0]))) or painted
+            return painted
         "core":
+            glyphs.paint_head(canvas,instance,Color(tint,float(CORE_INNER[1])),float(CORE_INNER[0]))
             return bool(glyphs.paint_head(canvas,instance,Color(tint,CORE_ALPHA)))
         "fill":
             return bool(glyphs.paint_head_interior(canvas,instance,
                 Color(tint,INTERIOR_ALPHA)))
-        "glow":
-            # 2.4% and 5.2% expansion of the authentic head mask about its
-            # centre: an extremely soft, contour-bound light about 1 px wide.
-            glyphs.paint_head(canvas,instance,Color(tint,OUTER_GLOW_ALPHA),OUTER_SCALE)
-            return bool(glyphs.paint_head(canvas,instance,
-                Color(tint,INNER_GLOW_ALPHA),INNER_SCALE))
     return false

@@ -130,7 +130,8 @@ The music is the focus:
   window retains its original closing barline and any authored repeat mark.
 - Keep the hand not being practised visible but dimmed.
 - Show finger numbers wherever known. Never invent an unavailable assignment.
-- Space fast notes generously: about **3.3 staff spaces per sixteenth** at least.
+- Space fast notes generously: about **4.3 staff spaces per sixteenth** at least.
+- Clef, key signature, meter and the first note each keep their own space; none touch.
 - Use one small status label indicating the current window, hand and step.
 - Hide the piano keyboard except for a wrong-note hint in Free.
 - **Pause** freezes both the visible score and the graded/untimed exercise.

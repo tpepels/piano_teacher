@@ -7,7 +7,7 @@ extends RefCounted
 # Single owner of horizontal attack-readability policy. The authentic
 # glyph collision solver below may demand more space than these preferences.
 const MIN_SOURCE_ATTACK_SPACING_PX := 25.0
-const SIXTEENTH_STAFF_SPACES := 3.3
+const SIXTEENTH_STAFF_SPACES := 4.3
 
 
 static func source_attack_intervals_fit(events: Array, max_density: float) -> bool:
@@ -45,7 +45,7 @@ static func source_attack_intervals_fit(events: Array, max_density: float) -> bo
 # MIDI attack as a dense passage. Return a whole-score linear density; do not
 # retime events, move individual noteheads or distort notation.
 static func readable_density(notes: Array, preferred: float, gap: float = 22.0) -> float:
-    # A linear axis guarantees every sixteenth 3.3 spaces whenever genuine
+    # A linear axis guarantees every sixteenth 4.3 spaces whenever genuine
     # eighth-or-faster source content is present, including a single figure.
     var beats: Array[float] = []
     for note in notes:

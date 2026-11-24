@@ -74,12 +74,13 @@ func _block_written_context(gap: float, bins: Dictionary, cell: float) -> void:
                 var origin_y: float = center+(
                     3.0-float(clef.get("line",2 if sign == "G" else 4 if sign == "F" else 3)))*gap
                 var columns: int = maxi(absi(signature),changes.size())
-                _block_context_glyph(name,x-(86.0+float(columns)*14.0)*gap/17.0,
+                _block_context_glyph(name,x-ContextPainter.clef_lead_pixels(columns,gap),
                     origin_y,gap,bins,cell)
             if key_changed:
                 for i in range(changes.size()):
                     var mark: Dictionary = changes[i]
-                    var gx: float = x-(39.0+float(changes.size()-i)*14.0)*gap/17.0
+                    var gx: float = x-(ContextPainter.HEADER_KEY_RIGHT_UNITS+float(changes.size()-i)
+                        *ContextPainter.HEADER_KEY_COLUMN_UNITS)*gap/ContextPainter.HEADER_UNITS_PER_SPACE
                     var gy: float = Geometry.note_y(int(mark["step"]),center+gap*2.0,gap)
                     _block_context_glyph(str(mark["name"]),gx,gy,gap,bins,cell)
             if opening or previous.get("meter",[]) != measure.get("meter",[]):

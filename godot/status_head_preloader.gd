@@ -49,7 +49,7 @@ func warm(renderer) -> void:
                 var interior: Texture2D = glyphs.head_interior(str(head))
                 if interior != null:
                     layer.draw_texture_rect(interior,Rect2(2,2,4,4),false,faint)
-                for scale in [1.0,NoteStatusInk.INNER_SCALE,NoteStatusInk.OUTER_SCALE]:
+                for scale in [1.0, float(NoteStatusInk.CORE_INNER[0])] + NoteStatusInk.BLEED.map(func(ring): return float(ring[0])):
                     glyphs.paint(layer,str(head),4.0,4.0,gap*scale,faint,true))
         warm.add_child(layer)
     if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":

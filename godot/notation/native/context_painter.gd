@@ -10,8 +10,14 @@ const BarlineLayout := preload("res://notation/native/barline_layout.gd")
 # One physical Verovio header-column rule. Engraving, clip clearance and
 # source-rest reservations must share these values, not retype 86/17,14/17.
 const HEADER_UNITS_PER_SPACE := 17.0
-const HEADER_CLEF_LEAD_UNITS := 86.0
-const HEADER_KEY_COLUMN_UNITS := 14.0
+# Header columns, right to left from the first note (x), in units of
+# 1/17 staff space: 1.5 spaces of air, a 2-space meter column, 0.6 space,
+# key columns one flat/sharp wide (17), 0.7 space, then the ~2.8-space
+# clef. The meter column is centred 2.5 spaces before the first note. Each block has its own room; none may touch its neighbour.
+const HEADER_METER_CENTER_UNITS := 42.0
+const HEADER_KEY_RIGHT_UNITS := 69.0
+const HEADER_KEY_COLUMN_UNITS := 17.0
+const HEADER_CLEF_LEAD_UNITS := 128.0
 
 static func clef_lead_pixels(columns: int, gap: float) -> float:
     return (HEADER_CLEF_LEAD_UNITS + HEADER_KEY_COLUMN_UNITS*float(columns))*gap/HEADER_UNITS_PER_SPACE
@@ -313,7 +319,7 @@ func context_meter_x(measure: Dictionary, x: float, gap: float,
     # columns. Shifting the *whole* block another 76/17 staff spaces
     # left made the printed header unnecessarily wide, adding an entire
     # extra bar of queue clearance at slow practice tempos.
-    var center: float = x-gap*1.6
+    var center: float = x-gap*HEADER_METER_CENTER_UNITS/HEADER_UNITS_PER_SPACE
     if not is_finite(right_limit):
         return center
     var half_width := 0.0
@@ -363,7 +369,7 @@ func paint_context(canvas, frame: RenderPass, measure: Dictionary, previous_meas
         if key_changed:
             for i in range(change_marks.size()):
                 var mark: Dictionary = change_marks[i]
-                var glyph_x: float = x-(39.0+float(change_marks.size()-i)*HEADER_KEY_COLUMN_UNITS)*header_scale-header_shift
+                var glyph_x: float = x-(HEADER_KEY_RIGHT_UNITS+float(change_marks.size()-i)*HEADER_KEY_COLUMN_UNITS)*header_scale-header_shift
                 var glyph_y: float = Geometry.note_y(int(mark["step"]),
                     center+2.0*gap,gap)
                 symbol_painter.paint_accidental(canvas,frame,glyph_x,glyph_y,

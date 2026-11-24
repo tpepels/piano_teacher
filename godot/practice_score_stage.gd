@@ -11,6 +11,7 @@ const NativeNotation := preload("res://notation/native/view.gd")
 const GlowField := preload("res://mint_glow_field.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameCountIn := preload("res://game_countin.gd")
+const PLAYHEAD_FRACTION := preload("res://notation/shared/spacing_policy.gd").PLAYHEAD_FRACTION
 const StepTimeline := preload("res://score_step_timeline.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 signal navigation_requested(destination: String)
@@ -166,8 +167,7 @@ func _ready() -> void:
     count_in = GameCountIn.new()
     count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
     # Four large beat pulses sit above the staff, without a modal overlay.
-    count_in.position = Vector2(164, 24)
-    count_in.size = Vector2(360, 84)
+    score_frame.resized.connect(_place_count_in)
     count_in.visible = false
     score_frame.add_child(count_in)
     # A visible retry notice must not consume vertical space or force the
@@ -331,6 +331,14 @@ func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     practice_playback_banner.add_theme_font_size_override("font_size",UI.font_size(17,scale))
     practice_note_feedback_label.add_theme_font_size_override("font_size",UI.font_size(18,scale))
     practice_note_feedback_panel.offset_left = -minf(330.0,maxf(180.0,score_frame.size.x - 24.0))
+    _place_count_in()
+
+func _place_count_in() -> void:
+    # The count-in sits in the empty run-up left of the playhead, above the
+    # staff; it must never cover the first notes or their stems.
+    var playhead_x: float = score_frame.size.x*PLAYHEAD_FRACTION
+    count_in.position = Vector2(24.0, 8.0)
+    count_in.size = Vector2(maxf(160.0, playhead_x-24.0-28.0), 72.0)
 
 func _button(caption: String, action: Callable, primary := false, role := "") -> Button:
     var button := UI.button(caption,role if not role.is_empty() else "primary" if primary else "secondary")
