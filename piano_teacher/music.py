@@ -97,6 +97,8 @@ class Piece:
     # MIDI input has no authoritative authored notation.
     source_format: str = ""
     midi_ticks_per_beat: int = 0
+    # Fingers written in an imported MusicXML score: (source_id, finger).
+    authored_fingerings: tuple[tuple[str, int], ...] = ()
 
 
 def note_name(pitch: int) -> str:

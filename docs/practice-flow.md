@@ -17,7 +17,8 @@ Opening a new MIDI or MusicXML file starts the first measure window with its
 own Listen step. It does not first play the whole piece. The source supplies
 target tempo, authored measure boundaries, notes, hands and complete releases;
 MusicXML is read as the same timeline (each staff one hand, repeats as
-written; authored fingerings are not carried over).
+written). Fingers written in the MusicXML are kept as authored fingering;
+your own corrections still win and automatic fingering fills the rest.
 
 ## Learn moving measure windows
 

@@ -103,12 +103,12 @@ class FingeringService:
     def _prepare(self, piece, fingerprint, directory):
         sources = self._sources(piece)
         overrides = {sid: finger for sid, finger in self._overrides(directory).items() if sid in sources}
-        # MIDI has physical pitches and releases but no authored fingerings.
-        # Preserve the historical cache structure without interpreting MIDI
-        # as if it contained original MusicXML fingering annotations.
-        authored_text = {}
-        authored = {}
-        fixed = overrides
+        # Fingers written in an imported MusicXML score are kept as authored;
+        # the learner's corrections still win, the model fills the rest.
+        authored = {sid: finger for sid, finger in getattr(piece, 'authored_fingerings', ())
+                    if sid in sources}
+        authored_text = {sid: (str(finger),) for sid, finger in authored.items()}
+        fixed = {**authored, **overrides}
         config = {'input_digest': _digest({'bpm': piece.bpm,
                     'notes': [asdict(n) for n in piece.notes], 'authored': authored_text}),
                   'manual': overrides, 'scope': 'complete-original-piece', 'schema': 1}
