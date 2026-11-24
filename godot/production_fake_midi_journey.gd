@@ -2,7 +2,7 @@ extends SceneTree
 ## Real production main.tscn + embedded Python + actual native notation,
 ## with a TEST-ONLY mido input port at the hardware boundary. No fake
 ## state machine, renderer, assessment, shortcut, or transport owner.
-const MAX_MS := 145000
+const MAX_MS := 200000
 var app
 var begun_ms := 0
 var phase_ms := 0
@@ -386,6 +386,63 @@ func _process(_delta: float) -> bool:
                 _fail("Wrong MIDI did not cause one failed same-tempo repeat")
                 return true
             failed_take_seen = true
+            _advance("second_failure")
+        "second_failure":
+            # A second failed take in a row at 50% returns to Free.
+            if str(state.get("phase","")) != "playing" or \
+                    float(state.get("clock_beat",-100.0)) < 0.2:
+                return false
+            _strike(61)
+            _advance("free_again")
+        "free_again":
+            if mode != "learn" or step != "free":
+                if int(state.get("transport_id",-1)) > initial_transport+1 and \
+                        mode == "practice" and bool(state.get("running",false)):
+                    _fail("Two failed takes at 50% did not return to Free")
+                    return true
+                return false
+            if int(state.get("lesson_steps_mastered",0)) != 0 or \
+                    bool(state.get("running",false)):
+                _fail("Returning to Free granted credit or kept a take running")
+                return true
+            var again: Array = state.get("teaching",{}).get("expected_notes",[])
+            var held: float = app.presentation_session.score_flow.hold_world
+            if again.is_empty() or not is_finite(held) or \
+                    absf(app.presentation_session.score_flow.project(now_ms)-held) > .02:
+                free_hold_since_ms = -1
+                return false
+            # The target must rest at the playhead before a key counts.
+            if free_hold_since_ms < 0:
+                free_hold_since_ms = now_ms
+                return false
+            if now_ms-free_hold_since_ms < 400:
+                return false
+            print("FULL_SCENE_FREE_AFTER_TWO_FAILURES held=",held)
+            _strike(int(again[0]["pitch"]))
+            _advance("free_again_last")
+        "free_again_last":
+            if mode == "practice":
+                _advance("tempo_again")
+                return false
+            var targets: Array = state.get("teaching",{}).get("expected_notes",[])
+            if targets.is_empty():
+                return false
+            if int(state.get("teaching",{}).get("target_index",-1)) >= 1:
+                _strike(int(targets[0]["pitch"]))
+                _advance("tempo_again")
+            elif now_ms-phase_ms > 600:
+                # The first key may have come while the target was arriving.
+                _strike(int(targets[0]["pitch"]))
+                phase_ms = now_ms
+        "tempo_again":
+            if step != "tempo" or mode != "practice" or \
+                    not bool(state.get("running",false)):
+                return false
+            if int(state.get("bpm",0)) != 40:
+                _fail("Tempo after Free did not restart at 50%")
+                return true
+            # The clean and faster checks count takes from here.
+            initial_transport = int(state.get("transport_id",-1))-1
             _advance("clean_repeat")
         "clean_repeat":
             if int(state.get("transport_id",-1)) <= initial_transport or \
@@ -433,6 +490,6 @@ func _process(_delta: float) -> bool:
                 return true
             if Time.get_ticks_msec()-stopped_at_ms < 450:
                 return false
-            print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo resume_tempo wrong_tempo auto_repeat clean_tempo stop")
+            print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo resume_tempo wrong_tempo auto_repeat second_failure free_again clean_tempo stop")
             quit(0)
     return false

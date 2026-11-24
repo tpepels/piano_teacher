@@ -6,8 +6,7 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field, replace
 from typing import Callable, Literal
 from .music import Note, Phrase
-from .lesson_settings import SETTINGS
-from .grading_tolerance import onset_tolerance, duration_tolerance
+from .grading_tolerance import onset_tolerance, duration_tolerance, match_window
 from .application.musical_scheduler import SCHEDULER
 
 
@@ -233,8 +232,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
     for attacks in by_pitch.values():
         attacks.sort()
     for note_index, (note, (start, _, _, local_spb)) in enumerate(zip(expected, timing)):
-        window = max(SETTINGS.grading_match_window_min_seconds,
-                     SETTINGS.grading_match_window_beats * local_spb)
+        window = match_window(local_spb)
         attacks = by_pitch[note.pitch]
         first = bisect_left(attacks, (start-window, -1))
         last = bisect_right(attacks, (start+window, len(played)))

@@ -354,6 +354,22 @@ class MusicalTimeline:
             meter=tuple(meter)))
         return self._append_take(take, world=count_in.world_end, at=count_in.end_at)
 
+    def cut_at(self, t: float) -> None:
+        """End the run at wall instant `t`: the segment sounding then is
+        cut there and everything placed after it is dropped (Retry, or a
+        Resume that gives a take a fresh count-in)."""
+        if not self.segments:
+            return
+        m = self.musical(t)
+        kept = [s for s in self.segments if s.start_at <= m + 1e-9]
+        if not kept:
+            self.reset()
+            return
+        last = kept[-1]
+        kept[-1] = replace(last, cut_beats=last.beat_at(m - last.start_at))
+        self.segments = kept
+        self.end_world = None
+
     def cut_take(self, t: float) -> None:
         """End the current take at wall instant `t` (Resume continues it in a
         new take after its own count-in)."""

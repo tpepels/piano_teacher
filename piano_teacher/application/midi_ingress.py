@@ -10,7 +10,7 @@ import math
 from .musical_scheduler import SCHEDULER
 from .session_events import MidiArrival
 from ..live_feedback import live_assessment
-from ..grading_tolerance import onset_tolerance
+from ..grading_tolerance import match_window
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,7 +213,10 @@ class MidiIngress:
             spb = SCHEDULER.seconds_per_beat(
                 facts.tempo_map.bpm_at(facts.from_beat)
                 if facts.tempo_map is not None else facts.bpm)
-            if not is_on or not facts.paused and musical_at >= -onset_tolerance(spb):
+            # A press before the downbeat is graded when it is close enough
+            # to be matched to the first note (it can then be early); a press
+            # further into the count-in is not part of the take.
+            if not is_on or not facts.paused and musical_at >= -match_window(spb):
                 recorded = recorder.add(message.note,is_on,musical_at)
             elif is_on and not facts.paused:
                 early = True

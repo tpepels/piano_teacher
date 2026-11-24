@@ -70,6 +70,42 @@ def write_midi(path, *, bars=5, bpm=80, left=True, chords=False,
     return path
 
 
+def write_musicxml(path, *, bars=2, chords=False):
+    """The same music as write_midi, written as two-staff MusicXML: bar n
+    has the right hand on beats 0 (with a chord when `chords`) and 3, and
+    one whole note in the left hand, at 80 BPM in 4/4."""
+    def note(step, octave, duration, kind, staff, chord=False, voice=1):
+        return (f"<note>{'<chord/>' if chord else ''}<pitch><step>{step}</step>"
+                f"<octave>{octave}</octave></pitch><duration>{duration}</duration>"
+                f"<voice>{voice}</voice><type>{kind}</type><staff>{staff}</staff></note>")
+    def rest(duration, kind, staff, voice=1):
+        return (f"<note><rest/><duration>{duration}</duration><voice>{voice}</voice>"
+                f"<type>{kind}</type><staff>{staff}</staff></note>")
+    steps = ("C", "D", "E", "F", "G")
+    measures = []
+    for bar in range(bars):
+        right = [note("C" if bar == 0 else steps[bar % 5], 5, 1, "quarter", 1)]
+        if chords:
+            right += [note("E", 5, 1, "quarter", 1, chord=True),
+                      note("G", 5, 1, "quarter", 1, chord=True)]
+        right += [rest(2, "half", 1), note("G", 5, 1, "quarter", 1)]
+        left = [note("C", 3, 4, "whole", 2, voice=2)]
+        attributes = ("<attributes><divisions>1</divisions><key><fifths>0</fifths></key>"
+                      "<time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves>"
+                      "<clef number=\"1\"><sign>G</sign><line>2</line></clef>"
+                      "<clef number=\"2\"><sign>F</sign><line>4</line></clef></attributes>"
+                      "<direction placement=\"above\"><direction-type><metronome><beat-unit>quarter</beat-unit>"
+                      "<per-minute>80</per-minute></metronome></direction-type><sound tempo=\"80\"/></direction>"
+                      if bar == 0 else "")
+        measures.append(f"<measure number=\"{bar+1}\">{attributes}{''.join(right)}"
+                        f"<backup><duration>4</duration></backup>{''.join(left)}</measure>")
+    path.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1">'
+        '<part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>'
+        f'<part id="P1">{"".join(measures)}</part></score-partwise>')
+    return path
+
+
 def take(state):
     """The authorized physical take: one deadline Python chose for the receipt."""
     current = state["playback_timeline"]["current"]
@@ -78,11 +114,12 @@ def take(state):
 
 
 class PracticeSession:
-    def __init__(self, directory, monkeypatch, **midi_options):
+    def __init__(self, directory, monkeypatch, musicxml=False, **midi_options):
         self.clock = InputClock()
         self.music = directory/"music"
         self.music.mkdir(parents=True)
-        self.path = write_midi(self.music/"lesson.mid", **midi_options)
+        self.path = (write_musicxml(self.music/"lesson.musicxml", **midi_options) if musicxml
+                     else write_midi(self.music/"lesson.mid", **midi_options))
         self.data = directory/"learner"
         self.monkeypatch = monkeypatch
         monkeypatch.delenv("PIANO_TEACHER_SOUNDFONT", raising=False)

@@ -77,10 +77,10 @@ CASES = {
     "last note far too late": ({"shift": (LAST, 3.0)}, [C, C, C, M], (3, 0, 1, 1)),
     "last note far too early": ({"shift": (LAST, -3.0)}, [C, C, C, M], (3, 0, 1, 1)),
     "first chord far too late": ({"shift": (0, 3.0)}, [M, C, C, C], (3, 0, 1, 1)),
-    # A key pressed during the count-in, beyond the tolerance, is not
-    # graded at all: the note is missed rather than early.
+    # A press in the count-in close enough to be matched to the first note
+    # is graded (early); one far into the count-in is not part of the take.
     "first chord note far too early": ({"shift": (0, -2.0)}, [M, C, C, C], (3, 0, 1, 0)),
-    "first chord note just too early": ({"shift": (0, -.45)}, [M, C, C, C], (3, 0, 1, 0)),
+    "first chord note just too early": ({"shift": (0, -.45)}, ["early", C, C, C], (4, 0, 0, 0)),
     "first chord note just too late": ({"shift": (0, .45)}, ["late", C, C, C], (4, 0, 0, 0)),
     "the whole take rushed twice as fast": ({"speed": 2.0}, [C, C, C, M], (3, 0, 1, 1)),
 }
@@ -157,3 +157,65 @@ def test_two_failures_above_the_floor_slow_down_and_a_clean_take_resets_the_coun
     assert state["bpm"] == 80 and state["streak"] == 0
     state = play(session, state, shift=(LAST, .6))     # failure 2 of 2: slower
     assert state["bpm"] == 72 and state["flow"]["message"] == "Slower: 72 BPM"
+
+
+WINDOWS = {
+    # name: (fixture options, window to select or None for the opening one)
+    "right hand, one bar": ({}, None),
+    "left hand, one bar": ({}, (1, 1, "left")),
+    "both hands, one bar": ({}, (1, 1, "both")),
+    "right hand, two bars": ({}, (1, 2, "right")),
+    "MusicXML, right hand": ({"musicxml": True}, None),
+}
+MISTAKES = {
+    # name: (play options built from the window's note count, index, status)
+    "first note missing": (lambda n: {"missing": (0,)}, 0, M),
+    "last note missing": (lambda n: {"missing": (n-1,)}, -1, M),
+    "first note wrong": (lambda n: {"wrong": (0,)}, 0, W),
+    "last note too late": (lambda n: {"shift": (n-1, .6)}, -1, "late"),
+    "first note too early": (lambda n: {"shift": (0, -.45)}, 0, "early"),
+}
+
+
+def window_take(session, window):
+    if window is not None:
+        first, last, hand = window
+        session.select(first, last, hand=hand)
+    session.finish_listen()
+    session.finish_free()
+    state = session.ready_score()
+    assert state["running"] and state["bpm"] == 40, state
+    session.ask("score.native_layout")
+    return state
+
+
+@pytest.mark.parametrize("window", list(WINDOWS))
+@pytest.mark.parametrize("mistake", list(MISTAKES))
+def test_every_window_kind_grades_a_mistake_and_repeats(practice_session, window, mistake):
+    options, selected = WINDOWS[window]
+    session = practice_session(bars=3, chords=True, **options)
+    state = window_take(session, selected)
+    notes = session.ask("score.semantic")["notes"]
+    build, index, status = MISTAKES[mistake]
+    after = play(session, state, **build(len(notes)))
+    expected = [C]*len(notes)
+    expected[index] = status
+    assert graded(session, state["transport_id"]) == expected
+    assert after["running"] and after["bpm"] == 40
+    assert after["flow"]["message"] == "Again at the same tempo"
+    assert after["hand"] == state["hand"]
+    assert (after["first_bar"], after["last_bar"]) == (state["first_bar"], state["last_bar"])
+
+
+@pytest.mark.parametrize("window", list(WINDOWS))
+def test_every_window_kind_passes_a_clean_take_and_rejects_silence(practice_session, window):
+    options, selected = WINDOWS[window]
+    session = practice_session(bars=3, chords=True, **options)
+    state = window_take(session, selected)
+    count = len(session.ask("score.semantic")["notes"])
+    clean = play(session, state)
+    assert graded(session, state["transport_id"]) == [C]*count
+    assert clean["bpm"] > 40
+    silent = play(session, clean, missing=tuple(range(count)))
+    assert graded(session, clean["transport_id"]) == [M]*count
+    assert silent["bpm"] == clean["bpm"] and silent["flow"]["message"] == "Again at the same tempo"

@@ -57,7 +57,7 @@ class PlaybackAuthorization:
             placed = self._resume_placement(timeline, take, now)
         if placed is None:
             if intent.action in ("restart", "resume") and timeline.open:
-                timeline.cut_take(now)
+                timeline.cut_at(now)
             else:
                 timeline.reset()
             placed = timeline.start_after(
@@ -80,17 +80,13 @@ class PlaybackAuthorization:
 
     @staticmethod
     def _resume_placement(timeline, take, now):
-        """Resume: a pause in a rest or count-in only moves what follows;
-        a take paused while playing ends there and continues from the
-        paused beat after the visible ink and one count-in bar."""
+        """Resume always gives the take one complete count-in bar (owner
+        decision 2026-11-08): the run ends where it was paused and the take
+        continues from the paused beat (or its opening, when the pause came
+        in the count-in or rest) after the visible ink and a fresh bar."""
         paused_at = timeline.holds[-1][0] if timeline.paused else now
         timeline.resume(now)
-        last = timeline.last_take()
-        if last is None:
-            return None
-        if timeline.musical(paused_at) <= last.start_at + 1e-9:
-            return last
-        timeline.cut_take(paused_at)
+        timeline.cut_at(now)
         return None
 
     # Godot could not draw a take (it saw it after its first note, or a

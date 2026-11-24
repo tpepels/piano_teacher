@@ -147,9 +147,10 @@ function of it; a Pause is a hold that moves every later segment.
    - Start, Retry, Listen, score-ready: a run continues after the ink Godot
      reported ahead of its playhead (`ink_ahead_beats`, sent with the
      command), then one count-in bar;
-   - Resume: a pause in a rest or count-in only moves what follows; a take
-     paused while playing ends there and continues from the paused beat
-     after its own count-in.
+   - Resume: the run ends where it was paused and the take continues
+     from the paused beat (from its opening when paused in its count-in or
+     the rest before it) after the visible ink and one complete count-in
+     bar.
 3. Godot follows the published timeline for the scrolling world during a
    run and draws each take's notes at its world start (they may appear on
    the visible staff). An abandoned take whose first note never reached

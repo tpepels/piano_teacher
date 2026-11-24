@@ -42,7 +42,7 @@ def test_display_failure_stops_the_take_and_retry_uses_a_new_take(practice_sessi
     assert retry["playback_timeline"]["current"]["take_id"] != take["take_id"]
 
 
-def test_paused_count_in_resumes_the_same_take_and_rejects_lead_in_notes(practice_session):
+def test_paused_count_in_resumes_with_a_full_count_in_and_rejects_lead_in_notes(practice_session):
     session = practice_session(bars=1)
     take = desktop_tempo(session)
     original = session.snapshot()
@@ -52,9 +52,10 @@ def test_paused_count_in_resumes_the_same_take_and_rejects_lead_in_notes(practic
     session.tick(30)
     again = session.command("resume")["playback_timeline"]["current"]
     assert again["take_id"] == take["take_id"]
-    # Paused in the count-in: the rest of it and the take move by exactly
-    # the paused time; the drawn notes keep their place on the staff.
-    assert again["deadline_ms"] == pytest.approx(take["deadline_ms"]+30000, abs=1)
+    # Paused in the count-in: Resume gives the take a fresh, complete
+    # count-in bar (4 beats at 40 BPM = 6 s), starting right away.
+    lead = again["deadline_ms"]/1000-session.clock()
+    assert 6.0 <= lead <= 6.0+.5
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0
     session.clock.at = again["deadline_ms"]/1000
@@ -315,3 +316,21 @@ def test_keyboard_hint_only_for_a_wrong_note_in_free():
     assert keyboard(wrong) == "hint"
     for mode in ("practice", "listen"):
         assert keyboard({**wrong, "mode": mode}) == "hidden"
+
+
+def test_a_late_decision_adds_a_whole_rest_bar_before_the_count_in(practice_session):
+    """If the engine settles a take after its count-in should have begun
+    (a stalled worker), the repeat moves by whole bars, never partly."""
+    session = practice_session(bars=1)
+    take = desktop_tempo(session)
+    start = take["deadline_ms"]/1000
+    for beat, pitch, on in ((0,72,True), (1,72,False), (3,79,True), (4,79,False)):
+        session.clock.at = start+beat*60/40
+        session.key(pitch, on, after=0)
+    end = start+4*60/40
+    state = session.tick(1.0)          # first tick one second after the end
+    incoming = state["playback_timeline"]["current"]
+    assert state["running"] and incoming["bpm"] == 80
+    # One rest bar (4 beats at the outgoing 40 BPM), then the eased count-in.
+    assert incoming["deadline_ms"]/1000 == pytest.approx(
+        end+4*60/40+spans_seconds(count_in_spans(4,40,80)))

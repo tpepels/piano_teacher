@@ -232,7 +232,7 @@ PY
   local scenario_log="$WORK/native-midi-$variant.log"
   # A fresh physical Resume includes an entire authored count-in bar.
   # Bound the longer real-time journey consistently with its Godot budget.
-  timeout 155s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
+  timeout 210s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
     PIANO_TEST_SECOND_BEAT="$second_beat" \
     PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
     "$GODOT_BIN" --headless --audio-driver Dummy --path godot \

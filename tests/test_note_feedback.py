@@ -82,7 +82,7 @@ def test_onsets_accept_150ms_or_a_local_sixteenth(bpm, tolerance, direction):
 
 
 @pytest.mark.parametrize("bpm,tolerance", [(40, .375), (120, .150)])
-def test_first_attack_can_arrive_early_but_count_in_keys_earn_no_credit(bpm, tolerance):
+def test_first_attack_can_arrive_early_and_count_in_keys_earn_no_credit(bpm, tolerance):
     accepted = NoteTake(phrase(note("first")), bpm=bpm)
     accepted.receive(60, -tolerance+.001)
     assert accepted.finish().flow_passed
@@ -90,8 +90,19 @@ def test_first_attack_can_arrive_early_but_count_in_keys_earn_no_credit(bpm, tol
     assert (event["status"], event["source_id"]) == ("on_time", "first")
     assert {key: event[key] for key in accepted.identity} == accepted.identity
 
+    # Just outside the tolerance the press still belongs to the first note:
+    # it is graded early and the take fails.
+    early = NoteTake(phrase(note("first")), bpm=bpm)
+    early.receive(60, -tolerance-.001)
+    assert early.recorder.presses
+    result = early.finish()
+    assert not result.flow_passed
+    assert [entry.status for entry in result.notes] == ["early"]
+
+    # Further into the count-in it is no part of the take and earns nothing.
+    from piano_teacher.grading_tolerance import match_window
     count_in = NoteTake(phrase(note("first")), bpm=bpm)
-    count_in.receive(60, -tolerance-.001)
+    count_in.receive(60, -match_window(60/bpm)-.001)
     assert not count_in.recorder.presses
     assert not count_in.finish().flow_passed
     event = count_in.events.after(0)["events"][0]

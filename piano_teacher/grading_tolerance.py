@@ -17,3 +17,9 @@ def duration_tolerance(duration_seconds: float, seconds_per_beat: float) -> floa
                        + 0.28 * max(0.0, seconds_per_beat - 0.5)))
     return max(SETTINGS.grading_duration_floor_seconds,
                duration_seconds * fraction)
+
+
+def match_window(seconds_per_beat: float) -> float:
+    """How far from a note an attack can be and still be matched to it."""
+    return max(SETTINGS.grading_match_window_min_seconds,
+               SETTINGS.grading_match_window_beats * seconds_per_beat)
