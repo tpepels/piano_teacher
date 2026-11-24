@@ -48,8 +48,6 @@ func configure(view, statistics) -> void:
     view.learner_history_delete_requested.connect(func():
         statistics.invalidate()
         command_requested.emit("learning.delete_learner",{"confirm":true}))
-    view.calibration_requested.connect(func(action: String):
-        action_requested.emit({"action":action}))
     view.midi_range_requested.connect(func(action: String):
         action_requested.emit({"action":action}))
     view.volume_changed.connect(set_listen_volume)

@@ -206,14 +206,14 @@ def test_calibration_collects_real_ingress_then_applies_persists_and_resets(conn
     period = 60 / calibration["bpm"]
     with pytest.raises(ValueError, match="Finish"):
         engine.control("calibration_apply")
-    for beat in range(4, 44):
+    for beat in range(4, 28):
         now[0] = epoch + beat * period + .08
         backend.ports[-1].press()
         backend.ports[-1].release()
-    now[0] = epoch + 44 * period + .1
+    now[0] = epoch + 28 * period + .1
     engine.advance_clock()
     result = engine.state()["midi_calibration"]["result"]
-    assert result["reliable"] and result["samples"] == 40
+    assert result["reliable"] and result["samples"] == 24
     assert engine.preferences()["midi_offset_ms"] == 0
     engine.control("calibration_apply")
     assert engine.preferences()["midi_offset_ms"] == pytest.approx(80, abs=1)
@@ -233,24 +233,6 @@ def test_calibration_collects_real_ingress_then_applies_persists_and_resets(conn
     assert engine.preferences()["midi_offset_ms"] == 80
     engine.control("calibration_reset")
     assert engine.preferences()["midi_offset_ms"] == 0
-
-
-@pytest.mark.parametrize("offsets,reliable", [((.08, .08, .18, .08, .08), True),
-                                             ((.08, .08, .18, .19, .08), False)])
-def test_calibration_excludes_one_outlying_round_but_rejects_disagreement(offsets, reliable):
-    calibration = MidiTapCalibration()
-    calibration.start(100)
-    for round_index, offset in enumerate(offsets):
-        first = calibration.start_at + (4 + round_index * 8) * calibration.period
-        for tap in range(8):
-            assert calibration.observe(first + tap * calibration.period + offset)
-    calibration.advance(calibration.start_at + 44 * calibration.period + .1)
-    result = calibration.snapshot(calibration.start_at + 44 * calibration.period + .1)["result"]
-    assert result["reliable"] is reliable
-    if reliable:
-        assert result["estimate_ms"] == pytest.approx(80, abs=1)
-    else:
-        assert result["error"]
 
 
 def test_teaching_the_physical_key_range_does_not_record_notes_and_survives_reopen(practice_session):

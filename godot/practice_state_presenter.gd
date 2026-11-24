@@ -5,11 +5,13 @@ extends RefCounted
 
 var practice_view
 var settings_view
+var calibration_view
 var last_smoke_phase := ""
 
-func _init(practice, settings) -> void:
+func _init(practice, settings, calibration) -> void:
     practice_view = practice
     settings_view = settings
+    calibration_view = calibration
 
 func present(parsed: Dictionary, screen: String, busy: bool,
         score_ready: bool, audio_error: bool,
@@ -17,6 +19,8 @@ func present(parsed: Dictionary, screen: String, busy: bool,
     settings_view.present_midi_key_range(
         parsed.get("midi_key_range",{}) if parsed.get("midi_key_range") is Dictionary else {})
     settings_view.present_calibration(
+        parsed.get("midi_calibration",{}),int(parsed.get("midi_offset_ms",0)))
+    calibration_view.present_calibration(
         parsed.get("midi_calibration",{}),int(parsed.get("midi_offset_ms",0)))
 
     settings_view.present_practice(parsed,screen == "settings")

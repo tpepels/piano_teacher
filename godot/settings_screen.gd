@@ -14,7 +14,8 @@ signal device_selected(name: String)
 signal tempo_requested(bpm: int)
 signal metronome_requested(enabled: bool)
 signal hold_grading_requested(enabled: bool)
-signal calibration_requested(action: String)
+signal calibration_page_requested
+var timing_label: Label
 signal midi_range_requested(action: String)
 signal volume_changed(db: float)
 signal fullscreen_requested(enabled: bool)
@@ -27,21 +28,13 @@ signal exit_requested
 var ui_scale := 1.0
 var default_font: Font
 var settings_grid: GridContainer
-var midi_calibration_body: VBoxContainer
 var history_actions_body: VBoxContainer
-var midi_calibration_toggle: Button
 var history_toggle: Button
 var device_button: Button
 var input_activity_label: Label
 var midi_range_label: Label
 var midi_range_start_button: Button
 var midi_range_cancel_button: Button
-var calibration_label: Label
-var calibration_count_label: Label
-var calibration_beat_pulse: Control
-var calibration_progress: ProgressBar
-var calibration_round_labels: Array[Label] = []
-var calibration_apply_button: Button
 var folder_controls: VBoxContainer
 var folder_edit: LineEdit
 var tempo_setting: SpinBox
@@ -187,42 +180,14 @@ func _ready() -> void:
     keyboard_range_row.add_child(midi_range_cancel_button)
     midi_range_label = _label("",14,MUTED)
     midi.add_child(midi_range_label)
-    midi_calibration_body = _stack(10)
-    midi_calibration_toggle = _disclosure(midi,"MIDI timing calibration",midi_calibration_body)
-    var calibration_row := HFlowContainer.new()
-    calibration_row.add_theme_constant_override("h_separation", 8)
-    midi_calibration_body.add_child(calibration_row)
-    calibration_row.add_child(_button("Calibrate timing", func():
-        calibration_requested.emit("calibration_start"), false, "settings"))
-    calibration_apply_button = _button("Apply", func():
-        calibration_requested.emit("calibration_apply"), false, "settings")
-    calibration_apply_button.disabled = true
-    calibration_row.add_child(calibration_apply_button)
-    calibration_row.add_child(_button("Reset", func():
-        calibration_requested.emit("calibration_reset"), false, "utility"))
-    calibration_row.add_child(_button("Cancel", func():
-        calibration_requested.emit("calibration_cancel"), false, "utility"))
-    calibration_count_label = _label("4 · 3 · 2 · 1 → PLAY", 28, INK, true)
-    calibration_count_label.visible = false
-    midi_calibration_body.add_child(calibration_count_label)
-    calibration_beat_pulse = preload("res://calibration_beat_pulse.gd").new()
-    midi_calibration_body.add_child(calibration_beat_pulse)
-    calibration_progress = ProgressBar.new()
-    calibration_progress.min_value = 0
-    calibration_progress.max_value = 100
-    calibration_progress.show_percentage = false
-    calibration_progress.custom_minimum_size.y = 16
-    calibration_progress.visible = false
-    midi_calibration_body.add_child(calibration_progress)
-    var rounds_row := HFlowContainer.new()
-    rounds_row.add_theme_constant_override("h_separation", 16)
-    midi_calibration_body.add_child(rounds_row)
-    for number in range(1, 6):
-        var round_label := _label("Round %d/5" % number, 14, MUTED)
-        calibration_round_labels.append(round_label)
-        rounds_row.add_child(round_label)
-    calibration_label = _label("One 4-beat count-in, then 5 continuous rounds of 8 taps.", 14, MUTED)
-    midi_calibration_body.add_child(calibration_label)
+    # Timing calibration has its own page; here: the current correction.
+    var timing_row := HBoxContainer.new()
+    timing_row.add_theme_constant_override("separation", 12)
+    midi.add_child(timing_row)
+    timing_row.add_child(_button("Calibrate timing", func(): calibration_page_requested.emit()))
+    timing_label = _label("", 14, MUTED)
+    timing_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    timing_row.add_child(timing_label)
 
     var music := _section("Music library")
     var music_panel := _card()
@@ -462,12 +427,6 @@ func present_learning_status(values: Dictionary) -> void:
     _current_fingerprint = str(values.get("current_fingerprint", ""))
     delete_piece_button.disabled = _history_busy or _current_fingerprint.is_empty()
 
-func animate_calibration_beat(beat: float, active: bool,
-        round_beats: int = 12, preparation: int = 4) -> void:
-    if calibration_beat_pulse != null:
-        calibration_beat_pulse.call(
-            "present_beat", beat, active, round_beats, preparation)
-
 func present_midi_key_range(state: Dictionary) -> void:
     if midi_range_label == null:
         return
@@ -489,69 +448,9 @@ func present_midi_key_range(state: Dictionary) -> void:
         midi_range_label.text = ""
 
 
-func present_calibration(state: Dictionary, offset_ms: int) -> void:
-    if calibration_label == null:
-        return
-    var result: Variant = state.get("result")
-    var active: bool = bool(state.get("active", false))
-    var total_rounds: int = maxi(1,int(state.get("rounds",5)))
-    var current: int = clampi(int(state.get("round",1)),1,total_rounds)
-    var total_taps: int = maxi(1,int(state.get("ticks",8)))
-    var round_samples: Array = state.get("round_samples", [])
-    calibration_progress.visible = active
-    calibration_count_label.visible = active
-    calibration_progress.value = 100.0 * clampf(
-        float(state.get("progress",0.0)),0.0,1.0)
-    var phase: String = str(state.get("phase","ready"))
-    if active:
-        if phase == "ready":
-            calibration_count_label.text = "READY · 4 · 3 · 2 · 1"
-        elif phase == "count_in":
-            calibration_count_label.text = "COUNT IN · %d" % int(state.get("countdown",4))
-        else:
-            calibration_count_label.text = "ROUND %d/%d · TAP %d/%d" % [
-                current,total_rounds,int(state.get("tap_number",0)),total_taps]
-    for i in range(calibration_round_labels.size()):
-        var count: int = int(round_samples[i]) if i < round_samples.size() else 0
-        calibration_round_labels[i].text = "Round %d/%d · %d taps" % [
-            i+1,total_rounds,count]
-        calibration_round_labels[i].add_theme_color_override("font_color",
-            INK if active and i == current-1 else MUTED)
-    var status := "Saved correction: %d ms. " % offset_ms
-    if active:
-        status += ("Tap one key for every click. One initial count-in; " +
-            "five uninterrupted eight-tap rounds.")
-    elif result is Dictionary:
-        var measurement: Dictionary = result
-        if bool(measurement.get("reliable",false)):
-            var estimate: int = int(measurement.get("estimate_ms",0))
-            status += ("Measured: %d ms, %d/%d rounds used; " +
-                "%d anomalous taps excluded (max jitter %d ms).") % [
-                estimate,int(measurement.get("used_rounds",0)),total_rounds,
-                int(measurement.get("discarded_taps",0)),
-                int(measurement.get("jitter_ms",0))]
-            if estimate != offset_ms:
-                status += " Select Apply offset to save this correction."
-            else:
-                status += " This matches the saved correction."
-        else:
-            status += str(measurement.get("error",
-                "Inconsistent timing; calibrate again."))
-        var round_results: Array = measurement.get("rounds",[])
-        for i in range(mini(calibration_round_labels.size(),round_results.size())):
-            var entry: Dictionary = round_results[i]
-            var round_status := "excluded"
-            if bool(entry.get("included",false)):
-                round_status = "%d ms" % int(entry.get("median_ms",0))
-            calibration_round_labels[i].text = "Round %d: %s" % [i+1,round_status]
-    else:
-        status += "Calibrate: four-beat count-in once, then five eight-tap rounds."
-    calibration_label.text = status
-    calibration_label.tooltip_text = (
-        "This measures tap timing relative to audible clicks, including human " +
-        "timing and audio output delay; it does not isolate Bluetooth MIDI latency.")
-    calibration_apply_button.disabled = not (result is Dictionary and
-        bool(result.get("reliable",false)))
+func present_calibration(_state: Dictionary, offset_ms: int) -> void:
+    if timing_label != null:
+        timing_label.text = "Current correction: %d ms" % offset_ms
 
 func present_preferences(values: Dictionary) -> void:
     folder_edit.text = str(values.get("music_dir", ""))

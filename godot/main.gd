@@ -11,6 +11,7 @@ const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const ContinuousScoreFlow := preload("res://continuous_score_flow.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SettingsScreen := preload("res://settings_screen.gd")
+const CalibrationScreen := preload("res://calibration_screen.gd")
 const HomeScreen := preload("res://home_screen.gd")
 const PracticeScreen := preload("res://practice_screen.gd")
 const NavigationDrawer := preload("res://navigation_drawer.gd")
@@ -46,6 +47,7 @@ var input_session = ApplicationInputSession.new()
 var settings_interactions = SettingsInteractionSession.new()
 var navigation_drawer = NavigationDrawer.new()
 var settings_view: SettingsScreen
+var calibration_view: CalibrationScreen
 var home_view: HomeScreen
 var practice_view: PracticeScreen
 var screens: Dictionary = {}
@@ -193,7 +195,7 @@ func _ready() -> void:
     frame_coordinator = PracticeFrameCoordinator.new(
         practice_view,settings_view,demo_player,frame_meter)
     state_presenter = PracticeStatePresenter.new(
-        practice_view,settings_view)
+        practice_view,settings_view,calibration_view)
     command_failure_presenter = CommandFailurePresenter.new(
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(
@@ -205,7 +207,7 @@ func _ready() -> void:
     command_success_effects.request_library.connect(library_catalog.request_catalog)
     command_success_effects.request_library_health.connect(library_catalog.request_health)
     metronome_frame = MetronomeFrameCoordinator.new(
-        settings_view,practice_view,visual_transport_clock,
+        calibration_view,practice_view,visual_transport_clock,
         func(at_ms: int) -> float:
             return presentation_session.transport_beat(state_inbox.current,at_ms),
         countin_audio.practice_click,countin_audio.click)
@@ -310,6 +312,8 @@ func _resize_overlay_drawer() -> void:
         library_view.apply_viewport(size, ui_scale)
     if settings_view != null:
         settings_view.apply_viewport(size, ui_scale)
+    if calibration_view != null:
+        calibration_view.apply_viewport(size, ui_scale)
 
 
 func _build_interface() -> void:
@@ -428,6 +432,15 @@ func _build_settings_screen() -> void:
     settings_interactions.action_requested.connect(send_action)
     settings_view.device_selected.connect(midi_devices.choose)
     settings_interactions.exit_requested.connect(_exit_app)
+    # Timing calibration is its own page, opened from Settings.
+    var calibration_page := _screen("Calibration")
+    screens["calibration"] = calibration_page
+    calibration_view = CalibrationScreen.new()
+    calibration_page.add_child(calibration_view)
+    settings_view.calibration_page_requested.connect(func(): _navigate("calibration"))
+    calibration_view.navigation_requested.connect(_navigate)
+    calibration_view.calibration_requested.connect(func(action: String):
+        send_action({"action":action}))
 
 func _input(event: InputEvent) -> void:
     if input_session.capture(event,current_screen,get_viewport()):

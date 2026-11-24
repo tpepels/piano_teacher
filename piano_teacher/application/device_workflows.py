@@ -74,7 +74,7 @@ class DeviceWorkflows:
                 raise ValueError("Connect the MIDI keyboard before calibrating")
             self.lifecycle.stop(reason=stop_reason)
             self.midi_input.start_calibration(self.clock())
-            self.notices.feedback = "Tap one key per click through five continuous rounds"
+            self.notices.feedback = "Tap one key with every click"
         elif action == "calibration_cancel":
             self.midi_input.cancel_calibration()
         elif action == "calibration_apply":

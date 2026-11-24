@@ -4,7 +4,7 @@ extends RefCounted
 const CueTimeline := preload("res://countin_cue_timeline.gd")
 const TempoTimeline := preload("res://tempo_timeline.gd")
 ## The backend grades MIDI; this class owns only audio/UI frame counters.
-var settings_view
+var calibration_view
 var practice_view
 var clock
 var transport_beat_at: Callable
@@ -229,9 +229,9 @@ func _count_in(token: String, beat: float, bar_beats: float, meter: Variant,
         float(units[2]),drop_late)
 
 
-func _init(settings, practice, visual_clock, at_beat: Callable,
+func _init(calibration, practice, visual_clock, at_beat: Callable,
         on_count: Callable, on_raw: Callable) -> void:
-    settings_view = settings
+    calibration_view = calibration
     practice_view = practice
     clock = visual_clock
     transport_beat_at = at_beat
@@ -262,7 +262,7 @@ func update(state: Dictionary, state_tick_ms: int,
         var ticks_per_round := maxi(1,int(calibration.get("ticks",8)))
         var total := count_in + ticks_per_round * maxi(
             1,int(calibration.get("rounds",5)))
-        settings_view.animate_calibration_beat(
+        calibration_view.animate_calibration_beat(
             beat,true,ticks_per_round,count_in)
         if beat >= 0.0 and beat < float(total):
             var tick := floori(beat + .00001)
@@ -277,9 +277,9 @@ func update(state: Dictionary, state_tick_ms: int,
                     raw_click.call(tick == 0 or round_start)
         return
     calibration_tick_index = -999
-    if (settings_view.calibration_beat_pulse != null
-            and settings_view.calibration_beat_pulse.visible):
-        settings_view.animate_calibration_beat(-1.0,false)
+    if (calibration_view != null and calibration_view.calibration_beat_pulse != null
+            and calibration_view.calibration_beat_pulse.visible):
+        calibration_view.animate_calibration_beat(-1.0,false)
     if _reserved_count_in(state,state_tick_ms,now_ms):
         return
     # Graphical audio has exactly one authorized take identity. Its

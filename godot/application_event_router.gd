@@ -20,7 +20,7 @@ static func capture_action(event: InputEvent,screen: String,
             KEY_F11,KEY_ESCAPE] and not (
             key.ctrl_pressed and key.keycode == KEY_Q)):
         return ""
-    if key.keycode == KEY_ESCAPE and screen in ["library","settings"]:
+    if key.keycode == KEY_ESCAPE and screen in ["library","settings","calibration"]:
         return "keyboard"
     if key.keycode == KEY_F11 or key.ctrl_pressed and key.keycode == KEY_Q:
         return "keyboard"

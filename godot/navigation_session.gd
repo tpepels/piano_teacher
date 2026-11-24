@@ -31,7 +31,7 @@ func update_frame_rate(state: Dictionary) -> void:
     # Display cadence follows the visible context, independently of the
     # backend MIDI/audio timeline and the canonical score projection.
     var active: bool = current_screen == "practice" and bool(state.get("loaded",false))
-    active = active or (current_screen == "settings" and bool(
+    active = active or (current_screen == "calibration" and bool(
         state.get("midi_calibration",{}).get("active",false)))
     var target_fps: int = 60 if active else 30
     OS.low_processor_usage_mode = not active
