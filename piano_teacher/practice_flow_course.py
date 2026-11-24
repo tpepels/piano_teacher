@@ -343,10 +343,33 @@ def _keys_by_checkpoint(course):
             groups.setdefault(first, []).append(stage_key(
                 exercise, hand, variant, course.profile, course.course_version))
     keys = {bar: frozenset(group) for bar, group in groups.items()}
+    previews = {bar: _measure_preview(course.piece, bar)
+                for bar in range(1, len(course.piece.bar_boundaries), CHECKPOINT_BARS)}
     if len(_checkpoint_keys) > 4:
         _checkpoint_keys.clear()
-    _checkpoint_keys[id(definition)] = (definition, keys)
-    return keys
+    _checkpoint_keys[id(definition)] = (definition, (keys, previews))
+    return keys, previews
+
+
+_NATURAL_STEP = (0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6)  # pitch class -> letter
+
+
+def _measure_preview(piece, bar: int) -> dict:
+    """A thumbnail of one measure: its right-hand notes on a treble staff
+    (left hand on bass if the right is silent) as (x 0..1, staff step),
+    step 0 = bottom line, 8 = top line. Accidentals are not drawn."""
+    start, end = piece.bar_boundaries[bar-1], piece.bar_boundaries[bar]
+    notes = [n for n in piece.notes if start-1e-7 <= n.start < end-1e-7]
+    hand = "right" if any(n.hand == "right" for n in notes) else "left"
+    bottom = 30 if hand == "right" else 18  # E4 / G2 as diatonic indices
+    heads = []
+    for n in notes:
+        if n.hand != hand:
+            continue
+        step = (n.pitch//12)*7 + _NATURAL_STEP[n.pitch % 12] - bottom
+        heads.append([round((n.start-start)/max(1e-6, end-start), 3),
+                      max(-6, min(14, step))])
+    return {"clef": "treble" if hand == "right" else "bass", "notes": heads[:24]}
 
 
 def checkpoints(course) -> list[dict]:
@@ -356,7 +379,7 @@ def checkpoints(course) -> list[dict]:
     practised. Jumping uses open_at (that measure's window, from Listen)."""
     last_bar = len(course.piece.bar_boundaries)-1
     mastered = dict(course.progress.mastered)
-    keys = _keys_by_checkpoint(course)
+    keys, previews = _keys_by_checkpoint(course)
     exercise = course.exercise
     here = exercise.phrase.last_bar if exercise.kind == "learn" else None
     rows = []
@@ -365,5 +388,6 @@ def checkpoints(course) -> list[dict]:
         group = keys.get(first, frozenset())
         rows.append({"bar": first, "last_bar": last,
                      "complete": bool(group) and group <= mastered.keys(),
-                     "current": here is not None and first <= here <= last})
+                     "current": here is not None and first <= here <= last,
+                     "preview": previews.get(first, {"clef": "treble", "notes": []})})
     return rows

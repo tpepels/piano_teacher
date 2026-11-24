@@ -10,7 +10,8 @@ var heading: Label
 var where_label: Label
 var resume_button: Button
 var listen_button: Button
-var checkpoint_row: HFlowContainer
+var checkpoint_row: HBoxContainer
+var checkpoint_scroll: ScrollContainer
 var hand_row: HBoxContainer
 var slower_button: Button
 var tempo_value: Label
@@ -59,11 +60,14 @@ func _ready() -> void:
 	_gap(menu, 18)
 
 	_small("Checkpoints", menu)
-	checkpoint_row = HFlowContainer.new()
-	checkpoint_row.add_theme_constant_override("h_separation", 8)
-	checkpoint_row.add_theme_constant_override("v_separation", 8)
-	checkpoint_row.custom_minimum_size.x = 420
-	menu.add_child(checkpoint_row)
+	# One strip, like a level select; it scrolls for long pieces.
+	checkpoint_scroll = ScrollContainer.new()
+	checkpoint_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	checkpoint_scroll.custom_minimum_size = Vector2(640, 86)
+	menu.add_child(checkpoint_scroll)
+	checkpoint_row = HBoxContainer.new()
+	checkpoint_row.add_theme_constant_override("separation", 6)
+	checkpoint_scroll.add_child(checkpoint_row)
 	_gap(menu, 18)
 
 	hand_row = HBoxContainer.new()
@@ -117,20 +121,70 @@ func _item(text: String, command: Dictionary, parent: Node, font_size := 34,
 
 
 func _checkpoint(entry: Dictionary) -> Button:
-	# One measure number per checkpoint: filled when complete, ringed
-	# where you are now. Choosing one starts that measure from Listen.
+	# A small picture of the checkpoint's first measure, so you can find a
+	# place by its shape. Choosing one starts that measure from Listen.
 	var bar := int(entry.get("bar", 1))
-	var button := ActionButton.new()
-	button.text = str(bar)
-	button.tooltip_text = "Measures %d–%d" % [bar, int(entry.get("last_bar", bar))]
-	button.add_theme_font_size_override("font_size", 18)
-	button.configure("choice")
-	button.set_selected(bool(entry.get("current", false)))
-	button.custom_minimum_size = Vector2(52, 44)
-	if bool(entry.get("complete", false)) and not bool(entry.get("current", false)):
-		button.add_theme_color_override("font_color", Design.MINT)
-	button.pressed.connect(func(): chosen.emit({"action": "open_at", "bar": bar, "mode": "learn"}))
-	return button
+	var tile := CheckpointTile.new()
+	tile.setup(entry)
+	tile.tooltip_text = "Measures %d–%d" % [bar, int(entry.get("last_bar", bar))]
+	tile.pressed.connect(func(): chosen.emit({"action": "open_at", "bar": bar, "mode": "learn"}))
+	return tile
+
+
+class CheckpointTile extends Button:
+	const Look := preload("res://practice_theme.gd")
+	const LINE_GAP := 5.0
+	var bar := 1
+	var notes: Array = []
+	var complete := false
+	var current := false
+
+	func setup(entry: Dictionary) -> void:
+		bar = int(entry.get("bar", 1))
+		var preview: Dictionary = entry.get("preview", {}) if entry.get("preview") is Dictionary else {}
+		notes = preview.get("notes", []) if preview.get("notes") is Array else []
+		complete = bool(entry.get("complete", false))
+		current = bool(entry.get("current", false))
+		custom_minimum_size = Vector2(100, 74)
+		focus_mode = Control.FOCUS_ALL
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		flat = true
+		for state in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+			add_theme_stylebox_override(state, StyleBoxEmpty.new())
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		focus_entered.connect(queue_redraw)
+		focus_exited.connect(queue_redraw)
+
+	func _draw() -> void:
+		var lit := is_hovered() or has_focus()
+		if current or lit:
+			# The same mint key as the menu words, under the tile.
+			var key := Rect2(Vector2(6, size.y-4), Vector2(size.x-12, 3))
+			for i in range(3, 0, -1):
+				draw_rect(key.grow(float(i)*2.0), Color(Look.MINT, .06), true)
+			draw_rect(key, Color(Look.MINT, 1.0 if current else .7), true)
+		var top := 12.0
+		var left := 8.0
+		var width := size.x-16.0
+		var line := Color(Look.STONE, .28)
+		for i in range(5):
+			draw_line(Vector2(left, top+i*LINE_GAP), Vector2(left+width, top+i*LINE_GAP), line, 1.0)
+		var ink := Look.MINT if complete else Color(Look.STONE, .9 if (lit or current) else .7)
+		var bottom := top+4.0*LINE_GAP
+		for note in notes:
+			if not note is Array or note.size() < 2:
+				continue
+			var x: float = left+4.0+float(note[0])*(width-8.0)
+			var y: float = bottom-float(note[1])*LINE_GAP*.5
+			draw_set_transform(Vector2(x, y), -.35, Vector2(1.0, .72))
+			draw_circle(Vector2.ZERO, 3.0, ink)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var font := Look.font(600)
+		var label := str(bar)
+		var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+		draw_string(font, Vector2((size.x-w)*.5, size.y-9), label, HORIZONTAL_ALIGNMENT_LEFT,
+			-1, 15, Look.MINT if current else Color(Look.STONE, .85))
 
 
 func present(state: Dictionary) -> void:
@@ -154,9 +208,15 @@ func present(state: Dictionary) -> void:
 		_checkpoints = checkpoints.duplicate(true)
 		for child in checkpoint_row.get_children():
 			child.queue_free()
+		var here: Control = null
 		for entry in checkpoints:
 			if entry is Dictionary:
-				checkpoint_row.add_child(_checkpoint(entry))
+				var tile := _checkpoint(entry)
+				checkpoint_row.add_child(tile)
+				if bool(entry.get("current", false)):
+					here = tile
+		if here != null:
+			checkpoint_scroll.call_deferred("ensure_control_visible", here)
 	var hands: Array = state.get("hands", []) if state.get("hands") is Array else []
 	var hand_actions: Dictionary = controls.get("hands", {})
 	var hand_key := [hands, str(state.get("hand", "")), hand_actions]
