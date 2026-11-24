@@ -64,6 +64,7 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "exercise_count": ('number',),
     "flow": ('dict',),
     "screen": ('dict',),
+    "checkpoints": ('list',),
     "feedback": ('string',),
     "feedback_marks": ('list',),
     "feedback_unmapped": ('number',),

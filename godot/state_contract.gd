@@ -41,6 +41,7 @@ const SCHEMA := {
     "first_bar": ["number"],
     "flow": ["dict"],
     "screen": ["dict"],
+    "checkpoints": ["list"],
     "guided_recovery": ["bool"],
     "hand": ["string"],
     "hand_stages": ["list"],

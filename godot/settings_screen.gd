@@ -97,8 +97,8 @@ func _stack(separation: int) -> VBoxContainer:
     return control
 
 func _section(value: String) -> VBoxContainer:
-    var control := _stack(12)
-    control.add_child(_label(value, 17, INK, true))
+    var control := _stack(10)
+    control.add_child(_title(value, 26))
     return control
 
 func _disclosure(parent: VBoxContainer, title: String,
@@ -116,8 +116,13 @@ func _disclosure(parent: VBoxContainer, title: String,
 
 
 func _card() -> PanelContainer:
+    # Sections sit on the stage, separated by space and a hairline, not boxed.
     var control := PanelContainer.new()
-    control.add_theme_stylebox_override("panel", Design.card_surface())
+    var line := StyleBoxFlat.new()
+    line.bg_color = Color.TRANSPARENT
+    line.border_width_top = 1
+    line.border_color = Color(Design.SAGE, .22)
+    control.add_theme_stylebox_override("panel", line)
     return control
 
 func _card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
@@ -132,14 +137,14 @@ func _button(value: String, callback: Callable, primary := false,
     var control := ActionButton.new()
     control.text = value
     control.clip_text = false
-    control.set_meta("ui_font_base", 15)
-    control.add_theme_font_size_override("font_size", _ui_font(15))
-    control.configure(role if not role.is_empty() else "primary" if primary else "secondary")
-    var font: Font = default_font if default_font != null else Design.font(400)
-    var width: float = font.get_string_size(value,
-        HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(15)).x
-    control.custom_minimum_size = Vector2(
-        maxf(96.0, width + 48.0 * ui_scale), 38.0 * ui_scale)
+    # Game-menu words, not boxed tool buttons; danger stays rose.
+    var menu_role := "menu_danger" if role == "danger" else "menu"
+    control.set_meta("ui_font_base", 19)
+    control.add_theme_font_size_override("font_size", _ui_font(19))
+    control.configure(menu_role)
+    var width: float = Design.title_font().get_string_size(value,
+        HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(19)).x
+    control.custom_minimum_size = Vector2(width + 46.0 * ui_scale, 40.0 * ui_scale)
     control.pressed.connect(callback)
     return control
 
@@ -150,9 +155,7 @@ func _ready() -> void:
     var content := _stack(20)
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     add_child(content)
-    content.add_child(_label("PIANO & PREFERENCES", 14, ACCENT, true))
-    content.add_child(_title("Your piano & practice", 32))
-    content.add_child(_label("Keyboard and practice essentials first. Detailed tools are available when needed.", 14, MUTED))
+    content.add_child(_title("Settings", 44))
 
     settings_grid = GridContainer.new()
     settings_grid.columns = 1
@@ -168,35 +171,35 @@ func _ready() -> void:
     var device_row := HFlowContainer.new()
     device_row.add_theme_constant_override("h_separation", 10)
     midi.add_child(device_row)
-    device_button = _button("Choose USB MIDI piano", func(): choose_devices_requested.emit(), false, "settings")
+    device_button = _button("Choose piano", func(): choose_devices_requested.emit(), false, "settings")
     device_row.add_child(device_button)
-    device_row.add_child(_button("Refresh devices", func(): refresh_devices_requested.emit(), false, "utility"))
-    input_activity_label = _label("Connect your piano, then play a note to check input.", 14, MUTED)
+    device_row.add_child(_button("Refresh", func(): refresh_devices_requested.emit(), false, "utility"))
+    input_activity_label = _label("Play a note to test.", 14, MUTED)
     midi.add_child(input_activity_label)
     var keyboard_range_row := HFlowContainer.new()
     keyboard_range_row.add_theme_constant_override("h_separation",8)
     midi.add_child(keyboard_range_row)
-    midi_range_start_button = _button("Set keyboard key range",func():
+    midi_range_start_button = _button("Set key range",func():
         midi_range_requested.emit("midi_range_start"),false,"settings")
     keyboard_range_row.add_child(midi_range_start_button)
-    midi_range_cancel_button = _button("Cancel range setup",func():
+    midi_range_cancel_button = _button("Cancel",func():
         midi_range_requested.emit("midi_range_cancel"),false,"utility")
     midi_range_cancel_button.visible = false
     keyboard_range_row.add_child(midi_range_cancel_button)
-    midi_range_label = _label("Connect your piano to set its lowest and highest keys.",14,MUTED)
+    midi_range_label = _label("",14,MUTED)
     midi.add_child(midi_range_label)
     midi_calibration_body = _stack(10)
     midi_calibration_toggle = _disclosure(midi,"MIDI timing calibration",midi_calibration_body)
     var calibration_row := HFlowContainer.new()
     calibration_row.add_theme_constant_override("h_separation", 8)
     midi_calibration_body.add_child(calibration_row)
-    calibration_row.add_child(_button("Calibrate MIDI timing", func():
+    calibration_row.add_child(_button("Calibrate timing", func():
         calibration_requested.emit("calibration_start"), false, "settings"))
-    calibration_apply_button = _button("Apply offset", func():
+    calibration_apply_button = _button("Apply", func():
         calibration_requested.emit("calibration_apply"), false, "settings")
     calibration_apply_button.disabled = true
     calibration_row.add_child(calibration_apply_button)
-    calibration_row.add_child(_button("Reset offset", func():
+    calibration_row.add_child(_button("Reset", func():
         calibration_requested.emit("calibration_reset"), false, "utility"))
     calibration_row.add_child(_button("Cancel", func():
         calibration_requested.emit("calibration_cancel"), false, "utility"))
@@ -242,9 +245,9 @@ func _ready() -> void:
     folder_actions.add_theme_constant_override("h_separation", 10)
     folder_actions.add_theme_constant_override("v_separation", 6)
     folder_controls.add_child(folder_actions)
-    folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
-    folder_actions.add_child(_button("Save folder", func(): save_folder_requested.emit(folder_edit.text.strip_edges()), false, "secondary"))
-    music.add_child(_label("MIDI and MusicXML files in this folder and its subfolders.", 13, MUTED))
+    folder_actions.add_child(_button("Choose folder", _browse_folder, false, "navigation"))
+    folder_actions.add_child(_button("Save", func(): save_folder_requested.emit(folder_edit.text.strip_edges()), false, "secondary"))
+    music.add_child(_label("MIDI and MusicXML, including subfolders.", 13, MUTED))
     # History is a full-width secondary section, not part of folder setup.
 
     var practice := _section("Practice tempo")
@@ -268,16 +271,16 @@ func _ready() -> void:
     tempo_setting.suffix = " BPM"
     tempo_setting.custom_minimum_size = Vector2(150, 40)
     tempo_row.add_child(tempo_setting)
-    apply_tempo_button = _button("Apply tempo", func(): tempo_requested.emit(int(tempo_setting.value)), false, "settings")
+    apply_tempo_button = _button("Apply", func(): tempo_requested.emit(int(tempo_setting.value)), false, "settings")
     tempo_row.add_child(apply_tempo_button)
     metronome_toggle = CheckButton.new()
-    metronome_toggle.text = "Metronome during practice"
+    metronome_toggle.text = "Metronome"
     metronome_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     metronome_toggle.tooltip_text = "Count-in is always audible, even when metronome is off"
     metronome_toggle.toggled.connect(func(enabled: bool): metronome_requested.emit(enabled))
     practice.add_child(metronome_toggle)
     hold_grading_toggle = CheckButton.new()
-    hold_grading_toggle.text = "Grade how long I hold notes"
+    hold_grading_toggle.text = "Grade note length"
     hold_grading_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     hold_grading_toggle.tooltip_text = (
         "Off: pitch and note attacks determine success; key-release data is saved. "
@@ -287,7 +290,7 @@ func _ready() -> void:
         hold_grading_requested.emit(enabled))
     practice.add_child(hold_grading_toggle)
     practice.add_child(_label(
-        "Off by default. Rhythm and correct notes come first.", 12, MUTED))
+        "Off by default.", 12, MUTED))
 
     var audio := _section("Listening & display")
     var audio_panel := _card()
@@ -317,7 +320,7 @@ func _ready() -> void:
         listen_volume_label.text = "%+d dB" % int(round(db))
         volume_changed.emit(db))
     fullscreen_toggle = CheckButton.new()
-    fullscreen_toggle.text = "Fullscreen application  ·  F11"
+    fullscreen_toggle.text = "Fullscreen"
     fullscreen_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     fullscreen_toggle.button_pressed = true
     fullscreen_toggle.toggled.connect(func(enabled: bool): fullscreen_requested.emit(enabled))
@@ -392,18 +395,16 @@ func _build_learning_controls(parent: VBoxContainer) -> void:
     actions.add_theme_constant_override("h_separation", 10)
     actions.add_theme_constant_override("v_separation", 6)
     history_actions_body.add_child(actions)
-    export_history_button = _button("Export history…", _browse_history_export, false, "secondary")
+    export_history_button = _button("Export history", _browse_history_export, false, "secondary")
     actions.add_child(export_history_button)
-    delete_piece_button = _button("Delete current piece history…", _confirm_piece_history_delete, false, "utility")
+    delete_piece_button = _button("Delete this piece's history", _confirm_piece_history_delete, false, "utility")
     delete_piece_button.disabled = true
     actions.add_child(delete_piece_button)
-    delete_learner_button = _button("Delete all learner history…", func():
+    delete_learner_button = _button("Delete all history", func():
         delete_learner_dialog.popup_centered(), false, "utility")
     actions.add_child(delete_learner_button)
     history_actions_body.add_child(_label(
-        "Reset Lesson restarts lesson progress and preserves learning history. " +
-        "Permanent deletion also removes saved learning progress. Exported files " +
-        "remain wherever you saved them. Source MIDI and device settings are preserved.",
+        "Deleting history also deletes saved progress. Your music files stay.",
         13, MUTED))
     export_dialog = FileDialog.new()
     export_dialog.title = "Export local learning history"
@@ -458,9 +459,6 @@ func _confirm_piece_history_delete() -> void:
 
 func present_learning_status(values: Dictionary) -> void:
     history_summary_label.text = str(values.get("summary", "Local learning history"))
-    if values.has("detail_attempt_count") and values.has("pruned_attempt_count"):
-        history_summary_label.text += " %d takes with detail retained; %d pruned." % [
-            int(values["detail_attempt_count"]), int(values["pruned_attempt_count"])]
     _history_default_path = str(values.get("default_path", ""))
     _current_fingerprint = str(values.get("current_fingerprint", ""))
     delete_piece_button.disabled = _history_busy or _current_fingerprint.is_empty()
@@ -487,9 +485,9 @@ func present_midi_key_range(state: Dictionary) -> void:
             + "highest key %d = Restart with count-in. Notes in this exercise take priority.") % [
                 int(state.get("low",0)),int(state.get("high",127))]
     elif device.is_empty():
-        midi_range_label.text = "Connect a MIDI piano, then teach its lowest and highest keys."
+        midi_range_label.text = ""
     else:
-        midi_range_label.text = "Teach this piano's two end keys once; the range is saved per device."
+        midi_range_label.text = ""
 
 
 func present_calibration(state: Dictionary, offset_ms: int) -> void:
@@ -574,7 +572,7 @@ func present_practice(state: Dictionary, editing: bool = false) -> void:
         input_activity_label.text = "Input received · MIDI note %d · %d notes received" % [
             int(state.get("midi_input_note", 0)), int(state.get("midi_input_count", 0))]
     else:
-        input_activity_label.text = "Play a note to check input." if not str(state.get("device", "")).is_empty() else "Connect your MIDI piano, then play a note to check input."
+        input_activity_label.text = "Play a note to test." if not str(state.get("device", "")).is_empty() else "Connect your piano, then play a note to test."
     var tone: Color = ACCENT if recent else MUTED
     if input_activity_label.get_theme_color("font_color") != tone:
         input_activity_label.add_theme_color_override("font_color", tone)
@@ -620,7 +618,7 @@ func present_devices(names: Array, connected: String, open_menu: bool = false) -
     device_menu.add_separator()
     for index in range(_device_names.size()):
         device_menu.add_item(str(_device_names[index]), index)
-    device_button.text = connected if not connected.is_empty() else "Choose USB MIDI piano"
+    device_button.text = connected if not connected.is_empty() else "Choose piano"
     if open_menu:
         device_menu.position = Vector2i(device_button.get_screen_position()) + Vector2i(0, int(device_button.size.y))
         device_menu.popup()

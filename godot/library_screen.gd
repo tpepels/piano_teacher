@@ -43,15 +43,14 @@ func _ready() -> void:
     var library_intro := UI.stack(4)
     library_intro.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     library_heading.add_child(library_intro)
-    library_intro.add_child(UI.label("PIANO TEACHER", 14, ACCENT, true))
-    library_intro.add_child(UI.title("Your music", 32))
+    library_intro.add_child(UI.title("Music", 44))
     library_path_label = UI.label("Looking for scores…", 13, MUTED)
     library_path_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     library_path_label.clip_text = true
     library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     library_layout.add_child(library_path_label)
     library_search = LineEdit.new()
-    library_search.placeholder_text = "Search songs…"
+    library_search.placeholder_text = "Find a piece"
     library_search.clear_button_enabled = true
     library_search.tooltip_text = "Ctrl+F or / to focus search · Esc closes the library"
     library_search.custom_minimum_size = Vector2(220, 40)
@@ -75,11 +74,11 @@ func _ready() -> void:
     library_utilities.add_theme_constant_override("separation", 10)
     library_layout.add_child(library_utilities)
     library_utilities.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    var refresh := UI.button("Refresh", "utility")
+    var refresh := _menu_link("Refresh")
     refresh.name = "LibraryRefresh"
     refresh.pressed.connect(func(): refresh_requested.emit())
     library_utilities.add_child(refresh)
-    library_health_button = UI.button("Check files", "settings")
+    library_health_button = _menu_link("Check files")
     library_health_button.pressed.connect(func(): health_check_requested.emit())
     # Dynamic text also says "Checking…" or "Recheck files". Reserve room
     # from the start so the button does not visibly resize or clip.
@@ -126,14 +125,15 @@ func present_health(parsed: Dictionary) -> void:
     var active: bool = bool(parsed.get("running", false))
     var started: bool = bool(parsed.get("started", false))
     library_health_button.disabled = active
-    library_health_button.text = "Checking…" if active else "Recheck files" if started else "Check files"
+    library_health_button.text = "Checking…" if active else "Check files"
     library_health_label.visible = started
     if started:
         library_health_label.text = (
-            "Checking %d of %d files · %d OK · %d repaired · %d errors" if active
-            else "File check complete: %d of %d · %d OK · %d repaired · %d errors"
-        ) % [int(parsed.get("checked", 0)), int(parsed.get("total", 0)),
-             int(parsed.get("ok", 0)), int(parsed.get("warning", 0)), int(parsed.get("error", 0))]
+            "Checking %d of %d" if active else "%d of %d checked"
+        ) % [int(parsed.get("checked", 0)), int(parsed.get("total", 0))]
+        var problems: int = int(parsed.get("error", 0))
+        if problems > 0:
+            library_health_label.text += " · %d need attention" % problems
         if not str(parsed.get("message", "")).is_empty():
             library_health_label.text += "\n" + str(parsed["message"])
     # A large music collection may scan hundreds of files. Rebuilding
@@ -196,11 +196,13 @@ func _render_message() -> void:
     elif not issue.is_empty():
         library_message.text = issue
     elif pieces.is_empty():
-        library_message.text = "No scores yet. Add .mid, .midi or MusicXML files to this folder."
+        library_message.text = "Add MIDI or MusicXML files to your music folder."
     elif _visible_count == 0:
-        library_message.text = "No matches for “%s”. Try another title or clear the search." % library_search.text.strip_edges()
+        library_message.text = "Nothing matches “%s”." % library_search.text.strip_edges()
     else:
-        library_message.text = "%d personal files  ·  %d shown" % [pieces.size(), _visible_count]
+        library_message.text = (("1 piece" if pieces.size() == 1 else "%d pieces" % pieces.size())
+            if _visible_count >= pieces.size()
+            else "%d of %d" % [_visible_count, pieces.size()])
     library_message.add_theme_color_override("font_color",
         Color("#FF8B82") if not library_error.is_empty() else MUTED)
     library_message.visible = _viewport_width >= 1100.0 or not library_error.is_empty() \
@@ -230,8 +232,8 @@ func _populate() -> void:
     var show_recent: bool = query.is_empty() and not recent.is_empty()
     var sections: Array = []
     if show_recent:
-        sections.append({"title": "LAST OPENED", "entries": [recent], "resume": true})
-    sections.append({"title": "YOUR MUSIC", "entries": pieces})
+        sections.append({"title": "Continue", "entries": [recent], "resume": true})
+    sections.append({"title": "All pieces", "entries": pieces})
     for section in sections:
         var section_added := false
         var grid: GridContainer
@@ -246,7 +248,7 @@ func _populate() -> void:
             if not query.is_empty() and not (title + " " + location + " " + focus).to_lower().contains(query):
                 continue
             if not section_added:
-                library_rows.add_child(UI.label(str(section.title).capitalize(), 15, MUTED, true))
+                library_rows.add_child(UI.label(str(section.title), 17, MUTED, true))
                 grid = GridContainer.new()
                 grid.columns = 1
                 grid.add_theme_constant_override("h_separation", 12)
@@ -254,19 +256,14 @@ func _populate() -> void:
                 grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
                 library_rows.add_child(grid)
                 section_added = true
-            var format_name: String = str(entry.get("format", ""))
-            var hint: String = ("%d BPM · %s" % [int(entry.get("bpm", 0)), focus]
-                if not focus.is_empty() else
-                location if not location.is_empty() else "Music folder")
             var diagnosis: Dictionary = library_health_info.get("items", {}).get(identifier, {})
             var status: String = str(diagnosis.get("status", ""))
-            var detail: String = format_name + "  ·  " + hint
+            # One short line: where it lives, or what needs attention.
+            var detail: String = location
             if status == "error":
-                detail = "Needs attention  ·  " + detail
-            elif status == "warning":
-                detail = "Repaired  ·  " + detail
-            if resume_saved:
-                detail = "Continue from saved place  ·  " + detail
+                detail = "Needs attention"
+            elif resume_saved:
+                detail = "Pick up where you left off"
             var row := LibraryRow.new()
             if resume_saved:
                 row.pressed.connect(func(): open_requested.emit(identifier, true))
@@ -285,3 +282,12 @@ func _populate() -> void:
             visible += 1
     _visible_count = visible
     _render_message()
+
+
+func _menu_link(text: String) -> Button:
+    # Quiet game-menu words instead of boxed tool buttons.
+    var button := UI.button(text, "menu")
+    button.set_meta("ui_font_base", 19)
+    button.add_theme_font_size_override("font_size", 19)
+    button.custom_minimum_size = Vector2(0, 40)
+    return button

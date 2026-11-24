@@ -84,8 +84,8 @@ class LearningEvidenceSession:
                 "default_path": str(data_dir / "exports" / "learning-history.json"),
                 "evidence_retention_days": self._library.settings["evidence_retention_days"],
                 "evidence_budget_mib": self._library.settings["evidence_budget_mib"],
-                "summary": (f"{status['attempts']} recorded takes. "
-                            "History stays on this computer. Reset Lesson preserves history.")}
+                "summary": (f"{status['attempts']} take" + ("" if status['attempts'] == 1 else "s")
+                            + " saved on this computer")}
 
 
     def statistics(self, fingerprint: str | None = None, *, query=None) -> dict:

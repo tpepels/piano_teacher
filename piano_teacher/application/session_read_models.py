@@ -11,6 +11,7 @@ from .musical_scheduler import SCHEDULER, SNAPSHOT_LATENCY_SECONDS
 from .score_state_publisher import ScoreProjectionFacts
 from .control_projection import project_controls
 from .screen_projection import project_screen
+from ..practice_flow_course import checkpoints
 from .session_snapshot_builder import SnapshotValues, capture as capture_session_snapshot
 from ..state_projection import SessionSnapshot, project_session_state
 
@@ -222,6 +223,7 @@ class SessionReadModels:
         state["stage_key"] = plan.identity if plan is not None else ""
         if plan is not None:
             state["flow"] = self.lesson.flow_status(self.lesson.plan, self.transport.mode)
+            state["checkpoints"] = checkpoints(plan.course_state())
         return state, pending, timeline
 
     def control_snapshot(self) -> dict:

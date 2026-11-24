@@ -35,28 +35,30 @@ func mount(host: Control, screens: Dictionary, make_button: Callable,
     rail_panel.add_theme_stylebox_override(
         "panel", Design.surface(Color(Design.NIGHT, .52), 10))
     shell.add_child(rail_panel)
-    rail = UI.stack(8)
-    rail.custom_minimum_size.x = 150
+    rail = UI.stack(4)
+    rail.custom_minimum_size.x = 190
     rail_panel.add_child(rail)
     var brand := UI.title("Piano\nTeacher", 23)
     brand.custom_minimum_size.y = 100
     rail.add_child(brand)
-    for item in [["library", "Library"], ["settings", "Settings"]]:
+    # A game menu: large words, the current page lit by the mint key.
+    for item in [["practice", "Play"], ["library", "Music"], ["settings", "Settings"]]:
         var destination: String = item[0]
         var button: Button = make_button.call(item[1],
-            func(): navigate.call(destination), false, "choice")
-        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        button.custom_minimum_size.x = 0
+            func(): navigate.call(destination), false, "menu")
+        button.set_meta("ui_font_base", 30)
+        button.add_theme_font_size_override("font_size", 30)
+        button.custom_minimum_size = Vector2(0, 54)
         rail.add_child(button)
-        navigation[destination] = button
+        if destination != "practice":
+            navigation[destination] = button
     var spacer := Control.new()
     spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
     rail.add_child(spacer)
-    var practice_button: Button = make_button.call(
-        "Practice", func(): navigate.call("practice"), true, "primary")
-    rail.add_child(practice_button)
     var exit_button: Button = make_button.call(
-        "Exit", exit_app, false, "danger")
+        "Quit", exit_app, false, "menu_danger")
+    exit_button.set_meta("ui_font_base", 22)
+    exit_button.add_theme_font_size_override("font_size", 22)
     exit_button.tooltip_text = "Close Piano Teacher (Ctrl+Q)"
     rail.add_child(exit_button)
     var pages := Control.new()
@@ -95,4 +97,4 @@ func resize(view_size: Vector2) -> void:
     drawer.offset_top = inset
     drawer.offset_right = -inset
     drawer.offset_bottom = -inset
-    rail.custom_minimum_size.x = 160.0 if view_size.x >= 1100.0 else 125.0
+    rail.custom_minimum_size.x = 210.0 if view_size.x >= 1100.0 else 170.0

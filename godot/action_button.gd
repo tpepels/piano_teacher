@@ -59,7 +59,30 @@ func _has_symbol() -> bool:
 	return action_role in ["navigation", "utility", "listen", "settings", "review",
 		"danger", "library", "practice_tempo"]
 
+func _skin_menu() -> void:
+	# Game-menu item: a large word on the stage, no box. Hover, focus and
+	# selection light a mint key at its left edge (drawn inside the button,
+	# so no glow ever spills over a neighbour).
+	var empty := StyleBoxEmpty.new()
+	empty.content_margin_left = 30
+	empty.content_margin_right = 12
+	empty.content_margin_top = 6
+	empty.content_margin_bottom = 6
+	for state in ["normal","hover","pressed","hover_pressed","disabled","focus"]:
+		add_theme_stylebox_override(state, empty)
+	alignment = HORIZONTAL_ALIGNMENT_LEFT
+	add_theme_font_override("font", Design.title_font())
+	var rest: Color = Design.CORAL if action_role == "menu_danger" else Color(Design.STONE,.72)
+	var lit: Color = Design.CORAL if action_role == "menu_danger" else Design.STONE
+	add_theme_color_override("font_color", lit if is_selected else rest)
+	for state in ["font_hover_color","font_pressed_color","font_hover_pressed_color","font_focus_color"]:
+		add_theme_color_override(state, lit)
+	add_theme_color_override("font_disabled_color", lit if is_selected else Color(Design.SLATE,.55))
+
 func _skin() -> void:
+	if action_role.begins_with("menu"):
+		_skin_menu()
+		return
 	var accent: Color = _accent()
 	var background: Color = _background()
 	var flat := action_role in ["navigation", "utility", "library"]
@@ -74,15 +97,14 @@ func _skin() -> void:
 	normal.content_margin_right = 0 if icon_only else 14
 	normal.content_margin_top = 8
 	normal.content_margin_bottom = 8
-	normal.shadow_color = Color("#1F78AD",.34) if important else Color(Design.NIGHT,.22)
-	normal.shadow_size = 15 if important else 2
+	normal.shadow_color = Color(Design.NIGHT,.22)
+	normal.shadow_size = 2
 	normal.shadow_offset = Vector2(0,2)
 	add_theme_stylebox_override("normal", normal)
 	var hover := normal.duplicate() as StyleBoxFlat
 	hover.bg_color = background.lightened(.09)
 	hover.border_color = Color(Design.HIGHLIGHT,.92) if important else Color(Design.MINT,.70)
-	hover.shadow_color = Color("#247BAE",.23)
-	hover.shadow_size = 9
+	hover.shadow_size = 2
 	add_theme_stylebox_override("hover", hover)
 	var pressed := normal.duplicate() as StyleBoxFlat
 	pressed.bg_color = background.darkened(.13)
@@ -121,7 +143,23 @@ func _skin() -> void:
 				"font_hover_pressed_color","font_focus_color","font_disabled_color"]:
 			add_theme_color_override(state,Color.TRANSPARENT)
 
+func _draw_menu_key() -> void:
+	var lit := is_selected or ((is_hovered() or has_focus()) and not disabled)
+	if not lit and not button_pressed:
+		return
+	var tone: Color = Design.CORAL if action_role == "menu_danger" else Design.MINT
+	var h := size.y*.62
+	var key := Rect2(Vector2(6.0,(size.y-h)*.5),Vector2(6.0,h))
+	# Soft bloom kept inside the button: three widening, fading layers.
+	for i in range(3, 0, -1):
+		var grow := float(i)*3.0
+		draw_rect(key.grow(grow), Color(tone, .07), true)
+	draw_rect(key, tone, true)
+
 func _draw() -> void:
+	if action_role.begins_with("menu"):
+		_draw_menu_key()
+		return
 	if not _has_symbol() or size.x < 32 or size.y < 32:
 		return
 	var accent: Color = _accent()

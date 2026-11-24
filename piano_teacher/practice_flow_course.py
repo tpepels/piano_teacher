@@ -316,3 +316,54 @@ class PracticeFlowLessonGenerator:
                   for ex in exercises for hand in ex.hands}
         return LessonPlanDefinition(exercises, stages, self.name,
                                     requires_unique_source_ids=True)
+
+
+# --- Checkpoints ---------------------------------------------------------
+
+CHECKPOINT_BARS = 4
+_checkpoint_keys: dict[int, tuple] = {}
+
+
+def _keys_by_checkpoint(course):
+    """Stage keys of every window, grouped by the checkpoint its last bar
+    falls in (cached per immutable definition: keys hash all window notes)."""
+    definition = course.definition
+    cached = _checkpoint_keys.get(id(definition))
+    if cached is not None and cached[0] is definition:
+        return cached[1]
+    from .lesson_contracts import lesson_hands
+    from .teaching_course import stage_key
+    groups: dict[int, list[str]] = {}
+    for exercise in definition.exercises:
+        if exercise.kind != "learn":
+            continue
+        first = 1 + (exercise.phrase.last_bar-1)//CHECKPOINT_BARS*CHECKPOINT_BARS
+        for hand in lesson_hands(exercise):
+            variant = definition.stages(exercise, hand)[0].variant
+            groups.setdefault(first, []).append(stage_key(
+                exercise, hand, variant, course.profile, course.course_version))
+    keys = {bar: frozenset(group) for bar, group in groups.items()}
+    if len(_checkpoint_keys) > 4:
+        _checkpoint_keys.clear()
+    _checkpoint_keys[id(definition)] = (definition, keys)
+    return keys
+
+
+def checkpoints(course) -> list[dict]:
+    """Every fourth measure (1, 5, 9, ...) is a place to jump to in the
+    piece. A checkpoint is complete when every window that ends in its
+    measures is mastered for every hand; ``current`` holds the window being
+    practised. Jumping uses open_at (that measure's window, from Listen)."""
+    last_bar = len(course.piece.bar_boundaries)-1
+    mastered = dict(course.progress.mastered)
+    keys = _keys_by_checkpoint(course)
+    exercise = course.exercise
+    here = exercise.phrase.last_bar if exercise.kind == "learn" else None
+    rows = []
+    for first in range(1, last_bar+1, CHECKPOINT_BARS):
+        last = min(last_bar, first+CHECKPOINT_BARS-1)
+        group = keys.get(first, frozenset())
+        rows.append({"bar": first, "last_bar": last,
+                     "complete": bool(group) and group <= mastered.keys(),
+                     "current": here is not None and first <= here <= last})
+    return rows
