@@ -38,6 +38,7 @@ The separate final examination uses the whole original piece.
 | 2026-11-21 | Pause freezes the visible score even in Free/Listen/count-in; render only the selected practice measure window, retaining full sounding tails but no visible neighboring bars. |
 | 2026-11-22 | Adopt A0–A7 architectural unification: one serialized PracticeSession; cohesive lesson, assessment, transport and score domains; one score preparation pipeline; physical Godot adapters; and complete migration/removal of redundant orchestration. Preserve supported features and real physical invariants; CI remains manual. |
 | 2026-11-23 | Practice Flow is the only course. Remove the other courses and strategies, the warm-up course, lesson-screen extras, the no-piano timing preview, save-failure recovery and lost-reply recovery. |
+| 2026-11-24 | Import MusicXML again (as the same MIDI timeline). Remove the Lesson path; add checkpoints every 4 measures. Game-style menus; 4.3 staff spaces per sixteenth; header glyphs never touch; status colour bleeds from the head. |
 
 ## Structural decoupling plan (R1–R8, adopted 2026-11-23)
 

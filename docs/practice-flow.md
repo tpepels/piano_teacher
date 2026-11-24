@@ -13,9 +13,11 @@ piano lesson.
 
 ## Open a piece
 
-Opening a new MIDI file starts the first measure window with its own Listen
-step. It does not first play the whole piece. The original MIDI supplies target
-tempo, authored measure boundaries, notes, hands and complete releases.
+Opening a new MIDI or MusicXML file starts the first measure window with its
+own Listen step. It does not first play the whole piece. The source supplies
+target tempo, authored measure boundaries, notes, hands and complete releases;
+MusicXML is read as the same timeline (each staff one hand, repeats as
+written; authored fingerings are not carried over).
 
 ## Learn moving measure windows
 
@@ -102,6 +104,13 @@ warm-up, rather than immediately running at saved tempo. This also applies to
 saved final-test progress: reopen at whole-piece Free, then restart Tempo at
 50%. A partial chord or held physical key is not saved as completed learning.
 
+## Checkpoints
+
+Every fourth measure (1, 5, 9, …) is a checkpoint. The pause menu shows them
+as measure numbers: marked where you are, highlighted when every window that
+ends in those measures is mastered for every hand. Choosing one starts that
+measure's window from Listen; saved progress elsewhere is kept.
+
 ## Simplified exercises (Coda / Fukuda)
 
 Coda/Fukuda is an aid, not part of the normal Listen → Free → Tempo order.
@@ -137,6 +146,8 @@ The music is the focus:
 - **Pause** freezes both the visible score and the graded/untimed exercise.
   Resume continues the selected passage without presenting new notes during
   the pause. In Free, the next target holds still until the correct key.
+- Menus (the pause menu, Music, Settings) read as game menus: a few large
+  words, the chosen one lit by a mint key at its edge; no boxed tool buttons.
 - Keep **Pause/Resume** and **Listen again** as the practice controls. Everything
   else progresses automatically. This controls the visible normal flow;
   configured physical MIDI shortcuts and existing keyboard/API tools remain.
