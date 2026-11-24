@@ -140,7 +140,8 @@ class PlaybackCoordinator:
         self._suspended = None
         self.state = PlaybackState.IDLE
         self._clear_active_segment()
-        self.failure = reason
+        # A cancelled or replaced exposure is not a failure.
+        self.failure = ""
 
     def _clear_active_segment(self) -> None:
         self.active_take_id = ""
@@ -166,7 +167,7 @@ class PlaybackCoordinator:
         self.generation += 1
         self.intent = None
         self.receipt = None
-        self.failure = reason
+        self.failure = ""
         self.state = (PlaybackState.PAUSED if self.active_take_id
                       else PlaybackState.IDLE)
 
@@ -333,6 +334,9 @@ class PlaybackCoordinator:
         return self._commit(intent, receipt, commit=commit, capture=capture,
                             abort=abort)
 
+    def intent_matches(self, facts: PlaybackRuntimeFacts) -> bool:
+        return self.intent is not None and self._valid_source(facts, self.intent)
+
     def segment_id_for(self, intent: PlaybackIntent) -> str:
         return f"{intent.intent_id}:segment:{intent.attempt}"
 
@@ -423,13 +427,20 @@ class PlaybackCoordinator:
             raise ValueError("Stale playback failure")
         # Revoke authorization before storage/device cleanup. If that
         # cleanup raises, an old graded take must not appear authorized.
+        message = "The score stopped displaying correctly"
         self.state = PlaybackState.FAILED
-        self.failure = reason
+        self.failure = message
         try:
-            notify_failure("score_presentation_failed")
+            notify_failure(reason)
         finally:
             self.state = PlaybackState.FAILED
-            self.failure = reason
+            self.failure = message
+
+    def clear_failure(self) -> None:
+        """The failed take is being placed again; nothing is failed now."""
+        self.state = PlaybackState.IDLE
+        self.failure = ""
+        self._clear_active_segment()
 
     def advance(self, facts: PlaybackRuntimeFacts) -> None:
         if self.state == PlaybackState.FAILED:
@@ -437,6 +448,10 @@ class PlaybackCoordinator:
         if self.intent is not None:
             if not self._valid_source(facts, self.intent):
                 self.invalidate("Source changed before notation admission")
+            elif facts.paused:
+                # A take requested at a Pause starts on Resume; waiting
+                # paused is normal and never times out.
+                return
             elif facts.now - self.intent.requested_at > MAX_ADMISSION_WAIT_SECONDS:
                 # Includes silent physical preflight failures and unavailable
                 # engraving. A dead/admitting UI is not a valid steady state.

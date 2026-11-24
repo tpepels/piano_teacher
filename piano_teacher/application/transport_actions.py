@@ -37,7 +37,8 @@ class PlaybackAuthorization:
         if intent is None or (self.transport.paused and intent.action != "resume"):
             return
         facts = self.transport_timing.playback_facts()
-        if facts.source is None:
+        if facts.source is None or not self.transport.intent_matches(facts):
+            # A stale intent is invalidated by the next clock tick.
             return
         timeline = self.transport.musical_timeline
         now = self.clock()
@@ -62,6 +63,14 @@ class PlaybackAuthorization:
             placed = timeline.start_after(
                 take, now=now, rest_beats=self.transport.ink_ahead_beats,
                 bar_beats=plan.bar_beats, meter=plan.meter, bpm=intent.bpm)
+        try:
+            self._authorize(facts, timeline, placed)
+        except Exception as exc:
+            # _commit already stopped the take and published the failure;
+            # the MIDI key, tick or command that triggered it stands.
+            print("PLAYBACK_START_FAILED:", type(exc).__name__, exc, flush=True)
+
+    def _authorize(self, facts, timeline, placed) -> None:
         self.transport.authorize(
             facts, deadline=timeline.take_start(placed),
             world_origin=placed.world_start, segment_id=placed.take_id,
@@ -84,9 +93,38 @@ class PlaybackAuthorization:
         timeline.cut_take(paused_at)
         return None
 
+    # Godot could not draw a take (it saw it after its first note, or a
+    # running take lost its notes): place the same exposure again, once.
+    REPLACEABLE_DISPLAY_FAILURES = ("timeline_take_not_drawn",
+                                    "running_take_without_admitted_source")
+    REPLACE_AGAIN_AFTER_SECONDS = 30.0
+
     def fail_physical(self, **values) -> dict:
-        self.transport.fail(notify_failure=self.on_playback_failure, **values)
+        reason = str(values.get("reason", ""))
+        plan, mode = self.lesson.plan, self.transport.mode
+        key = (self.lesson.fingerprint, self.lesson.revision,
+               plan.identity if plan is not None else "", mode)
+        now = self.clock()
+        replace = (reason in self.REPLACEABLE_DISPLAY_FAILURES and plan is not None
+                   and mode in ("practice", "perform") and self.transport.running
+                   and not self.transport.paused
+                   and not (self._replaced is not None and self._replaced[0] == key
+                            and now - self._replaced[1] < self.REPLACE_AGAIN_AFTER_SECONDS))
+        self.transport.fail(notify_failure=(
+            self.on_replaced_failure if replace else self.on_playback_failure), **values)
+        if replace:
+            self._replaced = (key, now)
+            self.transport.clear_failure()
+            self.transport_timing.request_playback(
+                action="score_ready", mode=mode, from_beat=self.lesson.opening_beat)
         return {"accepted": True}
+
+    _replaced: tuple | None = None
+
+    def on_replaced_failure(self, reason: str) -> None:
+        self.lifecycle.stop(reason=reason)
+        self.notices.feedback = "Count in, then play"
+        self.notices.next_action = ""
 
     def abort_playback(self, reason: str) -> None:
         self.lifecycle.stop(reason=reason)

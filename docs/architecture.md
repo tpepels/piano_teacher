@@ -104,7 +104,7 @@ Pure policy and services outside these domains:
 | Practice Flow course | `practice_flow_course` | the window/hand structure and **every "what happens next" rule**: `decide(event, state)` maps a graded take, a completed Free or a learner command to the next exposure, tempo and progress; `graded_progress` maps the ladder onto saved progress |
 | Practice Flow phases | `practice_flow` (pure) + `PracticeFlowCourseSession` | Listen → Free → (Aid → Free) → Tempo → Done within one step; `take_graded`: repeat / faster (+10%, or +20% after a secure clean take) / slower / Free / done. The aid is a phase, held by the flow session |
 | Assessment | `practice.py`, `AssessmentService`, `practice_assessment` | original-note matching, onset/release evidence, verdict, `secure` timing |
-| Scheduling | `MusicalScheduler` (`SCHEDULER`), `CountInPlan` | every deadline/count-in/rest calculation; count-in pulse (subdivided when a click would exceed 1.5 s) |
+| Musical timeline | `MusicalTimeline`, `tempo_curve`, `CountInPlan`, `MusicalScheduler` (beat/second conversions) | placement of every take, rest and count-in; time <-> world; count-in pulse (subdivided when a click would exceed 1.5 s) |
 | Persistence | `ProgressRepository`, `LearningLedger`, `LearnerProgress` on one SQLite connection | progress, evidence, history; migrations at the load boundary only |
 | Projection | `SessionCapture`, `ScorePresentation`, `SnapshotExtras`, `SessionReadModels`, `control_projection`, `screen_projection`, `state_projection` | one snapshot, control set and screen model from committed state |
 

@@ -86,8 +86,9 @@ A slower success is practice, not target-tempo mastery. A failed attempt breaks
 the target clean streak. A clean flow attempt has all required pitches and
 accepted onsets with no extra keys. In Settings, **Grade how long I hold notes**
 is off by default; when enabled, release errors also fail a take.
-After an attempt, the next follows directly with one
-count-in bar and no added feedback break. The staff keeps moving forward; the
+After an attempt, the next follows directly: the rest runs from the last
+sounding note (ties included) to its barline, then one count-in bar whose
+first half eases to the new tempo, with no added feedback break. The staff keeps moving forward; the
 repeat comes from the right and never jumps back.
 
 The one-bar repeat takes priority over decorative context: neighbour bars may

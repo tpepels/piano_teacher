@@ -95,7 +95,8 @@ banning historical module names.
 | [Fingering](../tests/test_fingering.py) | Real installed model inference, impossible/unavailable results, manual corrections and corrupt derived-cache recovery. |
 | [Alternate courses](../tests/test_alternate_courses.py) | Explicit source-progression/Coda selection, source-safe aids, manual controls, distinct generic release policy and every built-in warm-up. |
 | [Learning history](../tests/test_learning_history.py) | Actual outcomes/signed timing, unknown detail, stable paging, redacted atomic export, scoped deletion, preserved reset history and captured mastery criteria. |
-| [Desktop playback](../tests/test_desktop_playback.py) | Public reserve/present authorization, expired/stale admission, display failure, Retry, Pause/Resume, ungraded Listen and exact repeats through the target ladder. |
+| [Desktop playback](../tests/test_desktop_playback.py) | Takes placed on the musical timeline: repeat after one eased count-in bar, display failure, Retry, paused count-in, ungraded Listen. |
+| [MIDI journeys](../tests/test_midi_journeys.py) | Wrong, missing, extra and late notes; Free return at the floor; slower after two failures; mastery at target; a take Godot could not draw placed again; seeded long journeys with Pause/Retry/Stop never fail. |
 
 [Test inputs](../tests/session_inputs.py) supply small actual MIDI files, one
 injected input clock and external ports; the production engine decides grading

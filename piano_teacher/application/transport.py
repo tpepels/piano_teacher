@@ -303,6 +303,12 @@ class Transport:
     def segment_id_for(self, *args, **kwargs):
         return self._admission.segment_id_for(*args, **kwargs)
 
+    def intent_matches(self, *args, **kwargs):
+        return self._admission.intent_matches(*args, **kwargs)
+
+    def clear_failure(self, *args, **kwargs):
+        return self._admission.clear_failure(*args, **kwargs)
+
     def authorize(self, *args, **kwargs):
         return self._admission.authorize(*args, **kwargs)
 

@@ -79,10 +79,23 @@ evaluated identically by both sides:
 | T3 | Godot scroll position from the published timeline (replaces presentation epochs); ramps visible | Done with T5: the world follows the published timeline during a run |
 | T4 | Count-in bubbles and clicks from timeline segments | Done: count-in numbers and clicks read their beat from the timeline take, so the eased bar is counted as it moves |
 | T5 | Continuations and Start/Resume append segments at bar positions; remove reserve/present admission for them; late decision = extra rest bar | Done with T3: every timed take is placed and started by Python; Godot draws it at its world start (pop-in allowed), no reserve/present; an unplayed abandoned take is withdrawn |
-| T6 | Grading via the timeline inverse; remove fixed deadlines, reservation and clearance machinery; tests and journeys on the new contract | Done: live take position reads the timeline take; reserve/present/withdraw, physical admission evidence, fixed deadlines and the Godot reservation preflight removed. Remaining: the outgoing-rest geometry and continuation deadline arithmetic in MusicalScheduler no longer decide anything and can go next |
+| T6 | Grading via the timeline inverse; remove fixed deadlines, reservation and clearance machinery; tests and journeys on the new contract | Done: live take position reads the timeline take; reserve/present/withdraw, physical admission evidence, fixed deadlines and the Godot reservation preflight removed. The outgoing-rest geometry, continuation deadline arithmetic, visual-motion projection and their state fields followed (`4535f58d`) |
 
 Each stage keeps the 4/4 and 2/4 synthetic journeys, the test suite and the
 full desktop check green before it is committed.
+
+### Timeline rebuild in software — 2026-11-24
+
+T1–T6 are complete in software. Follow-ups on the same day: legacy
+deadline/geometry code removed; a take Godot could not draw (seen after
+its first note, or notes lost while playing) is placed again once
+automatically instead of stopping; a take requested at a Pause waits for
+Resume without timing out; a failure to start a take no longer breaks the
+MIDI key or tick that triggered it; cancelled exposures no longer publish a
+failure reason. New MIDI journeys (`tests/test_midi_journeys.py`) cover
+wrong, missing, extra and late notes, the Free return, slowing down,
+mastery and seeded long journeys with Pause/Retry/Stop. Piano acceptance
+(sound, clicks, motion) is pending.
 
 ## Structural decoupling plan (R1–R8, adopted 2026-11-23)
 

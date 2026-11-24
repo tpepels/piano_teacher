@@ -133,28 +133,33 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
     var segment_id: String = str(current.get("segment_id",""))
     if segment_id.is_empty() or segment_id == placed_segment:
         return
-    if _place(state,current,segment_id):
+    var outcome: String = _place(state,current,segment_id)
+    if outcome == "placed":
         placed_segment = segment_id
         unplaced_frames = 0
         return
     unplaced_frames += 1
-    if unplaced_frames >= MAX_UNPLACED_FRAMES:
+    # A take first seen after its opening note passed can never be drawn:
+    # Python places it again at once. Otherwise give the renderer time.
+    if outcome == "passed" or unplaced_frames >= MAX_UNPLACED_FRAMES:
         _report_problem("The score for this take could not be drawn")
         _report_authorized_failure(str(current.get("take_id","")),segment_id,
             "timeline_take_not_drawn")
 
-func _place(state: Dictionary, current: Dictionary, segment_id: String) -> bool:
+func _place(state: Dictionary, current: Dictionary, segment_id: String) -> String:
     var take: Dictionary = _timeline_take(state,segment_id)
     if take.is_empty() or not flow.following:
-        return false
+        return "wait"
+    var now_ms: int = Time.get_ticks_msec()
+    var start_world: float = flow.run_world(float(take["world_start"]))
+    if start_world <= flow.project(now_ms):
+        return "passed"
     var identity: Dictionary = _identity(state,current)
     var view = _matching_renderer(identity)
     if view == null or not is_instance_valid(view) or \
             not _assets_cover_window(view,state):
-        return false
-    var now_ms: int = Time.get_ticks_msec()
+        return "wait"
     var origin: float = float(view.runway_origin_beat)
-    var start_world: float = flow.run_world(float(take["world_start"]))
     var placed: Dictionary = view.place_timeline_take(
         flow.project(now_ms)-origin,float(take.get("source_from_beat",0.0)),
         start_world-origin,float(current.get("count_in_beats",0.0)))
@@ -162,16 +167,16 @@ func _place(state: Dictionary, current: Dictionary, segment_id: String) -> bool:
         _report_problem("Cannot draw the take where the timeline placed it")
         if not placed.is_empty():
             view.cancel_stream_arm()
-        return false
+        return "wait"
     if not view.bind_stream_segment(segment_id) or not view.acknowledge_stream_arm():
         view.cancel_stream_arm()
-        return false
+        return "wait"
     if runway != null and runway.owns_prepared_renderer(view):
         if not runway.promote_reserved(state):
             view.cancel_stream_arm()
             _report_authorized_failure(str(current.get("take_id","")),
                 segment_id,"prepared_stage_promotion_failed")
-            return false
+            return "wait"
     var count_in: float = float(current.get("count_in_beats",0.0))
     if count_in > 0.0:
         var backend_now: float = _backend_ms()
@@ -184,7 +189,7 @@ func _place(state: Dictionary, current: Dictionary, segment_id: String) -> bool:
                 current.get("count_in_plan",{}),
                 str(current.get("take_id","")),segment_id)
             metronome.acknowledge_reserved_count_in(now_ms)
-    return true
+    return "placed"
 
 func _failure_reported(code: int, body: PackedByteArray) -> void:
     if code != 0:
