@@ -65,23 +65,17 @@ class PracticeFlowCourseSession:
         return self._message
 
     @staticmethod
-    def active(plan) -> bool:
-        return plan is not None
-
-    def stage_entry(self, plan, *, resumed: bool = False) -> practice_flow.Transition:
-        return self.enter(stage_key=plan.identity,
+    def stage_entry(plan, *, resumed: bool = False) -> practice_flow.Transition:
+        """A fresh window starts in Listen; a saved one warms up in Free."""
+        return practice_flow.enter_stage(plan.identity,
             final=plan.exercise.kind == "perform",target_bpm=int(plan.target_bpm),
             resumed=resumed,hand_text={"right":"Right hand","left":"Left hand"}.get(
                 plan.hand,"Both hands"))
 
-    def opening(self, plan, *, resumed: bool = False) -> practice_flow.Transition:
-        """A fresh course starts in Listen; a saved window warms up in Free."""
-        return self.stage_entry(plan,resumed=resumed)
-
     def guided_entry(self, plan, *, recovery: bool,
                      simplified: bool) -> practice_flow.Transition | None:
         """A new source window/hand enters its course step before Free binds."""
-        if (self.active(plan) and not recovery and not simplified
+        if (plan is not None and not recovery and not simplified
                 and (self._phase is None or self._phase.plan is not plan
                      or self._phase.stage_key != plan.identity)):
             # Explicit Learn requests Free, including for the whole-piece
@@ -92,7 +86,7 @@ class PracticeFlowCourseSession:
         return None
 
     def tempo_entry(self, plan, *, bpm: int) -> FlowTempoEntry:
-        active = self.active(plan)
+        active = plan is not None
         if (active and self._phase is not None
                 and self._phase.plan is plan
                 and self._phase.stage_key == plan.identity
@@ -137,12 +131,6 @@ class PracticeFlowCourseSession:
             transition.state.step)
         self.say(transition.message)
         return self.state
-
-    def enter(self, *, stage_key: str, final: bool, target_bpm: int,
-              resumed: bool, hand_text: str) -> practice_flow.Transition:
-        return practice_flow.enter_stage(
-            stage_key,final=final,target_bpm=target_bpm,
-            resumed=resumed,hand_text=hand_text)
 
     def listen_finished(self) -> practice_flow.Transition:
         state = self.state

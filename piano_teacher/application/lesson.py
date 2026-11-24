@@ -174,7 +174,7 @@ class Lesson:
         return self._flow.listen_finished(*args, **kwargs)
 
     def flow_opening(self, *args, **kwargs):
-        return self._flow.opening(*args, **kwargs)
+        return self._flow.stage_entry(*args, **kwargs)
 
     def flow_say(self, *args, **kwargs):
         return self._flow.say(*args, **kwargs)
