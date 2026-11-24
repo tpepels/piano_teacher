@@ -225,48 +225,10 @@ class MatrixScore:
         """Source Part→Measure/Voice hierarchy, including unvoiced annotations."""
         return notation_parts(self.notation_elements, self.source_contexts)
 
-    def context_at_measure(self, part_index: int, measure: int) -> MatrixMeasureContext:
-        matches = [context for context in self.source_contexts
-                   if (context.part_index, context.measure) == (part_index, measure)]
-        if len(matches) != 1:
-            raise ValueError("No unique original source measure context")
-        return matches[0]
 
-    def context_protected_source_ids(self) -> frozenset[str]:
-        """Conservatively protect notes under mid-measure authored changes.
 
-        Without a reliable transformed MusicXML context projection, moving
-        an attack past a source clef/key/meter/divisions change can change
-        the music even if the MIDI pitches remain identical. Treat the
-        affected source part/measure as untransformable. A change exactly
-        at the bar boundary has no such restriction.
-        """
-        affected: set[tuple[int, int]] = set()
-        for context in self.source_contexts:
-            index = context.measure-self.phrase.first_bar
-            first, end = self.boundaries[index:index+2]
-            if any(first+1e-7 < change.onset < end-1e-7
-                   for change in context.changes):
-                affected.add((context.part_index, context.measure))
-        return frozenset(
-            item.source_id for item in self.notation_elements
-            if item.kind == "note" and not item.is_rest
-            and (item.part_index, item.measure) in affected)
 
-    def source_connectors(self):
-        """Explicit written slurs/ties, with unresolved partial-window arcs."""
-        from .coda_source_connectors import link_source_connectors
-        return link_source_connectors(self.notation_elements)
 
-    def connector_protected_source_ids(self) -> frozenset[str]:
-        """Every note under an authored source arc is ineligible for retiming."""
-        from .coda_source_connectors import protected_connector_source_ids
-        return protected_connector_source_ids(
-            self.notation_elements, self.source_connectors())
-
-    def source_voice_elements(self, name: str) -> tuple[MatrixSourceElement, ...]:
-        return tuple(item for item in self.notation_elements
-                     if item.voice_id == name)
 
     @property
     def rest_only_voices(self) -> tuple[MatrixRestOnlyVoice, ...]:
@@ -279,13 +241,7 @@ class MatrixScore:
         return tuple(MatrixRestOnlyVoice(name, tuple(missing[name]))
                      for name in sorted(missing))
 
-    @property
-    def note_count(self) -> int:
-        return len(self.index_to_source)
 
-    @property
-    def written_rest_count(self) -> int:
-        return len(self.written_rests)
 
     @property
     def attack_count(self) -> int:

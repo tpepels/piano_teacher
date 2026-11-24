@@ -17,16 +17,6 @@ import numpy as np
 from .coda_matrix import MatrixScore, MatrixVoice
 
 
-def reference_quantization(shortest_quarter_length: float, time_numerator: int) -> int:
-    """Coda's backend: ceil(1 / shortest note length) * meter numerator.
-
-    The published formula is nonstandard. Retain it explicitly for
-    reproducibility, rather than silently replacing it with a music21 grid.
-    """
-    if (not isfinite(shortest_quarter_length) or shortest_quarter_length <= 0
-            or time_numerator <= 0):
-        raise ValueError("Coda quantization requires a positive rhythm and meter")
-    return ceil(1 / shortest_quarter_length) * time_numerator
 
 
 def _tick(relative_beat: float, quantization: int) -> int:
@@ -114,44 +104,7 @@ class CodaVoiceMatrix:
         if int(np.count_nonzero(self.onset_map)) != len(self.owners):
             raise ValueError("Coda source attack ownership was lost")
 
-    def flatten(self) -> tuple[tuple[int, ...], dict[int, tuple[int, ...]]]:
-        """Linear rhythms and simultaneous pitch sets, matching the MMR API.
 
-        Author's algorithm assumes simultaneous pitches have equal written
-        durations. Reject conflicting source durations rather than
-        arbitrarily selecting the smallest MIDI pitch's duration.
-        """
-        flat = []
-        pitches = {}
-        for tick in range(self.steps):
-            sounding = tuple(int(p) for p in np.flatnonzero(self.onset_map[:,tick]))
-            pitches_at = [int(self.durations_matrix[p,tick]) for p in sounding]
-            if len(set(pitches_at)) > 1:
-                raise ValueError("Coda linear voice has unequal simultaneous durations")
-            flat.append(pitches_at[0] if pitches_at else 0)
-            if sounding:
-                pitches[tick] = sounding
-        return tuple(flat),pitches
-
-    def equal_duration_ranges(self) -> tuple[tuple[int,int,int],...]:
-        """Consecutive written attacks of identical duration (start,end,count)."""
-        flat,_ = self.flatten()
-        ranges = []
-        start = -1
-        value = -1
-        count = 0
-        for tick,duration in enumerate(flat):
-            if not duration:
-                continue
-            if duration != value:
-                if count>1:
-                    ranges.append((start,tick,count))
-                value,start,count = duration,tick,1
-            else:
-                count += 1
-        if count>1:
-            ranges.append((start,len(flat),count))
-        return tuple(ranges)
 
 
 def score_voice_matrices(score: MatrixScore, *,

@@ -33,9 +33,6 @@ def _as_variant(source: ExerciseVariant, level: str,
         tuple(i for i,_ in chosen))
 
 
-def _protected(source: ExerciseVariant, weak: frozenset[str] | None) -> set[int]:
-    return {i for i,n in zip(source.source_indices,source.notes)
-            if weak is not None and n.source_id not in weak}
 
 
 def rule_chord_outer(source: ExerciseVariant, *,

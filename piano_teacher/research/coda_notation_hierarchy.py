@@ -43,9 +43,6 @@ class MatrixMeasureContext:
     changes: tuple[MatrixContextChange, ...]
     resulting: tuple[MatrixContextValue, ...]
 
-    def at_entry(self, kind: str, number: str = "1") -> MatrixContextValue | None:
-        return next((v for v in self.inherited
-                     if (v.kind, v.number) == (kind, number)), None)
 
 
 @dataclass(frozen=True)

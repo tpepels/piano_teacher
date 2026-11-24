@@ -59,6 +59,3 @@ def catalog_requests(quantization: int, numerator: int,
     )
 
 
-def score_excerpt_categories() -> tuple[str, ...]:
-    """The /generate endpoint supports one caller-selected score excerpt."""
-    return AUTHOR_CATEGORIES

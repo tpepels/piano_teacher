@@ -261,7 +261,7 @@ def flow_assessed_progress(course, *, accepted, secure=False,
                                 failures=0, streak=0), t.message)
 
 
-def assessed_progress(course, *, correct, total, extras=0, accepted=None, selected_bpm=None,
+def assessed_progress(course, *, correct, total, extras=0, accepted=None,
                       secure=False, include_outcome: bool = False):
     p = course.progress
     if total <= 0:
