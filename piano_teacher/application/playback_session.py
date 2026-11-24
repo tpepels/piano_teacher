@@ -141,7 +141,6 @@ class PlaybackSession:
         self._transport.install_timed_origin(from_beat=scheduled.from_beat,
             run_at=deadline,gap_beats=source.visual_gap_beats)
         scope = ("perform" if request.mode == "perform" else
-            "partial" if self._take.automatic_remedial_review else
             "section_review" if self._take.review_end_beat is not None else
             "partial" if scheduled.from_beat > source.phrase.first_attack_beat+1e-7 else "full")
         return StartedTake(scope,scheduled.from_beat,

@@ -289,7 +289,7 @@ class AttemptSettlement:
         played: Sequence[PlayedNote], from_beat: float, end_beat: float,
         tempo: TempoMap | None, policies: PracticeAssessmentPolicies,
         layout_for_feedback: Callable[[], dict], mode: str,
-        review_end_beat: float | None, automatic_remedial_review: bool,
+        review_end_beat: float | None,
         performance_review: Callable[[Phrase, Assessment], dict],
         prepare_decision: Callable, plan,
         binding: TeachingBinding, now: float,
@@ -311,8 +311,6 @@ class AttemptSettlement:
             result = assessed.result
             route = completion_route(mode,review_end_beat,from_beat,
                 full_from_beat=phrase.first_attack_beat)
-            if automatic_remedial_review and route == "section_review":
-                route = "partial_recovery"
             summary = performance_review(phrase,result)
             if route == "full_passage":
                 pending = prepare_decision("full_result",result)

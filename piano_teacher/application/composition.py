@@ -324,10 +324,8 @@ def _transport_and_completion(r) -> None:
         live_feedback_workflows=r.live_feedback_workflows,
         measurement=r.measurement)
     r.selected_recovery = SelectedRecovery(
-        lesson=r.lesson, notices=r.notices, take=r.take, transport=r.transport,
-        transport_timing=r.transport_timing, continuation=r.continuation,
-        course=r.course,
-        exposure_workflows=r.exposure_workflows, clock=r.now)
+        lesson=r.lesson, notices=r.notices, course=r.course,
+        exposure_workflows=r.exposure_workflows)
 
     r.settlement = SettlementContinuation(
         lesson=r.lesson, notices=r.notices, score=r.score, take=r.take,

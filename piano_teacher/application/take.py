@@ -27,10 +27,6 @@ class Take:
     def assign_remediation(self, *args, **kwargs):
         return self._runtime.assign_remediation(*args, **kwargs)
 
-    @property
-    def automatic_remedial_review(self):
-        return self._runtime.automatic_remedial_review
-
     def clear_feedback(self, *args, **kwargs):
         return self._runtime.clear_feedback(*args, **kwargs)
 
@@ -58,9 +54,6 @@ class Take:
 
     def prepare_full_retry(self, *args, **kwargs):
         return self._runtime.prepare_full_retry(*args, **kwargs)
-
-    def prepare_recovery(self, *args, **kwargs):
-        return self._runtime.prepare_recovery(*args, **kwargs)
 
     def prepare_section(self, *args, **kwargs):
         return self._runtime.prepare_section(*args, **kwargs)

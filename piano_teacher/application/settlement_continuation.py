@@ -8,7 +8,6 @@ replays the take); if the next step fails after saving, progress is kept
 and Play simply continues from the saved lesson.
 """
 from __future__ import annotations
-from ..lesson_settings import SETTINGS
 from .playback_facts import FullPassageFacts
 from .teaching_continuation import (
     UnpreparedNextStage, FeedbackWaiting, FeedbackFault,
@@ -154,7 +153,7 @@ class SettlementContinuation:
         if isinstance(effect,EnterSelectedExposure):
             self.course.enter_selected_exposure(effect.exposure)
         elif isinstance(effect,EnterSelectedRemediation):
-            self.selected_recovery.start_remedial_assignment(effect.assignment,deadline=effect.deadline,
+            self.selected_recovery.start_remedial_assignment(effect.assignment,
                 exposure=effect.exposure)
         else:
             if isinstance(effect,ContinueSelectedScore):

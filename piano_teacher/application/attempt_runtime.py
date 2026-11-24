@@ -23,7 +23,6 @@ class AttemptRuntime:
     review_stage_identity: str | None = None
     review_end_beat: float | None = None
     review_session_complete: bool = False
-    automatic_remedial_review: bool = False
     retry_range: dict | None = None
     recovery_notice: dict | None = None
     guided_recovery_pending: bool = False
@@ -101,19 +100,12 @@ class AttemptRuntime:
 
     def prepare_full_retry(self) -> None:
         self.review_end_beat = None
-        self.automatic_remedial_review = False
         self.retry_range = None
 
     def apply_recovery(self, transition) -> None:
         self.guided_recovery_pending = transition.guided
         self.recovery_notice = transition.display.notice
         self.retry_range = transition.display.retry_range
-
-    def prepare_recovery(self, prepared) -> None:
-        self.review_end_beat = prepared.end
-        self.retry_range = dict(prepared.retry_range) if prepared.retry_range is not None else None
-        if prepared.automatic_review is not None:
-            self.automatic_remedial_review = prepared.automatic_review
 
     def reset_for_stop(self) -> None:
         """Reset every attempt/review/recovery field in one stable owner."""
@@ -124,7 +116,6 @@ class AttemptRuntime:
         self.review_stage_identity = None
         self.review_end_beat = None
         self.review_session_complete = False
-        self.automatic_remedial_review = False
         self.retry_range = None
         self.recovery_notice = None
         self.guided_recovery_pending = False

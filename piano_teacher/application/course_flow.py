@@ -6,7 +6,6 @@ generator selects stages and tempo. LessonNavigation applies seek, open
 at a measure and stage/tempo changes, and answers the lesson read ports.
 """
 from __future__ import annotations
-from ..music import Phrase
 from ..measure_grid import phrase_grid
 from ..remediation import RemedialAssignment
 from . import practice_flow
@@ -103,7 +102,7 @@ class CourseFlow:
                      recovery: bool = False,
                      remediation: RemedialAssignment | None = None,
                      exposure=None, effect=None, reason=None):
-        source = self.exposure_workflows.source()
+        self.exposure_workflows.source()  # raises "Open a piece first"
         entry = self.lesson.flow_guided_entry(self.lesson.plan,
             recovery=recovery,simplified=remediation is not None)
         if entry is not None:

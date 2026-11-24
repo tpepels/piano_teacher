@@ -13,7 +13,7 @@ from typing import Literal
 from ..exercise_generator import ExerciseVariant
 from ..exercise_contracts import TempoMap
 from ..teaching_decisions import TeachingExposure
-from ..remediation import RemedialAssignment, plan_timed_remedial_review
+from ..remediation import RemedialAssignment
 from .guided_session import GuidedFragment, materialize_fragment
 from .listen_session import ListenSelection
 
@@ -126,40 +126,13 @@ def prepare_listen(source: ExposureSource, *, revision: int, bpm: float,
         from_beat=source.variant.phrase.first_attack_beat))
 
 
-@dataclass(frozen=True, slots=True)
-class RecoveryPreparation:
-    action: str
-    start: float
-    end: float | None
-    retry_range: RetryRange
-    automatic_review: bool | None
-    feedback: str
-    next_action: str
-    assignment: RemedialAssignment | None = None
-
-
 def prepare_remedial(source: ExposureSource, assignment: RemedialAssignment,
-                     exposure, *, has_deadline: bool,
-                     automatic: bool) -> RecoveryPreparation | None:
+                     exposure) -> RemedialAssignment | None:
+    """The Free aid for this exact source stage, over the selected window;
+    None when the assignment belongs to a superseded stage."""
     if assignment.stage_key != source.stage_key:
         return None
-    automatic = (has_deadline and automatic
-                 and (exposure is None or exposure.mode == "practice"))
     if exposure is not None:
         assignment = replace(assignment,start_beat=exposure.from_beat,
             end_beat=exposure.end_beat if exposure.end_beat is not None else source.duration)
-    if assignment.guided and not automatic:
-        return RecoveryPreparation("guided",assignment.start_beat,None,None,False,
-            "Reviewing recurring pitch mistakes","",assignment)
-    review = plan_timed_remedial_review(assignment,source.variant.phrase,source.boundaries)
-    if automatic:
-        return RecoveryPreparation("continue",review.start_beat,
-            review.end_beat if review.end_beat < source.duration-1e-7 else None,
-            tuple(review.retry_range.items()),
-            review.start_beat > 1e-7 or review.end_beat < source.duration-1e-7,
-            f"Retrying {assignment.focus} with the music still moving",
-            "Play this section, then return to the complete passage.",assignment)
-    return RecoveryPreparation("prepare",review.start_beat,review.end_beat,
-        tuple(review.retry_range.items()),False,
-        f"Focused {assignment.focus} practice ready",
-        "Press Start to practise these measures. This partial retry cannot award mastery.",assignment)
+    return assignment

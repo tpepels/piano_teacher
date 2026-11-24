@@ -38,7 +38,6 @@ class TakeGrading:
             tempo=self.transport_timing.active_tempo_map(),policies=self.policy_registry.grading,
             layout_for_feedback=self.score.completed_take_layout,
             mode=self.transport.mode,review_end_beat=self.take.review_end_beat,
-            automatic_remedial_review=self.take.automatic_remedial_review,
             performance_review=self.performance_review,
             prepare_decision=self.lesson.prepare_decision,
             plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,

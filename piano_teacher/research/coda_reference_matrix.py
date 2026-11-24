@@ -10,7 +10,7 @@ No implication of complete reference parity or pedagogical effectiveness.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import ceil, isfinite
+from math import isfinite
 
 import numpy as np
 

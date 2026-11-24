@@ -53,8 +53,6 @@ class TeachingDecisions:
         scope = completion_route(self.transport.mode, self.take.review_end_beat,
             self.transport.play_from_beat,
             full_from_beat=p.active_phrase.first_attack_beat)
-        if self.take.automatic_remedial_review and scope == "section_review":
-            scope = "partial_recovery"
         state = TeachingState(1, self.binding(), p.course_state(),
             TeachingRouteFacts(mode=self.transport.mode, automatic=self.transport.auto,
                 assistance_used=self.measurement.assistance_used,

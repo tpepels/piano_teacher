@@ -12,14 +12,13 @@ documented; this is reference-guided, not blanket parity.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from math import isfinite
+from dataclasses import dataclass
 
-from ..exercise_contracts import OriginalTiming, TimingPlan
+from ..exercise_contracts import TimingPlan
 from ..exercise_generator import ExerciseVariant
 from ..music import Phrase
-from .coda_matrix import MatrixScore, MatrixVoice
-from .coda_reference_matrix import CodaVoiceMatrix, score_voice_matrices
+from .coda_matrix import MatrixScore
+from .coda_reference_matrix import score_voice_matrices
 
 
 @dataclass(frozen=True)

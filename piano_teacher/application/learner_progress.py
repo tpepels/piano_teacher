@@ -83,7 +83,6 @@ class LearnerProgress:
         from ..lesson_stage_semantics import describe
         steps = []
         for i, step in enumerate(plan.lesson_steps):
-            saved = self.saved(plan, fingerprint=fingerprint, stage_key=step.key)
             label = step.level
             family = "Practice"
             change = "source notes"

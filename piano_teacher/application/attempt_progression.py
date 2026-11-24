@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Callable
 
 from ..lesson_timing import preparation_meter
 from .musical_scheduler import SCHEDULER, SETTLEMENT_SECONDS
