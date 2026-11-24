@@ -121,6 +121,7 @@ class ExposureWorkflows:
         selected_plan = self.lesson.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
+        shown = self.score.displayed_score()
         effect = (None if exposure is not None
                   else self.lesson.manual_effect("practice", effect=effect))
         selected = exposure or self.lesson.install_command(effect)
@@ -132,19 +133,24 @@ class ExposureWorkflows:
             self.source(), selected,
             mode="practice", revision=self.lesson.revision,
             return_context=self.lesson.guided_return_context,
-            retry_range=self.take.retry_range), reason=reason)
+            retry_range=self.take.retry_range,
+            same_score=bool(shown) and shown == self.score.displayed_score(learning=False)),
+            reason=reason)
 
     def prepare_listen(self, *, effect=None, reason="transition") -> None:
         selected_plan = self.lesson.plan
         if selected_plan is None:
             raise ValueError("Open a piece first")
+        shown = self.score.displayed_score()
         self.lesson.install_command(
             self.lesson.manual_effect("listen", effect=effect))
         self.install(prepare_listen(
             self.source(), revision=self.lesson.revision,
             bpm=selected_plan.bpm,
             tempo_map=self.score.tempo_map(
-                selected_plan.active_stage, selected_plan.bpm)), reason=reason)
+                selected_plan.active_stage, selected_plan.bpm),
+            same_score=bool(shown) and shown == self.score.displayed_score(learning=False)),
+            reason=reason)
 
     def prepare_perform(self, *, scope: str = "current", exposure=None,
                         effect=None, reason="transition") -> None:

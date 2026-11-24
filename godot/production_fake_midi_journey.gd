@@ -26,6 +26,14 @@ var stopped_at_ms := -1
 var failed_take_seen := false
 var played_first := false
 var played_second := false
+# Continuity invariant (owner report 2026-11-24): the staff may never jump.
+var continuity_world := NAN
+var continuity_ms := -1
+var continuity_violation := ""
+var ink_shown_since := -1
+# Beat of the fixture's second note: 3.0 in the 4/4 fixture, 1.0 in 2/4.
+var second_beat: float = float(OS.get_environment("PIANO_TEST_SECOND_BEAT")) \
+    if not OS.get_environment("PIANO_TEST_SECOND_BEAT").is_empty() else 3.0
 
 func _initialize() -> void:
     call_deferred("_boot")
@@ -92,6 +100,25 @@ func _press_primary() -> bool:
     return true
 
 
+func _check_continuity(renderer, state: Dictionary, now_ms: int, step: String) -> String:
+    # Between two painted frames the staff moves forward by at most what
+    # the fastest current tempo covers in that time (plus frame slack).
+    # A visible jump forward or backward is a defect in every phase.
+    var world: float = float(renderer.stream_world_beat)
+    if not is_finite(world):
+        return ""
+    if is_finite(continuity_world) and continuity_ms >= 0:
+        var dt: float = maxf(0.0, float(now_ms-continuity_ms)/1000.0)
+        var bpm: float = maxf(float(state.get("bpm",0.0)), float(state.get("target_bpm",0.0)))
+        var allowed: float = maxf(bpm, 60.0)*1.25/60.0*dt + .06
+        var moved: float = world-continuity_world
+        if moved > allowed or moved < -.002:
+            return ("Staff jumped %.3f beats in %.0f ms (allowed %.3f) phase=%s step=%s mode=%s" % [
+                moved, dt*1000.0, allowed, phase, step, str(state.get("mode",""))])
+    continuity_world = world
+    continuity_ms = now_ms
+    return ""
+
 func _process(_delta: float) -> bool:
     if app == null or not is_instance_valid(app):
         return false
@@ -136,6 +163,20 @@ func _process(_delta: float) -> bool:
     var step: String = str(state.get("flow",{}).get("step",""))
     var mode: String = str(state.get("mode",""))
     var renderer = app.practice_view.stage.renderer
+    var continuity: String = _check_continuity(renderer, state, now_ms, step)
+    if not continuity.is_empty():
+        _fail(continuity)
+        return true
+    # The journey stays on one window: once its notes are drawn they may
+    # never vanish (Free -> Tempo, Pause/Resume and repeats keep the ink).
+    var ink: bool = renderer.native_ready and renderer.retained_ready() and \
+        not renderer.timeline.notes.is_empty()
+    if ink and ink_shown_since < 0 and phase not in ["boot","connect"]:
+        ink_shown_since = now_ms
+    if ink_shown_since >= 0 and not ink and phase not in ["stop_tempo","stopped_stable"]:
+        _fail("Drawn notes vanished in phase %s (step %s, revision %s)" % [
+            phase, step, str(state.get("revision",""))])
+        return true
     match phase:
         "connect":
             if app.command_coordinator.state.pending or not app.score_session.is_ready() or \
@@ -354,7 +395,7 @@ func _process(_delta: float) -> bool:
             if not played_first and beat >= 0.0 and beat < 0.45:
                 _strike(72)
                 played_first = true
-            if played_first and not played_second and beat >= 3.0 and beat < 3.45:
+            if played_first and not played_second and beat >= second_beat and beat < second_beat+.45:
                 _strike(79)
                 played_second = true
             if played_second:

@@ -59,6 +59,9 @@ class Score:
     def selection(self, *args, **kwargs):
         return self._read.selection(*args, **kwargs)
 
+    def displayed_score(self, *args, **kwargs):
+        return self._read.displayed_score(*args, **kwargs)
+
     def semantic_score(self, *args, **kwargs):
         return self._read.semantic_score(*args, **kwargs)
 

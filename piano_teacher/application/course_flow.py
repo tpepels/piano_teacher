@@ -108,11 +108,17 @@ class CourseFlow:
         if entry is not None:
             self.flow_execute(entry,reason=reason)
             return
+        shown = self.exposure_workflows.score.displayed_score()
         selected = exposure or self.lesson.install_command(self.lesson.manual_effect(
             "learn",from_beat=from_beat,effect=effect))
+        # Unchanged notes keep their revision: the drawn score stays (no
+        # clear, no re-engraving). An aid always brings different notes.
+        same_score = (remediation is None and bool(shown)
+                      and shown == self.exposure_workflows.score.displayed_score(
+                          learning=True, aid=None))
         # Command installation may select a different source variant/window.
         prepared = prepare_guided(self.exposure_workflows.source(),selected,
-            revision=self.lesson.revision,bump_revision=bump_revision,
+            revision=self.lesson.revision,bump_revision=bump_revision and not same_score,
             recovery=recovery,remediation=remediation,retry_range=self.take.retry_range)
         self.exposure_workflows.install(prepared,reason=reason)
 

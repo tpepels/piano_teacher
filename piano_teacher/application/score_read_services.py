@@ -33,6 +33,24 @@ class ScoreReadServices:
                 if remediation is not None else plan.active_stage.transformed_rhythm),
             display_name=remediation.focus if remediation is not None else "")
 
+    def displayed_score(self, *, learning: bool | None = None, aid=...) -> tuple:
+        """What the drawn score depends on (not its revision number):
+        piece, window phrase, hand, stage and any aid. Equal values mean
+        the notes on screen would be identical."""
+        plan = self.lesson.plan
+        if plan is None:
+            return ()
+        if learning is None:
+            learning = self.transport.mode == "learn"
+        if aid is ...:
+            aid = self.lesson.flow_aid if learning else None
+        phrase = self.lesson.display_phrase(learning=learning)
+        return (self.lesson.fingerprint, plan.identity, plan.hand,
+                aid.focus if aid is not None else None,
+                aid.transformed_rhythm if aid is not None else plan.active_stage.transformed_rhythm,
+                phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
+                tuple((n.source_id, n.start, n.end, n.pitch) for n in phrase.notes))
+
     def source_model(self) -> dict:
         with self.lock:
             return self.score_artifact_registry.current.source_model(self.selection())

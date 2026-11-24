@@ -181,6 +181,24 @@ notes.extend([
 short_path = target.parent / "ci_state_journey.mid"
 short.save(short_path)
 print("CREATED_FAKE_MIDI_JOURNEY",short_path)
+
+# The same journey in 2/4: a bar is only two beats, so the count-in and
+# the rest between repeats are short (owner report 2026-11-24).
+two = mido.MidiFile(type=1,ticks_per_beat=480)
+two_meta = mido.MidiTrack()
+two.tracks.append(two_meta)
+two_meta.append(mido.MetaMessage("time_signature",numerator=2,denominator=4))
+two_meta.append(mido.MetaMessage("set_tempo",tempo=mido.bpm2tempo(80)))
+two_notes = mido.MidiTrack()
+two.tracks.append(two_notes)
+two_notes.extend([
+    mido.Message("note_on",channel=0,note=72,velocity=84,time=0),
+    mido.Message("note_off",channel=0,note=72,velocity=0,time=240),
+    mido.Message("note_on",channel=0,note=79,velocity=84,time=240),
+    mido.Message("note_off",channel=0,note=79,velocity=0,time=240),
+])
+two.save(target.parent / "ci_state_journey_two_four.mid")
+print("CREATED_FAKE_MIDI_JOURNEY_TWO_FOUR")
 PY
 }
 verify_fixture_ui() {
@@ -190,9 +208,15 @@ verify_fixture_ui() {
     --script res://production_ui_smoke.gd
 }
 verify_fake_midi_ui() {
-  local variant="normal"
+  # $1: fixture variant: "normal" (4/4, second note on beat 3) or
+  # "two-four" (2/4, second note on beat 1).
+  local variant="${1:-normal}"
+  local fixture="ci_state_journey.mid" second_beat="3.0"
+  if [[ "$variant" == "two-four" ]]; then
+    fixture="ci_state_journey_two_four.mid"; second_beat="1.0"
+  fi
   set_case "fake-midi-$variant"
-  seed ci_state_journey.mid
+  seed "$fixture"
   # Restore the synthetic device as a persisted preference during normal
   # startup discovery. Selecting a new device mid-Listen would correctly
   # interrupt the real passage and invalidate this journey's state graph.
@@ -209,6 +233,7 @@ PY
   # A fresh physical Resume includes an entire authored count-in bar.
   # Bound the longer real-time journey consistently with its Godot budget.
   timeout 155s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
+    PIANO_TEST_SECOND_BEAT="$second_beat" \
     PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
     "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
       --script res://production_fake_midi_journey.gd | tee "$scenario_log"
@@ -335,7 +360,8 @@ fi
 check "Create isolated two-hand MIDI fixture" make_fixture || :
 check "Embedded Godot + Python registration and real score" verify_bridge || :
 check "Production UI / Play / Pause / Resume" verify_fixture_ui || :
-check "Real Godot practice transitions with synthetic physical MIDI" verify_fake_midi_ui || :
+check "Real Godot practice transitions with synthetic physical MIDI" verify_fake_midi_ui normal || :
+check "Same journey in 2/4 (short bars, short rests)" verify_fake_midi_ui two-four || :
 check "Moonlight Sonata / retry / Listen / lesson navigation" verify_moonlight || :
 # Every checked-in MIDI source is part of the real native acceptance
 # corpus. Do not quietly narrow the scope to a few handpicked pieces:

@@ -103,8 +103,12 @@ def prepare_guided(source: ExposureSource, selected: TeachingExposure, *,
 def prepare_timed(source: ExposureSource, selected: TeachingExposure, *,
                   mode: Literal["practice", "perform"], revision: int,
                   return_context: tuple[str, float] | None = None,
-                  retry_range: dict | None = None) -> TimedPreparation:
-    revision += 1
+                  retry_range: dict | None = None,
+                  same_score: bool = False) -> TimedPreparation:
+    # Unchanged notes keep their revision: the drawn score stays on screen
+    # (no clear, no re-engraving) and is already "ready" for the take.
+    if not same_score:
+        revision += 1
     if mode == "perform":
         return TimedPreparation(mode,selected.from_beat,selected.end_beat,
             revision,revision,None,None,"Preparing your performance",
@@ -118,10 +122,10 @@ def prepare_timed(source: ExposureSource, selected: TeachingExposure, *,
 
 
 def prepare_listen(source: ExposureSource, *, revision: int, bpm: float,
-                   tempo_map: TempoMap | None) -> ListenPreparation:
+                   tempo_map: TempoMap | None, same_score: bool = False) -> ListenPreparation:
     return ListenPreparation(ListenSelection(
         variant=source.variant,bpm=bpm,stage_key=source.stage_key,
-        revision=revision+1,bar_boundaries=source.boundaries,
+        revision=revision if same_score else revision+1,bar_boundaries=source.boundaries,
         time_signatures=source.time_signatures,tempo_map=tempo_map,
         from_beat=source.variant.phrase.first_attack_beat))
 

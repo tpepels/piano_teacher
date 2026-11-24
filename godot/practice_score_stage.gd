@@ -33,6 +33,7 @@ var _hand_cue_identity := ""
 var _hand_cue_previous_phase := ""
 var count_in: Control
 var keyboard: Control
+var keyboard_slot: Control
 var score_status_panel: CenterContainer
 var score_status_label: Label
 var score_browse_button: Button
@@ -200,8 +201,17 @@ func _ready() -> void:
     practice_note_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     practice_note_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_note_feedback_panel.add_child(practice_note_feedback_label)
+    # The hint keyboard has a permanent slot of constant height, so showing
+    # or hiding it never resizes the score (the staff must not jump).
+    keyboard_slot = Control.new()
+    keyboard_slot.name = "HintKeyboardSlot"
+    keyboard_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    keyboard_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    score_region.add_child(keyboard_slot)
     keyboard = HintKeyboard.new()
-    score_region.add_child(keyboard)
+    keyboard.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    keyboard_slot.add_child(keyboard)
+    keyboard_slot.custom_minimum_size.y = keyboard.custom_minimum_size.y
 
 
 func present_playhead_glow(score_ready: bool) -> void:
@@ -325,6 +335,7 @@ func _present_hand_cue(state: Dictionary) -> void:
 func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     _view_size = view_size
     keyboard.set_ui_scale(scale)
+    keyboard_slot.custom_minimum_size.y = keyboard.custom_minimum_size.y
     score_frame.custom_minimum_size.y = 135.0
     for side in ["left","right","top","bottom"]:
         score_margin_box.add_theme_constant_override("margin_" + side,1 if compact else 6)
