@@ -168,13 +168,6 @@ def tempo_rungs(course):
         for i in range(SETTINGS.automatic_tempo_steps+1))))
 
 
-def next_bpm(course):
-    p, rungs = course.progress, tempo_rungs(course)
-    if p.bpm < rungs[0]:
-        return min(rungs[0], p.bpm + max(SETTINGS.minimum_tempo_step_bpm,
-            round((p.target_bpm-rungs[0])/SETTINGS.automatic_tempo_steps)))
-    return next((bpm for bpm in rungs if bpm > p.bpm), p.target_bpm)
-
 
 def select_cursor(course, cursor, *, same_is_noop=False):
     if same_is_noop and cursor == course.progress.cursor:
@@ -273,41 +266,10 @@ def assessed_progress(course, *, correct, total, extras=0, accepted=None, select
     p = course.progress
     if total <= 0:
         return course, "No notes to assess"
-    if course.definition.generator_name == "practice-flow":
-        accepted = correct == total and extras == 0 if accepted is None else accepted
-        return flow_assessed_progress(course, accepted=accepted,
-                                      secure=accepted and secure,
-                                      include_outcome=include_outcome)
     accepted = correct == total and extras == 0 if accepted is None else accepted
-    if not accepted:
-        return course.with_progress(streak=0, failures=p.failures+1), f"Repeat - {correct}/{total} correct, {extras} extra"
-    transferable = tuple(sorted(set(p.transferable_tempos) | {course.key}))
-    if p.bpm < p.target_bpm:
-        bpm = next_bpm(course) if selected_bpm is None else selected_bpm
-        tempos = dict(p.stage_tempos)
-        tempos[course.key] = bpm
-        return course.with_progress(bpm=bpm, streak=0, failures=0,
-            stage_tempos=tuple(sorted(tempos.items())), transferable_tempos=transferable), f"Tempo increased to {bpm} BPM"
-    course = course.with_progress(failures=0, streak=p.streak+1, transferable_tempos=transferable)
-    if course.progress.streak < course.clean_runs_required:
-        label = "Clean" if correct == total and extras == 0 else "Accepted"
-        return course, f"{label} pass {course.progress.streak}/{course.clean_runs_required} - repeat"
-    previous = course.key
-    tempos, mastered = dict(p.stage_tempos), dict(p.mastered)
-    tempos[previous], mastered[previous] = p.bpm, p.target_bpm
-    course = course.with_progress(streak=0, stage_tempos=tuple(sorted(tempos.items())),
-                                  mastered=tuple(sorted(mastered.items())))
-    i, h, v = p.cursor
-    if v+1 < len(course.stages):
-        course = course.with_progress(cursor=(i, h, v+1))
-        course = course.with_progress(bpm=max(tempo_for_stage(course), carried_bpm(course) or SETTINGS.minimum_bpm))
-        return course, f"Mastered {previous}; introducing {course.stage.variant.level}"
-    if h+1 < len(course.hands):
-        course = course.with_progress(cursor=(i, h+1, 0))
-        return course.with_progress(bpm=tempo_for_stage(course)), f"Mastered {previous}; now {course.hand} hand"
-    if i+1 < len(course.definition.exercises):
-        return select_cursor(course, (i+1, 0, 0)), f"Mastered {previous}; next passage"
-    return course, "Piece mastered"
+    return flow_assessed_progress(course, accepted=accepted,
+                                  secure=accepted and secure,
+                                  include_outcome=include_outcome)
 
 
 def preserve_mastered(course, definition):
