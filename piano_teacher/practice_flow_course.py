@@ -1,10 +1,16 @@
-"""Moving-window Practice Flow course on authentic authored MIDI notes.
+"""Practice Flow: the course structure and every "what happens next" rule.
 
-Every new authored measure is introduced alone, then practised with up to
-three preceding measures. Source IDs, long releases and their original
-timing remain intact. Each window has its own hand sequence and mastery.
-The whole-piece examination remains separate. Simplified Coda/Fukuda
-material is an explicitly announced aid, never a hidden course stage.
+Structure: every new authored measure is introduced alone, then practised
+with up to three preceding measures; each window has its own hand sequence
+and mastery, followed by a separate whole-piece final test. Source IDs,
+long releases and original timing stay intact.
+
+Decisions (docs/practice-flow.md) live in ``decide`` below: one function
+from a teaching event (graded take, completed Free, learner command) to
+the next exposure, tempo and progress. The tempo ladder itself is the pure
+reducer in application/practice_flow.py. Simplified Coda/Fukuda material
+is an explicitly announced aid on the second return to Free, never a
+hidden course stage.
 """
 from __future__ import annotations
 
@@ -17,6 +23,13 @@ from .lesson_contracts import Exercise, LessonPlanDefinition
 from .music import Phrase, Piece
 from .practice_windows import moving_windows, MAX_PRACTICE_BARS
 from .lesson_generators import CodaAid, FukudaAid
+from .teaching_decisions import (
+    TeachingDecision, TeachingExposure, full_target_take,
+)
+from .teaching_course import flow_assessed_progress
+from .teaching_manual import choose_manual, next_guided_range
+from .application.assessment_verdict import AssessmentVerdict
+from .application.practice_flow import Outcome, floor_bpm
 
 def _hands(notes) -> tuple[str, ...]:
     present = {n.hand for n in notes}
@@ -76,9 +89,146 @@ def _entry_tempo(event, state, decision):
              or event.action in ("practice","perform","course_stage","open_at")))
     if (event.kind == "manual" and exposure.mode == "practice"
             and (state.route.mode in ("learn","listen") or final_entry)):
-        from .application.practice_flow import floor_bpm
         return _at_tempo(decision,floor_bpm(int(decision.progress_after.target_bpm)),
                          reset=True)
+    return decision
+
+
+# --- Decisions ---------------------------------------------------------
+
+
+def _base_decision(event, state):
+    """The take/command outcome before Practice Flow's step rules apply."""
+    c, route, result = state.course, state.route, event.assessment
+    chosen, message = c, ""
+    continuation = "continue"
+    eligible = full_target_take(event, state)
+    verdict = (AssessmentVerdict.decide(result, policy="practice-flow", eligible=eligible)
+               if result is not None else None)
+    passed = verdict.accepted if verdict is not None else False
+    flow_outcome = None
+    manual_exposure = None
+    if event.kind == "manual":
+        chosen,start,end,mode,continuation = choose_manual(event,state)
+        manual_exposure = start,end,mode
+    elif event.kind == "interrupted":
+        continuation = "stop"
+    elif event.kind in ("full_result", "focused_result"):
+        if eligible:
+            chosen, message, flow_outcome = flow_assessed_progress(
+                c, accepted=passed, secure=passed and result.secure)
+        if (not route.automatic or flow_outcome is Outcome.PIECE_DONE
+                or route.scope in ("perform", "section_review")):
+            continuation = "stop"
+        elif chosen.key != c.key:
+            continuation = "advance"
+        elif event.kind == "focused_result":
+            continuation = "reintegrate"
+        else:
+            continuation = "repeat"
+    elif event.kind == "guided_completed":
+        continuation = "stop" if event.completed else "guided"
+    else:
+        raise ValueError("Unsupported teaching event")
+    exposure = None
+    if continuation not in ("stop", "pause"):
+        start = event.from_beat if event.from_beat is not None else 0.
+        end = event.end_beat
+        mode = "learn" if continuation == "guided" else route.mode
+        if manual_exposure is not None:
+            start,end,mode = manual_exposure
+        elif event.kind == "guided_completed":
+            mode = "practice"
+            if route.guided_return is not None:
+                start, end = route.guided_return[1], None
+        elif chosen.key != c.key and route.course_guided and route.mode == "learn":
+            selected = next_guided_range(chosen,state.manual_facts.credits)
+            if chosen.exercise.kind == "perform":
+                mode = "perform"
+            elif selected is not None:
+                start,end = selected
+                mode = "learn"
+        automatic = mode == "practice" if event.kind == "manual" and event.action in ("start","restart","practice","learn_next","course_stage","open_at") else route.automatic
+        restart = (event.kind == "manual" and event.action == "restart"
+                   and route.mode == "practice" and c.exercise.kind != "perform")
+        exposure = TeachingExposure(chosen.key, chosen.hand, start, end, chosen.progress.bpm, mode,
+            mode == "learn", automatic, bool(start or end is not None or mode == "learn"),
+            "handoff" if chosen.key != c.key else "rewind" if restart else "count_in")
+    return TeachingDecision(1, event.event_id+":teaching", event.event_id, state.binding,
+        c.progress, chosen.definition, chosen.progress, None, exposure, continuation,
+        eligible and not passed, eligible and route.performed_bpm >= c.progress.target_bpm,
+        "course_progression", message, flow_outcome, verdict)
+
+
+def decide(event, state, *, aid) -> TeachingDecision:
+    """The one Practice Flow decision for a teaching event."""
+    decision = _base_decision(event, state)
+    course = state.course
+    if (event.kind == "manual" and decision.next_exposure is not None
+            and decision.next_exposure.mode == "learn"
+            and decision.continuation == "guided"):
+        # Free is the complete selected window, including resumed final
+        # examinations.
+        exposure = replace(decision.next_exposure,from_beat=0.0,
+            end_beat=None,assisted=True)
+        decision = replace(decision,next_exposure=exposure)
+    if event.kind == "guided_completed" and event.completed:
+        if state.route.guided_range != (0.0,course.stage.variant.phrase.end-course.stage.variant.phrase.start):
+            raise ValueError("Free must find every attack in the selected window")
+        if state.route.remediation_active:
+            # The aid earns no source credit. Find every real note again
+            # before returning to the source's Tempo ladder.
+            exposure = TeachingExposure(course.key,course.hand,0.0,None,
+                int(course.progress.target_bpm),"learn",True,True,True,"count_in")
+            return _at_tempo(replace(decision,next_exposure=exposure,
+                continuation="guided",message="Now the original notes · without tempo"),
+                int(course.progress.target_bpm),reset=True)
+        # 2b -> 2c: every note found in order, Tempo starts by itself.
+        bpm = floor_bpm(int(decision.progress_after.target_bpm))
+        exposure = TeachingExposure(
+            course.key, course.hand, course.stage.variant.phrase.first_attack_beat, None, bpm,
+            "practice", False, True, False, "count_in")
+        return _at_tempo(replace(decision,next_exposure=exposure,
+                                 continuation="continue"),bpm,reset=True)
+    exposure = decision.next_exposure
+    if exposure is not None and exposure.mode == "perform":
+        # 4: the final test follows the same Tempo rules (50% -> target,
+        # 2 clean), so it runs as timed practice, not as a review.
+        exposure = replace(exposure, mode="practice")
+        decision = replace(decision, next_exposure=exposure)
+    if decision.flow_outcome is Outcome.BACK_TO_FREE and exposure is not None:
+        # 2c: still failing at 50% -> play it without tempo again (2b).
+        exposure = replace(exposure, from_beat=0.0, end_beat=None,
+                           mode="learn", assisted=True, automatic=True,
+                           require_full_verification=True,
+                           preparation="count_in")
+        simplified = (aid(course,event.assessment)
+               if dict(decision.progress_after.free_returns).get(course.key,0) == 2 else None)
+        return _entry_tempo(event,state,
+            replace(decision,next_exposure=exposure,continuation="guided",
+                remediation=simplified,
+                message=simplified.focus if simplified is not None else decision.message))
+    if (exposure is not None and exposure.mode != "learn"
+            and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
+            and decision.definition_after.exercises[
+                decision.progress_after.cursor[0]].kind != "perform"):
+        # A new hand or window starts at Listen -> Free, never
+        # directly in tempo. The engine plays Listen before Free.
+        exposure = replace(exposure, from_beat=0.0, end_beat=None,
+                           mode="learn", assisted=True, automatic=True,
+                           require_full_verification=True,
+                           preparation="count_in")
+        return _entry_tempo(event,state,
+            replace(decision,next_exposure=exposure,continuation="guided"))
+    decision = _entry_tempo(event,state,decision)
+    exposure = decision.next_exposure
+    if (exposure is not None and exposure.mode == "practice"
+            and exposure.from_beat == 0 and exposure.end_beat is None):
+        source = decision.definition_after.stages(
+            decision.definition_after.exercises[decision.progress_after.cursor[0]],
+            exposure.hand)[decision.progress_after.cursor[2]].variant.phrase
+        decision = replace(decision,next_exposure=replace(exposure,
+            from_beat=source.first_attack_beat))
     return decision
 
 
@@ -92,8 +242,6 @@ class PracticeFlowLessonGenerator:
     """Real notes only, in the owner's phrase / hand / link order."""
     components: tuple = (FukudaAid(), CodaAid())
     name: str = "practice-flow"
-    # Tempo/timing rules of docs/practice-flow.md (teaching_decisions).
-    flow_rules: bool = True
 
     def _simplified_aid(self, course, result):
         """Ask existing MIDI contributors for this exact source window/hand."""
@@ -122,76 +270,7 @@ class PracticeFlowLessonGenerator:
             "second_return_to_free",aid.transformed_rhythm)
 
     def decide_teaching(self, event, state):
-        from .teaching_decisions import TeachingExposure, decide_standard_teaching
-        decision = decide_standard_teaching(event, state)
-        course = state.course
-        if (event.kind == "manual" and decision.next_exposure is not None
-                and decision.next_exposure.mode == "learn"
-                and decision.continuation == "guided"):
-            # Free is the complete selected window, including resumed final
-            # examinations. Other courses retain their short guided ideas.
-            exposure = replace(decision.next_exposure,from_beat=0.0,
-                end_beat=None,assisted=True)
-            decision = replace(decision,next_exposure=exposure)
-        if event.kind == "guided_completed" and event.completed:
-            if state.route.guided_range != (0.0,course.stage.variant.phrase.end-course.stage.variant.phrase.start):
-                raise ValueError("Free must find every attack in the selected window")
-            if state.route.remediation_active:
-                # The aid earns no source credit. Find every real note again
-                # before returning to the source's Tempo ladder.
-                exposure = TeachingExposure(course.key,course.hand,0.0,None,
-                    int(course.progress.target_bpm),"learn",True,True,True,"count_in")
-                return _at_tempo(replace(decision,next_exposure=exposure,
-                    continuation="guided",message="Now the original notes · without tempo"),
-                    int(course.progress.target_bpm),reset=True)
-            # 2b -> 2c: every note found in order, Tempo starts by itself.
-            from .application.practice_flow import floor_bpm
-            bpm = floor_bpm(int(decision.progress_after.target_bpm))
-            exposure = TeachingExposure(
-                course.key, course.hand, course.stage.variant.phrase.first_attack_beat, None, bpm,
-                "practice", False, True, False, "count_in")
-            return _at_tempo(replace(decision,next_exposure=exposure,
-                                     continuation="continue"),bpm,reset=True)
-        exposure = decision.next_exposure
-        if exposure is not None and exposure.mode == "perform":
-            # 4: the final test follows the same Tempo rules (50% -> target,
-            # 2 clean), so it runs as timed practice, not as a review.
-            exposure = replace(exposure, mode="practice")
-            decision = replace(decision, next_exposure=exposure)
-        from .application.practice_flow import Outcome
-        if decision.flow_outcome is Outcome.BACK_TO_FREE and exposure is not None:
-            # 2c: still failing at 50% -> play it without tempo again (2b).
-            exposure = replace(exposure, from_beat=0.0, end_beat=None,
-                               mode="learn", assisted=True, automatic=True,
-                               require_full_verification=True,
-                               preparation="count_in")
-            aid = (self._simplified_aid(course,event.assessment)
-                   if dict(decision.progress_after.free_returns).get(course.key,0) == 2 else None)
-            return _entry_tempo(event,state,
-                replace(decision,next_exposure=exposure,continuation="guided",
-                    remediation=aid,message=aid.focus if aid is not None else decision.message))
-        if (exposure is not None and exposure.mode != "learn"
-                and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
-                and decision.definition_after.exercises[
-                    decision.progress_after.cursor[0]].kind != "perform"):
-            # A new hand or window starts at Listen -> Free, never
-            # directly in tempo. The engine plays Listen before Free.
-            exposure = replace(exposure, from_beat=0.0, end_beat=None,
-                               mode="learn", assisted=True, automatic=True,
-                               require_full_verification=True,
-                               preparation="count_in")
-            return _entry_tempo(event,state,
-                replace(decision,next_exposure=exposure,continuation="guided"))
-        decision = _entry_tempo(event,state,decision)
-        exposure = decision.next_exposure
-        if (exposure is not None and exposure.mode == "practice"
-                and exposure.from_beat == 0 and exposure.end_beat is None):
-            source = decision.definition_after.stages(
-                decision.definition_after.exercises[decision.progress_after.cursor[0]],
-                exposure.hand)[decision.progress_after.cursor[2]].variant.phrase
-            decision = replace(decision,next_exposure=replace(exposure,
-                from_beat=source.first_attack_beat))
-        return decision
+        return decide(event, state, aid=self._simplified_aid)
 
     def generate(self, piece: Piece):
         exercises = course_exercises(piece)

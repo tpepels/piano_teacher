@@ -223,8 +223,7 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
         stage_tempos=tuple(sorted(tempos.items())), transferable_tempos=tuple(sorted(transferable)))
 
 
-def flow_assessed_progress(course, *, accepted, secure=False,
-                           include_outcome: bool = False):
+def flow_assessed_progress(course, *, accepted, secure=False):
     """One graded Tempo take, decided by the practice flow state machine
     (application/practice_flow.py); this only maps it onto course progress."""
     from .application import practice_flow as flow
@@ -235,7 +234,7 @@ def flow_assessed_progress(course, *, accepted, secure=False,
                            free_returns=dict(p.free_returns).get(course.key,0))
     t = flow.take_graded(state, passed=accepted, secure=secure)
     def selected(c, message):
-        return (c, message, t.outcome) if include_outcome else (c, message)
+        return c, message, t.outcome
     if t.outcome not in (flow.Outcome.STAGE_DONE, flow.Outcome.PIECE_DONE):
         bpm = p.bpm if t.outcome is flow.Outcome.BACK_TO_FREE else t.state.bpm
         returns = dict(p.free_returns)
@@ -259,17 +258,6 @@ def flow_assessed_progress(course, *, accepted, secure=False,
         return selected(course, "Piece mastered")
     return selected(course.with_progress(bpm=flow.floor_bpm(int(p.target_bpm)),
                                 failures=0, streak=0), t.message)
-
-
-def assessed_progress(course, *, correct, total, extras=0, accepted=None,
-                      secure=False, include_outcome: bool = False):
-    p = course.progress
-    if total <= 0:
-        return course, "No notes to assess"
-    accepted = correct == total and extras == 0 if accepted is None else accepted
-    return flow_assessed_progress(course, accepted=accepted,
-                                  secure=accepted and secure,
-                                  include_outcome=include_outcome)
 
 
 def preserve_mastered(course, definition):

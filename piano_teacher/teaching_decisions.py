@@ -7,14 +7,14 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from math import isfinite
 from .teaching_course import (
-    PlanProgress, CourseState, assessed_progress, steps, preserve_mastered,
+    PlanProgress, CourseState, steps, preserve_mastered,
 )
 from .lesson_contracts import LessonPlanDefinition
 from .practice import Assessment
 from .remediation import RemedialAssignment
 from .application.stage_change import StageChange
 from .lesson_settings import SETTINGS
-from .teaching_manual import ManualFacts, choose_manual, next_guided_range
+from .teaching_manual import ManualFacts
 from .application.assessment_verdict import AssessmentVerdict
 from .application.practice_flow import Outcome
 
@@ -139,71 +139,6 @@ def full_target_take(event, state) -> bool:
         and not route.assistance_used
         and full_source_opening(state) and route.review_end_beat is None
         and bool(result and result.notes))
-
-
-def decide_standard_teaching(event, state):
-    """Practice Flow's base decision; PracticeFlowLessonGenerator refines it."""
-    c, route, result = state.course, state.route, event.assessment
-    chosen, message = c, ""
-    continuation = "continue"
-    eligible = full_target_take(event, state)
-    verdict = (AssessmentVerdict.decide(result, policy="practice-flow", eligible=eligible)
-               if result is not None else None)
-    passed = verdict.accepted if verdict is not None else False
-    flow_outcome = None
-    manual_exposure = None
-    if event.kind == "manual":
-        chosen,start,end,mode,continuation = choose_manual(event,state)
-        manual_exposure = start,end,mode
-    elif event.kind == "interrupted":
-        continuation = "stop"
-    elif event.kind in ("full_result", "focused_result"):
-        if eligible:
-            chosen, message, flow_outcome = assessed_progress(
-                c, correct=result.correct, total=len(result.notes),
-                extras=result.extra_notes, accepted=passed,
-                secure=result.secure, include_outcome=True)
-        if (not route.automatic or flow_outcome is Outcome.PIECE_DONE
-                or route.scope in ("perform", "section_review")):
-            continuation = "stop"
-        elif chosen.key != c.key:
-            continuation = "advance"
-        elif event.kind == "focused_result":
-            continuation = "reintegrate"
-        else:
-            continuation = "repeat"
-    elif event.kind == "guided_completed":
-        continuation = "stop" if event.completed else "guided"
-    else:
-        raise ValueError("Unsupported teaching event")
-    exposure = None
-    if continuation not in ("stop", "pause"):
-        start = event.from_beat if event.from_beat is not None else 0.
-        end = event.end_beat
-        mode = "learn" if continuation == "guided" else route.mode
-        if manual_exposure is not None:
-            start,end,mode = manual_exposure
-        elif event.kind == "guided_completed":
-            mode = "practice"
-            if route.guided_return is not None:
-                start, end = route.guided_return[1], None
-        elif chosen.key != c.key and route.course_guided and route.mode == "learn":
-            selected = next_guided_range(chosen,state.manual_facts.credits)
-            if chosen.exercise.kind == "perform":
-                mode = "perform"
-            elif selected is not None:
-                start,end = selected
-                mode = "learn"
-        automatic = mode == "practice" if event.kind == "manual" and event.action in ("start","restart","practice","learn_next","course_stage","open_at") else route.automatic
-        restart = (event.kind == "manual" and event.action == "restart"
-                   and route.mode == "practice" and c.exercise.kind != "perform")
-        exposure = TeachingExposure(chosen.key, chosen.hand, start, end, chosen.progress.bpm, mode,
-            mode == "learn", automatic, bool(start or end is not None or mode == "learn"),
-            "handoff" if chosen.key != c.key else "rewind" if restart else "count_in")
-    return TeachingDecision(1, event.event_id+":teaching", event.event_id, state.binding,
-        c.progress, chosen.definition, chosen.progress, None, exposure, continuation,
-        eligible and not passed, eligible and route.performed_bpm >= c.progress.target_bpm,
-        "course_progression", message, flow_outcome, verdict)
 
 
 def validate_teaching_decision(decision, *, event, state):
