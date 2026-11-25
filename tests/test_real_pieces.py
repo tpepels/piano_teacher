@@ -93,17 +93,22 @@ def assert_failed_and_repeated(before, after):
     assert after["lesson_steps_mastered"] == before["lesson_steps_mastered"]
 
 
-def assert_follows_directly(session, before, after):
+def assert_follows_directly(session, before, after, source=None):
     """The next take's first note comes after the rest to the barline and one
-    count-in bar: never a longer pause."""
+    count-in bar: never a longer pause. Barlines are the piece's own (a
+    window may hold a pickup or a change of meter)."""
     timeline = session.ask("score.semantic")["practice_timeline"]
-    numerator, denominator = timeline["gap"]["meter"]
-    bar = numerator*4/denominator
     floor = before["play_from_beat"]
-    # The last sounding note, then rest to its barline (window bars start
-    # at beat 0 of the window, so barlines are whole multiples of `bar`).
     sounding = timeline["sounding_duration_beats"]
-    to_barline = -(-sounding//bar)*bar
+    if source is not None:
+        from piano_teacher.importing.pieces import import_piece
+        bars = import_piece(source).bar_boundaries
+        start = bars[before["first_bar"]-1]
+        to_barline = next(b for b in bars if b >= start+sounding-1e-6)-start
+    else:
+        numerator, denominator = timeline["gap"]["meter"]
+        bar = numerator*4/denominator
+        to_barline = -(-sounding//bar)*bar
     count_in = after["playback_timeline"]["current"]["count_in_beats"]
     allowed = (to_barline-floor+count_in)*60/min(before["bpm"], after["bpm"])
     gap = (after["playback_timeline"]["current"]["deadline_ms"]
@@ -281,3 +286,32 @@ def test_pause_mid_take_resumes_with_a_count_in_and_grades_cleanly(practice_sess
     assert current["deadline_ms"]/1000 > session.clock.at
     after = perform(session, resumed, score_events(session, resumed))
     assert after["running"] and after["playback_timeline"]["state"] != "failed"
+
+
+# --- Windows across a change of meter -----------------------------------
+
+@pytest.mark.parametrize("hand", ["right", "left"])
+def test_a_window_across_a_change_of_meter_grades_and_follows_directly(practice_session, hand):
+    """Moonlight II changes from 3/4 to 2/4: the window holding the change
+    grades like any other and its repeat follows the real barlines."""
+    from piano_teacher.importing.pieces import import_piece
+    source = FIXTURES/"moonlight-2.mxl"
+    piece = import_piece(source)
+    change = piece.time_signatures[1][0]
+    bar = piece.bar_boundaries.index(change)+1        # first bar in 2/4
+    session = open_piece(practice_session, source)
+    steps = session.ask("lesson.overview")["steps"]
+    target = next(step for step in steps if step["hand"] == hand
+                  and step["kind"] != "perform"
+                  and (step["first_bar"], step["last_bar"]) == (bar-1, bar))
+    session.command("select_step", number=target["number"])
+    session.command("learn")
+    state = tempo(session)
+    clean = perform(session, state, score_events(session, state))
+    assert graded(session, state["transport_id"]) == ["correct"]*len(
+        [n for n in notes(session) if n["onset_beats"] >= state["play_from_beat"]])
+    assert clean["bpm"] > state["bpm"]
+    assert_follows_directly(session, state, clean, source)
+    wrong = perform(session, clean, score_events(session, clean,
+        pitch=lambda n: [n["midi_pitch"]+1]))
+    assert_failed_and_repeated(clean, wrong)
