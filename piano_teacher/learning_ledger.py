@@ -24,7 +24,7 @@ from .sqlite_transaction import sqlite_atomic
 
 _PROGRESS_TABLES = ("strategy_sessions", "learner_units", "learner_stages",
                     "repeat_tempo_credit", "stage_tempos", "mastery", "sessions",
-                    "fukuda_mistakes")
+                    "fukuda_mistakes", "piece_progress")
 
 
 class LearningLedger:

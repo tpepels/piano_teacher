@@ -51,7 +51,13 @@ class PracticeEngine:
 
     def library_listing(self) -> dict:
         with self.lock:
-            return self.library.scan()
+            listing = self.library.scan()
+            saved = self.progress.summaries()
+        for piece in listing["pieces"]:
+            summary = saved.get(piece.get("fingerprint", ""))
+            if summary is not None:
+                piece["progress"] = summary
+        return listing
 
     def library_health_status(self) -> dict:
         return self.library_health.snapshot()

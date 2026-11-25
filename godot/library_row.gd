@@ -7,6 +7,8 @@ const Palette := preload("res://practice_theme.gd")
 var title_label: Label
 var detail_label: Label
 var text_scale := 1.0
+# Share of the piece learned, 0..1; negative when never practised.
+var progress := -1.0
 
 func _init() -> void:
     super._init()
@@ -101,6 +103,10 @@ func set_entry(title: String, detail: String, status: String = "") -> void:
         return
     _update_labels()
 
+func set_progress(fraction: float) -> void:
+    progress = fraction
+    queue_redraw()
+
 func _update_labels() -> void:
     title_label.text = str(get_meta("library_title", ""))
     detail_label.text = str(get_meta("library_detail", ""))
@@ -126,3 +132,10 @@ func _draw() -> void:
     draw_arc(center, 15.0, 0.0, TAU, 32, tone, 1.6, true)
     draw_colored_polygon(PackedVector2Array([center+Vector2(-4,-6), center+Vector2(-4,6),
         center+Vector2(7,0)]), tone)
+    # How far the piece is: a thin bar along the bottom of the text column.
+    if progress >= 0.0:
+        var track := Rect2(Vector2(34.0, size.y-7.0), Vector2(maxf(0.0, size.x-34.0-72.0), 3.0))
+        draw_rect(track, Color(Palette.STONE, .12), true)
+        if progress > 0.0:
+            draw_rect(Rect2(track.position, Vector2(track.size.x*progress, track.size.y)),
+                Palette.MINT, true)

@@ -1,10 +1,13 @@
 """Local score library and small, atomically persisted desktop preferences.
 
-Listing is intentionally metadata-only. Scores are parsed only when opened.
+Listing is intentionally metadata-only. Scores are parsed only when opened;
+each file is hashed once (cached by size and mtime) so saved progress, which
+is keyed by the source fingerprint, can be shown beside it.
 The client receives relative opaque keys and cannot open paths outside the library.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -39,6 +42,7 @@ class ScoreLibrary:
     def __init__(self, config_dir: Path | None = None):
         self.config_dir = Path(config_dir) if config_dir is not None else default_config_dir()
         self.settings_path = self.config_dir / 'settings.json'
+        self._fingerprints: dict[str, tuple[int, int, str]] = {}
         migrated = False
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
                          'last_piece': '', 'midi_device': '', 'midi_key_ranges': {}, 'metronome': True,
@@ -219,7 +223,8 @@ class ScoreLibrary:
                             continue
                         items.append({'id': relative, 'title': path.stem.replace('_', ' '),
                                       'folder': path.relative_to(root).parent.as_posix() if path.parent != root else '',
-                                      'format': 'MIDI'})
+                                      'format': 'MIDI',
+                                      'fingerprint': self._fingerprint(path)})
                     except OSError:
                         continue
                     if len(items) >= MAX_FILES:
@@ -232,6 +237,17 @@ class ScoreLibrary:
         items.sort(key=lambda x: (x['title'].casefold(), x['id'].casefold()))
         return {'folder': str(root), 'pieces': items, 'count': len(items),
                 'truncated': len(items) == MAX_FILES, 'last_piece': self.settings['last_piece']}
+
+    def _fingerprint(self, path: Path) -> str:
+        """The same sha256 the opened piece's progress is saved under."""
+        stat = path.stat()
+        key = str(path)
+        cached = self._fingerprints.get(key)
+        if cached and cached[:2] == (stat.st_size, stat.st_mtime_ns):
+            return cached[2]
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        self._fingerprints[key] = (stat.st_size, stat.st_mtime_ns, digest)
+        return digest
 
     def resolve(self, identifier: str) -> Path:
         if not isinstance(identifier, str) or not identifier or '\x00' in identifier:

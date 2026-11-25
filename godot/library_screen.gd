@@ -258,10 +258,19 @@ func _populate() -> void:
                 section_added = true
             var diagnosis: Dictionary = library_health_info.get("items", {}).get(identifier, {})
             var status: String = str(diagnosis.get("status", ""))
-            # One short line: where it lives, or what needs attention.
+            # One short line: how far you are, where it lives, or what
+            # needs attention.
+            var saved: Dictionary = entry.get("progress", {})
+            var fraction := _progress_fraction(saved)
             var detail: String = location
             if status == "error":
                 detail = "Needs attention"
+            elif not saved.is_empty():
+                detail = _progress_text(saved, fraction)
+                if resume_saved:
+                    detail = "Pick up where you left off · " + detail
+                elif not location.is_empty():
+                    detail += "  ·  " + location
             elif resume_saved:
                 detail = "Pick up where you left off"
             var row := LibraryRow.new()
@@ -271,6 +280,7 @@ func _populate() -> void:
                 row.pressed.connect(func(): open_requested.emit(identifier, false))
             grid.add_child(row)
             row.set_entry(title.replace("_", " "), detail, status)
+            row.set_progress(fraction)
             row.set_text_scale(ui_scale)
             if entry.has("description"):
                 row.tooltip_text += "\n" + str(entry["description"])
@@ -283,6 +293,23 @@ func _populate() -> void:
     _visible_count = visible
     _render_message()
 
+
+# Share of the piece's practice windows (and final run-through) mastered at
+# target tempo; -1 when the piece has never been practised.
+func _progress_fraction(saved: Dictionary) -> float:
+    var total := int(saved.get("total", 0))
+    if saved.is_empty() or total <= 0:
+        return -1.0
+    return clampf(float(saved.get("mastered", 0)) / float(total), 0.0, 1.0)
+
+func _progress_text(saved: Dictionary, fraction: float) -> String:
+    if fraction >= 1.0:
+        return "Learned"
+    # Never round an unfinished piece up to 100%.
+    var percent := mini(99, int(floor(fraction * 100.0)))
+    if bool(saved.get("final", false)):
+        return "%d%% · final run-through" % percent
+    return "%d%% · bar %d of %d" % [percent, int(saved.get("bar", 0)), int(saved.get("bars", 0))]
 
 func _menu_link(text: String) -> Button:
     # Library tools are key caps, distinct from the music rows below.

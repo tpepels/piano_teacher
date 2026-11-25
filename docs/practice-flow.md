@@ -112,6 +112,11 @@ warm-up, rather than immediately running at saved tempo. This also applies to
 saved final-test progress: reopen at whole-piece Free, then restart Tempo at
 50%. A partial chord or held physical key is not saved as completed learning.
 
+The music list shows how far each practised piece is: the share of its
+windows (and the final test) mastered at target tempo, with the bar being
+learned, for example “38% · bar 12 of 32”, and a thin bar under the title.
+A finished piece reads “Learned”; a piece never practised shows none.
+
 ## Checkpoints
 
 Every fourth measure (1, 5, 9, …) is a checkpoint. The pause menu shows them

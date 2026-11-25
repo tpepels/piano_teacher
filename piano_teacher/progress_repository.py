@@ -55,6 +55,11 @@ class ProgressRepository:
             fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
             count INTEGER NOT NULL,
             PRIMARY KEY (fingerprint,stage_key))""")
+        # What the library shows per piece; rewritten with every save.
+        self.db.execute("""CREATE TABLE IF NOT EXISTS piece_progress (
+            fingerprint TEXT PRIMARY KEY, mastered INTEGER NOT NULL,
+            total INTEGER NOT NULL, bar INTEGER, bars INTEGER NOT NULL,
+            final INTEGER NOT NULL)""")
         self.db.commit()
         # One owner initializes both progress and learner-state tables.
         self.learner_store = LearnerStateStore(self.db)
@@ -103,6 +108,11 @@ class ProgressRepository:
             # A restored streak can never already satisfy mastery.
             p.bpm = max(1, min(SETTINGS.maximum_bpm, int(row[3])))
             p.streak = min(p.course_state().clean_runs_required-1, max(0, int(row[4])))
+        if row and restore_session:
+            # Pieces saved before the library showed progress get a summary
+            # as soon as they are reopened.
+            with sqlite_atomic(self.db):
+                self._save_summary(p, fingerprint)
         return bool(row and restore_session)
 
     def save(self, plan: LearningPlan | None, fingerprint: str) -> None:
@@ -125,12 +135,28 @@ class ProgressRepository:
             for key, count in p.free_returns.items():
                 self.db.execute("INSERT OR REPLACE INTO flow_returns VALUES (?,?,?)",
                                 (fingerprint,key,count))
+            self._save_summary(p, fingerprint)
+
+    def _save_summary(self, p: LearningPlan, fingerprint: str) -> None:
+        step = p.step
+        final = step.kind == "perform"
+        self.db.execute("INSERT OR REPLACE INTO piece_progress VALUES (?,?,?,?,?,?)",
+            (fingerprint, p.lesson_steps_mastered, len(p.lesson_steps),
+             None if final else step.last_bar, len(p.piece.bar_boundaries)-1, int(final)))
+
+    def summaries(self) -> dict[str, dict]:
+        """How far each saved piece is, keyed by source fingerprint."""
+        return {row[0]: {"mastered": row[1], "total": row[2], "bar": row[3],
+                         "bars": row[4], "final": bool(row[5])}
+                for row in self.db.execute(
+                    "SELECT fingerprint,mastered,total,bar,bars,final FROM piece_progress")}
 
     def reset_piece(self, fingerprint: str) -> None:
         """Reset saved progress while preserving the authoritative evidence ledger."""
         with sqlite_atomic(self.db):
             for table in ("strategy_sessions", "learner_units", "learner_stages", "repeat_tempo_credit",
-                          "stage_tempos", "mastery", "sessions", "flow_returns"):
+                          "stage_tempos", "mastery", "sessions", "flow_returns",
+                          "piece_progress"):
                 self.db.execute(f"DELETE FROM {table} WHERE fingerprint=?", (fingerprint,))
             # A reset is historical exposure context, distinct from deletion.
             session = self.db.execute("""SELECT session_id FROM learning_sessions
