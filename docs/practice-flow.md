@@ -161,7 +161,11 @@ The music is the focus:
 - Space fast notes generously: about **4.3 staff spaces per sixteenth** at least.
 - Clef, key signature, meter and the first note each keep their own space; none touch.
 - Use one small status label indicating the current window, hand and step.
-- Hide the piano keyboard except for a wrong-note hint in Free.
+- Hide the piano keyboard except for a wrong-note hint in Free. It is drawn
+  as a small real keyboard (ivory and ebony keys, about two octaves), not
+  stretched across the screen.
+- A small grand staff (treble and bass clef) beside it shows the keys held
+  on the piano right now as whole notes: nothing else, no history.
 - **Pause** freezes both the visible score and the graded/untimed exercise.
   Resume continues the selected passage after one complete count-in bar
   (from the paused beat, or from the window's opening when paused in its

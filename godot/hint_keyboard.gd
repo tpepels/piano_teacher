@@ -3,10 +3,24 @@ extends Control
 
 const Design = preload("res://practice_theme.gd")
 const EXPECTED := Color("#C8AC7C")
-const NATURAL := Color("#525E57")
-const ACCIDENTAL := Color("#202925")
+# A real piano: ivory naturals, ebony sharps, a felt strip under the lid.
+const IVORY := Color("#F3EEDF")
+const IVORY_SHADE := Color("#D9D1BC")
+const EBONY := Color("#16181A")
+const EBONY_SHINE := Color("#3A3E42")
+const FELT := Color("#7A1F24")
+const CASE := Color("#0B0C0D")
+const TARGET := Color("#7FD8B5")
+const TARGET_DARK := Color("#2E8F6E")
 const KEY_GAP := 1.0
 const REGISTER_GAP := 22.0
+# A white key is about this many times as long as it is wide (a real one
+# is ~6; shorter keeps the hint compact while still reading as a piano).
+const KEY_ASPECT := 4.2
+const BLACK_LENGTH := .63
+const BLACK_WIDTH := .58
+## Room kept free on each side, for the held-notes staff.
+var side_reserve := 0.0
 
 var _expected_label: Label
 var _heard_label: Label
@@ -65,7 +79,7 @@ func set_ui_scale(value: float) -> void:
     _update_compact_height()
 
 func _update_compact_height() -> void:
-    custom_minimum_size.y = (88 if get_viewport_rect().size.y < 720 else 100) * ui_scale
+    custom_minimum_size.y = (80 if get_viewport_rect().size.y < 720 else 92) * ui_scale
     _layout_keys()
 
 func update_state(teaching: Dictionary) -> void:
@@ -174,10 +188,6 @@ func _layout_keys() -> void:
     _keys.clear()
     if not is_instance_valid(_expected_label):
         return
-    _expected_label.position = Vector2.ZERO
-    _expected_label.size = Vector2(maxf(0, size.x * .58 - 8), 20 * ui_scale)
-    _heard_label.position = Vector2(size.x * .58, 0)
-    _heard_label.size = Vector2(maxf(0, size.x * .42), 20 * ui_scale)
     var white_total := 0
     for register in _registers:
         var white_count := 0
@@ -186,19 +196,30 @@ func _layout_keys() -> void:
                 white_count += 1
         register["whites"] = white_count
         white_total += white_count
+    var top := 24.0 * ui_scale
+    var lid := 5.0 * ui_scale
+    var height := maxf(1, size.y - top - lid - 2 * ui_scale)
+    # Proportions of a real keyboard, centred; never wider than the space
+    # between the side reserves.
+    var gaps := REGISTER_GAP * maxf(0, _registers.size() - 1)
+    var room := maxf(1, size.x - 2.0 * side_reserve - gaps)
+    var width := minf(height / KEY_ASPECT, room / maxf(1, white_total))
+    var total := width * white_total + gaps
+    var x := (size.x - total) / 2.0
+    _expected_label.position = Vector2(x, 0)
+    _expected_label.size = Vector2(maxf(0, total * .58 - 8), 20 * ui_scale)
+    _heard_label.position = Vector2(x + total * .58, 0)
+    _heard_label.size = Vector2(maxf(0, total * .42), 20 * ui_scale)
     if white_total == 0:
         queue_redraw()
         return
-    var width := maxf(1, (size.x - REGISTER_GAP * (_registers.size() - 1)) / white_total)
-    var x := 0.0
-    var top := 28.0 * ui_scale
-    var height := maxf(1, size.y - top - 2 * ui_scale)
+    var key_top := top + lid
     for register in _registers:
         var begin := x
         for pitch in range(int(register.low), int(register.high) + 1):
             if _black(pitch):
                 continue
-            _keys[pitch] = {"rect": Rect2(x, top, width - KEY_GAP, height),
+            _keys[pitch] = {"rect": Rect2(x, key_top, width - KEY_GAP, height),
                 "black": false, "expected": _expected.has(pitch), "heard": _heard.has(pitch)}
             x += width
         # All black-key positions derive from the preceding natural key, including B/C and E/F gaps.
@@ -206,49 +227,63 @@ func _layout_keys() -> void:
             if not _black(pitch) or not _keys.has(pitch - 1):
                 continue
             var preceding: Rect2 = _keys[pitch - 1].rect
-            _keys[pitch] = {"rect": Rect2(preceding.end.x + KEY_GAP - width * .32, top,
-                width * .64, height * .62), "black": true,
+            _keys[pitch] = {"rect": Rect2(preceding.end.x + KEY_GAP * .5 - width * BLACK_WIDTH * .5,
+                key_top, width * BLACK_WIDTH, height * BLACK_LENGTH), "black": true,
                 "expected": _expected.has(pitch), "heard": _heard.has(pitch)}
-        register["rect"] = Rect2(begin, top, x - begin, height)
+        register["rect"] = Rect2(begin, top, x - begin, height + lid)
         x += REGISTER_GAP
     queue_redraw()
 
 func _draw() -> void:
     var font := get_theme_default_font()
+    # The case and the red felt under the lid, behind each register.
+    for register in _registers:
+        if not register.has("rect"):
+            continue
+        var case: Rect2 = register.rect
+        draw_rect(Rect2(case.position - Vector2(3, 0), Vector2(case.size.x + 6, 5.0 * ui_scale)), CASE, true)
+        draw_rect(Rect2(case.position + Vector2(0, 5.0 * ui_scale - 2), Vector2(case.size.x, 2)), FELT, true)
     for black in [false, true]:
         for pitch in _keys:
             var key: Dictionary = _keys[pitch]
             if bool(key.black) != black:
                 continue
             var rect: Rect2 = key.rect
-            var fill := ACCIDENTAL if black else NATURAL
+            var fill := EBONY if black else IVORY
             if bool(key.expected):
-                fill = Design.SAGE.darkened(.18) if black else Design.SAGE
+                fill = TARGET_DARK if black else TARGET
             if _live_mode and _pressed.has(pitch):
                 var status: String = str(_pressed[pitch])
                 fill = Color("#BB514D") if status == "unexpected" else Color("#C68D4D") if status in ["early", "late", "count_in"] else Color("#4AA989")
-            draw_style_box(Design.surface(fill, 2), rect)
-            if bool(key.expected):
-                draw_rect(rect.grow(-1), EXPECTED, false, 1.5)
-                var marker := Vector2(rect.get_center().x, rect.position.y + 8 if black else rect.end.y - 24)
-                draw_colored_polygon(PackedVector2Array([marker + Vector2(-4, 0), marker + Vector2(4, 0),
-                    marker + Vector2(0, 5)]), EXPECTED)
+            var face := StyleBoxFlat.new()
+            face.bg_color = fill
+            face.corner_radius_bottom_left = 3 if not black else 2
+            face.corner_radius_bottom_right = face.corner_radius_bottom_left
+            face.anti_aliasing = true
+            draw_style_box(face, rect)
+            if black:
+                # A lighter bevel at the front of an ebony key.
+                var front := Rect2(rect.position.x + 1.5, rect.end.y - rect.size.y * .14,
+                    rect.size.x - 3, rect.size.y * .1)
+                draw_rect(front, (fill.lightened(.18) if bool(key.expected) else EBONY_SHINE), true)
+            else:
+                # The worn front edge of an ivory key.
+                draw_rect(Rect2(rect.position.x, rect.end.y - 3, rect.size.x, 3),
+                    fill.darkened(.12) if bool(key.expected) else IVORY_SHADE, true)
             if bool(key.heard) and not _live_mode:
-                # A round slate marker survives alongside the triangular expected marker on the same key.
-                var heard_at := Vector2(rect.end.x - 6, rect.position.y + 8 if black else rect.end.y - 14)
-                draw_circle(heard_at, 3, Design.SLATE)
-                draw_arc(heard_at, 4.5, 0, TAU, 16, Design.SLATE, 1, true)
+                var heard_at := Vector2(rect.get_center().x, rect.position.y + rect.size.y * (.35 if black else .55))
+                draw_circle(heard_at, maxf(2.0, rect.size.x * .16), Design.SLATE if black else Design.CHARCOAL)
             var label := ""
             if bool(key.expected):
                 label = str(_expected[pitch])
             elif bool(key.heard) or (_live_mode and _pressed.has(pitch)) or int(pitch) % 12 == 0:
                 label = _pitch_name(int(pitch))
-            if not label.is_empty():
-                var font_size := _ui_font(11 if black else 12)
+            if not label.is_empty() and not black:
+                var font_size := _ui_font(10)
                 var text_width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-                var position := Vector2(rect.get_center().x - text_width / 2, rect.end.y - 4)
+                var position := Vector2(rect.get_center().x - text_width / 2, rect.end.y - 6)
                 draw_string(font, position, label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size,
-                    EXPECTED if bool(key.expected) else Design.STONE)
+                    Color("#173B30") if bool(key.expected) else Color("#5E5A50"))
     for index in range(1, _registers.size()):
         var register_rect: Rect2 = _registers[index].rect
         var center := Vector2(register_rect.position.x - REGISTER_GAP / 2, register_rect.get_center().y)

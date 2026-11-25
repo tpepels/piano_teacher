@@ -14,6 +14,7 @@ const GameCountIn := preload("res://game_countin.gd")
 const PLAYHEAD_FRACTION := preload("res://notation/shared/spacing_policy.gd").PLAYHEAD_FRACTION
 const StepTimeline := preload("res://score_step_timeline.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
+const HeldNotesStaff := preload("res://held_notes_staff.gd")
 signal navigation_requested(destination: String)
 signal score_retry_requested
 signal command_requested(command: Dictionary)
@@ -34,6 +35,7 @@ var _hand_cue_previous_phase := ""
 var count_in: Control
 var keyboard: Control
 var keyboard_slot: Control
+var held_staff: Control
 var score_status_panel: CenterContainer
 var score_status_label: Label
 var score_browse_button: Button
@@ -212,6 +214,14 @@ func _ready() -> void:
     keyboard.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     keyboard_slot.add_child(keyboard)
     keyboard_slot.custom_minimum_size.y = keyboard.custom_minimum_size.y
+    # What you are holding on the piano right now, beside the keyboard.
+    held_staff = HeldNotesStaff.new()
+    held_staff.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
+    held_staff.offset_left = 8.0
+    held_staff.offset_right = 8.0 + held_staff.custom_minimum_size.x
+    held_staff.visible = false
+    keyboard_slot.add_child(held_staff)
+    keyboard.side_reserve = held_staff.offset_right + 12.0
 
 
 func present_playhead_glow(score_ready: bool) -> void:
@@ -272,6 +282,9 @@ func present(state: Dictionary, busy: bool) -> void:
     teaching = teaching.duplicate()
     teaching["hint_visible"] = str(screen.get("keyboard","hidden")) == "hint"
     keyboard.update_state(teaching)
+    held_staff.visible = bool(state.get("loaded", false))
+    held_staff.present(state.get("midi_held_pitches", []) if state.get("midi_held_pitches") is Array else [],
+        int(state.get("key_fifths", 0)), renderer.glyphs if renderer != null else null)
 
 var _flow_message_id := -1
 
@@ -336,6 +349,9 @@ func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     _view_size = view_size
     keyboard.set_ui_scale(scale)
     keyboard_slot.custom_minimum_size.y = keyboard.custom_minimum_size.y
+    held_staff.set_ui_scale(scale)
+    held_staff.offset_right = held_staff.offset_left + held_staff.custom_minimum_size.x
+    keyboard.side_reserve = held_staff.offset_right + 12.0
     score_frame.custom_minimum_size.y = 135.0
     for side in ["left","right","top","bottom"]:
         score_margin_box.add_theme_constant_override("margin_" + side,1 if compact else 6)
