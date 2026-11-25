@@ -344,7 +344,14 @@ func _stream_header_beats(opening: float) -> float:
 
 ## Facts sent with every command that may start a run of timed music.
 func placement_facts() -> Dictionary:
-    return {"ink_ahead_beats":ink_ahead_beats()}
+    return {"ink_ahead_beats":ink_ahead_beats(),"free_travel_beats":free_travel_beats()}
+
+## Beats a Free passage needs to come in from beyond the right edge (with
+## its clef header) to the playhead: Free opens there, never on screen.
+func free_travel_beats() -> float:
+    if not native_ready or not retained_ready():
+        return 0.0
+    return clampf(_stream_right_beats()+_stream_header_beats(0.0)+.25,0.0,256.0)
 
 ## Beats of printed ink still ahead of the playhead that a new take must
 ## follow (Python starts the next run's count-in after it).

@@ -37,6 +37,13 @@ class Transport:
     def report_ink_ahead(self, beats) -> None:
         self._timeline.report_ink_ahead(beats)
 
+    @property
+    def free_travel_beats(self) -> float:
+        return self._timeline.free_travel_beats
+
+    def report_free_travel(self, beats) -> None:
+        self._timeline.report_free_travel(beats)
+
 
     @property
     def continuation_pending(self) -> bool:

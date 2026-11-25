@@ -113,6 +113,7 @@ class ScorePresentation:
             bpm=float(plan.bpm) if plan is not None else 0.0,
             timeline={"intent":pending,"current":timeline},
             next_count_in_beats=self.timing.next_count_in_beats(),
+            free_travel_beats=self.transport.free_travel_beats,
             next_count_in_meter=tuple(self.timing.next_count_in_meter()),
             duration_beats=(self.lesson.display_phrase(learning=self.transport.mode == "learn").end-self.lesson.display_phrase(learning=self.transport.mode == "learn").start
                             if plan is not None else 0.0),
@@ -214,5 +215,6 @@ class SessionReadModels:
             self.extras.add(state, now)
             state["controls"] = project_controls(state)
             state["screen"] = project_screen(
-                state, moving=state["controls"]["transport_active"])
+                state, moving=state["controls"]["transport_active"],
+                flash=(self.capture.notices.flash_id, self.capture.notices.flash_text))
             return state

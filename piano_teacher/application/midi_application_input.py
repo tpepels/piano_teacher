@@ -108,9 +108,11 @@ class MidiDelivery:
             teaching=lambda: self.lesson.guided_controller,
             feedback_take=self.live_feedback_workflows.feedback_take)
         if early:
-            # A key during the count-in earns no credit; say so instead of
-            # silently ignoring it.
-            self.notices.feedback = "Too early – wait for the count-in, then play"
+            # A key during the count-in, or before a Free target reaches the
+            # line, earns no credit; say so instead of silently ignoring it.
+            self.notices.flash(
+                "Wait until the note reaches the line" if self.transport.mode == "learn"
+                else "Too early – wait for the count-in, then play")
 
 
 class MidiDeviceConnection:

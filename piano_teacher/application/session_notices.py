@@ -12,6 +12,14 @@ class SessionNotices:
     feedback: str = "Open a MIDI file"
     next_action: str = "Open a MIDI file."
     _fault_action: str = ""
+    # A short message about the key just played ("Too early"); Godot shows
+    # each id once for a few seconds, also while the music moves.
+    flash_text: str = ""
+    flash_id: int = 0
+
+    def flash(self, text: str) -> None:
+        self.flash_text = text
+        self.flash_id += 1
 
     def publish(self, feedback: str, next_action: str) -> None:
         self.feedback = feedback

@@ -223,7 +223,8 @@ class PracticeFlowCourseSession:
             step = "free"  # the aid is Free on simplified notes
         if step == "done":
             step = "tempo"
-        percent = round(100*plan.bpm/plan.target_bpm) if plan.target_bpm else 100
+        from .practice_flow import tempo_percent
+        percent = tempo_percent(plan.bpm, plan.target_bpm)
         label = {"listen":"Listen","free":"Without tempo",
                  "tempo":f"Tempo {percent}%"}[step]
         hand_text = {"right":"Right hand","left":"Left hand"}.get(

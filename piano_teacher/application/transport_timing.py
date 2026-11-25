@@ -166,6 +166,9 @@ class TransportTiming:
         ahead = kwargs.get("ink_ahead_beats")
         if ahead is not None:
             self.transport.report_ink_ahead(ahead)
+        travel = kwargs.get("free_travel_beats")
+        if travel is not None:
+            self.transport.report_free_travel(travel)
 
     def musical_seconds(self, at: float) -> float:
         """Graded musical time of wall instant ``at``, in seconds since run_at.

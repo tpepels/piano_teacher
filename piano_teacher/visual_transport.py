@@ -61,6 +61,15 @@ class VisualTransport:
     # Beats of printed ink Godot last reported ahead of its playhead; a new
     # run starts its count-in after it.
     ink_ahead_beats: float = 0.0
+    # Beats a Free target needs to travel in from off the right edge of the
+    # staff (plus the clef header) to the playhead, as Godot measured it.
+    free_travel_beats: float = 0.0
+
+    def report_free_travel(self, beats) -> None:
+        value = float(beats)
+        if not math.isfinite(value) or not 0.0 <= value <= 256.0:
+            raise ValueError("Invalid Free travel measurement")
+        self.free_travel_beats = value
 
     def report_ink_ahead(self, beats) -> None:
         value = float(beats)

@@ -28,6 +28,7 @@ class ScoreProjectionFacts:
     next_count_in_meter: tuple[int, int]
     duration_beats: float
     has_source: bool
+    free_travel_beats: float = 0.0
 
 
 class ScoreStatePublisher:
@@ -60,7 +61,9 @@ class ScoreStatePublisher:
             self.guided_deadline = SCHEDULER.guided(
                 now=now, previous_deadline=self.guided_deadline,
                 duration_beats=max(.25,facts.duration_beats),
-                count_in_beats=facts.next_count_in_beats,
+                # At least one bar, and long enough for the target to come
+                # in from off-screen: the staff must hold where it is drawn.
+                count_in_beats=max(facts.next_count_in_beats,facts.free_travel_beats),
                 horizon_beats=0.0,bpm=facts.bpm)
 
     def guided_open_at(self, source: tuple[str, str, int, int]) -> float | None:

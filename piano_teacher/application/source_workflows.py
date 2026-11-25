@@ -74,7 +74,7 @@ class SourceInstallation:
             plan=prepared.plan, source=str(prepared.path),
             fingerprint=prepared.fingerprint))
         self.source_preparation.source_installed()
-        self.notices.publish("Press Start to practice", "Press Start to practice.")
+        self.notices.publish("", "Press Play to practise.")
         self.take.reset_source_presentation()
         return prepared.resumed
 

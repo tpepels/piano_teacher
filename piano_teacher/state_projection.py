@@ -358,8 +358,9 @@ def guided_learning_fields(*, teaching: Mapping, fragment: Mapping, session_id: 
     if phase == "loading":
         feedback = "Preparing a short idea to learn"
     elif phase == "disconnected":
-        feedback = "No piano connected. Connect your piano in Settings to learn notes."
-        fields["next_action"] = "Connect your piano in Settings to learn notes."
+        feedback = "No piano connected."
+        fields["next_action"] = ("Switch on or plug in your MIDI piano; practice continues as soon "
+                                 "as it is found. A new piano: choose it in Settings.")
     elif phase == "guided_complete":
         feedback = "You found every note. Ready to add rhythm?"
         fields["next_action"] = ("Retry rhythm from these bars." if returning

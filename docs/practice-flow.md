@@ -53,7 +53,9 @@ window to an earlier two-bar guided unit.
 
 - The next target waits at the playhead. The axis stays still while thinking.
 - Keys count only once the target is at the playhead. While it is still
-  travelling in, the prompt says to wait and a key earns nothing.
+  travelling in, a key earns nothing and a short message says to wait
+  until the note reaches the line. The target travels in from beyond the
+  right edge and stops exactly at the playhead.
 - A correct note turns green; the staff moves to the next target.
 - A wrong note turns the intended note red, shows the keyboard hint and waits
   for the correct key.
@@ -121,6 +123,22 @@ windows (and the final test) mastered at target tempo, with the bar being
 learned, for example “38% · bar 12 of 32”, and a thin bar under the title.
 A finished piece reads “Learned”; a piece never practised shows none.
 
+## Telling the learner
+
+Whenever practice cannot continue by itself, the score banner says why and
+what to do, in words that match the controls on screen:
+
+- No piano connected, in Free: "No piano connected." with how to fix it.
+  Free continues by itself, keeping the notes already found, as soon as the
+  piano is found again (it is looked for every few seconds).
+- The piano is lost during a Tempo take: the take stops, the banner says so,
+  and once it is back: "Piano connected again … Press Play when you are
+  ready."
+- A key in the count-in (too far before the first note to be graded):
+  "Too early – wait for the count-in, then play", briefly.
+- The first Tempo attempt reads "Tempo 50%" even when rounding to a whole
+  BPM moves it slightly.
+
 ## Checkpoints
 
 Every fourth measure (1, 5, 9, …) is a checkpoint. The pause menu shows them
@@ -162,10 +180,15 @@ The music is the focus:
 - Clef, key signature, meter and the first note each keep their own space; none touch.
 - Use one small status label indicating the current window, hand and step.
 - Hide the piano keyboard except for a wrong-note hint in Free. It is drawn
-  as a small real keyboard (ivory and ebony keys, about two octaves), not
-  stretched across the screen.
-- A small grand staff (treble and bass clef) beside it shows the keys held
-  on the piano right now as whole notes: nothing else, no history.
+  as a small real keyboard (ivory and ebony keys, about two octaves) at the
+  left end of the Pause/Resume row, not stretched across the screen.
+- A small, bright grand staff (treble and bass clef) at the right end of that
+  row shows the keys held on the piano right now as whole notes: nothing
+  else, no history. The row keeps its height, so nothing under the score
+  moves when the hint appears.
+- No markers float above the score; the playhead marks where you are.
+- Glows stay soft and inside their own control: no glow reaches a
+  neighbouring button or shows a square edge.
 - **Pause** freezes both the visible score and the graded/untimed exercise.
   Resume continues the selected passage after one complete count-in bar
   (from the paused beat, or from the window's opening when paused in its

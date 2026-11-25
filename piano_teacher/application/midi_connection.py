@@ -93,8 +93,8 @@ class MidiConnection:
         port = self._release(reason)
         try:
             yield MidiNotice(
-                f"MIDI piano disconnected: {previous}. Reconnect it, then press Start.",
-                "Reconnect your piano, then press Start.", connected=False)
+                f"Your piano was disconnected ({previous}).",
+                "Switch it on or plug it in again; it is found automatically.", connected=False)
         finally:
             self._close(port)
             self.retry_after = self._clock()+self.RETRY_SECONDS
@@ -120,11 +120,11 @@ class MidiConnection:
                 raise RuntimeError(
                     f"Cannot connect to MIDI input {name}: {exc}. Check the device and try again.") from exc
             self.device = name
-            feedback = f"MIDI piano connected: {name}. Press Start when ready."
+            feedback = f"Piano connected: {name}."
         else:
-            feedback = "MIDI piano disconnected. Connect a device to enable scoring."
+            feedback = "No piano selected."
         result.notice = MidiNotice(feedback,
-            "Press Start when you are ready." if name else "Connect your piano for feedback.",
+            "Press Play when you are ready." if name else "Choose your MIDI piano in Settings.",
             connected=self.port is not None)
 
     def scan(self) -> MidiScan:
@@ -155,11 +155,11 @@ class MidiConnection:
             self.retry_after = now+self.RETRY_SECONDS
             return MidiNotice(
                 f"Cannot reconnect MIDI piano {preferred}: {exc}. "
-                "Check the USB connection or select a device in Settings.",
-                "Reconnect your piano, then press Start.")
+                "Check the cable or Bluetooth, or choose the piano in Settings.",
+                "Switch it on or plug it in again; it is found automatically.")
         self.port, self.device = port, preferred
-        return MidiNotice(f"MIDI piano reconnected: {preferred}. Press Start when ready.",
-            "Press Start when you are ready.", connected=True, sampled_at=now)
+        return MidiNotice(f"Piano connected again: {preferred}.",
+            "Press Play when you are ready.", connected=True, sampled_at=now)
 
     def observe(self, message, *, now: float) -> None:
         self.probe.receive(message, now=now)

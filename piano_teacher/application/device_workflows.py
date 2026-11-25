@@ -34,8 +34,11 @@ class DeviceWorkflows:
         with self.midi_input.disconnected(reason) as notice:
             self.midi_input.cancel_key_range_capture()
             self.midi_input.clear_live_device()
-            self.lifecycle.stop(reason=reason)
             teaching = self.lesson.guided_controller
+            if self.transport.mode != "learn" or teaching is None:
+                # A timed take cannot be graded without the piano. Free has
+                # no take: it keeps the notes found and waits for the piano.
+                self.lifecycle.stop(reason=reason)
             if teaching is not None:
                 teaching.set_connected(False, now=self.clock())
         self.notices.publish(notice.feedback, notice.next_action)

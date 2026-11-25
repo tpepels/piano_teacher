@@ -49,7 +49,7 @@ class FlowState:
 
     @property
     def tempo_percent(self) -> int:
-        return round(100 * self.bpm / self.target_bpm) if self.target_bpm else 100
+        return tempo_percent(self.bpm, self.target_bpm)
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,16 @@ class Transition:
     state: FlowState
     message: str
     outcome: Outcome | None = None
+
+
+def tempo_percent(bpm: float, target_bpm: float) -> int:
+    """The tempo as the learner reads it: the 50% floor is "50%" even when
+    rounding it to a whole BPM moved it a little (16 of 31 BPM)."""
+    if not target_bpm:
+        return 100
+    if int(bpm) == floor_bpm(int(target_bpm)):
+        return 50
+    return round(100 * bpm / target_bpm)
 
 
 def floor_bpm(target_bpm: int) -> int:

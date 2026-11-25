@@ -63,6 +63,7 @@ var _score_status: Dictionary = {"ready":false,"visible":true,
     "text":"Choose a piece to begin","error":"","retry_visible":false,
     "browse_visible":true}
 var _busy := false
+var _flash_id := -1
 var _audio_error := false
 var _active := true
 
@@ -112,6 +113,13 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     _present_pause()
     var screen: Dictionary = parsed.get("screen",{}) if parsed.get("screen") is Dictionary else {}
     var status := str(screen.get("status",""))
+    var flash: Dictionary = screen.get("flash",{}) if screen.get("flash") is Dictionary else {}
+    if int(flash.get("id",0)) != _flash_id:
+        # A short message about the key just played, shown once.
+        var first := _flash_id < 0
+        _flash_id = int(flash.get("id",0))
+        if not first and not str(flash.get("text","")).is_empty():
+            present_message(str(flash["text"]))
     flow_status_label.visible = not status.is_empty()
     if flow_status_label.text != status:
         flow_status_label.text = status

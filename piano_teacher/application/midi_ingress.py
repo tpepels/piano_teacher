@@ -240,8 +240,9 @@ class MidiIngress:
         if facts.mode == "learn":
             if (is_on and facts.guided_open_at is not None
                     and corrected_at < facts.guided_open_at):
-                # The target is still travelling in; its prompt says so.
-                return False
+                # The target is still travelling in: the key earns nothing,
+                # and the learner is told to wait for it.
+                return True
             if teaching is not None and self.midi.connected:
                 teaching.receive(pitch=message.note,is_on=is_on,
                     channel=getattr(message,"channel",0),at=received_at)
@@ -251,3 +252,4 @@ class MidiIngress:
             return early
         if facts.mode == "listen":
             return early
+        return early

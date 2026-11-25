@@ -209,7 +209,7 @@ class PlaybackAuthorization:
                 # The score is ready but nothing can be graded: wait visibly
                 # instead of leaving the exposure stuck awaiting its score.
                 self.transport.wait_for_player()
-                self.notices.publish(NO_PIANO, "Connect a piano in Settings, then press Play.")
+                self.notices.publish(NO_PIANO, "Switch on or plug in your piano, then press Play.")
             elif decision == "practice":
                 position = (self.transport.pending_rewind
                     if self.transport.pending_rewind is not None else self.lesson.opening_beat)

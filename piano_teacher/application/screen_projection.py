@@ -12,6 +12,11 @@ def notice(s: Mapping, moving: bool) -> str:
     timeline = s.get("playback_timeline")
     if isinstance(timeline, Mapping) and timeline.get("state") == "failed":
         return str(timeline.get("failure") or "The score could not be presented")
+    teaching = s.get("teaching") if isinstance(s.get("teaching"), Mapping) else {}
+    if s.get("mode") == "learn" and teaching.get("phase") == "disconnected" and not s.get("paused"):
+        # Free waits for a piano: say so, or it looks as if it just stopped.
+        parts = [str(s.get(key) or "") for key in ("feedback", "next_action")]
+        return " ".join(part for part in parts if part)
     if moving or s.get("paused") or s.get("mode") == "learn":
         return ""
     parts = [str(s.get(key) or "") for key in ("feedback", "next_action")]
@@ -25,8 +30,9 @@ def keyboard(s: Mapping) -> str:
             and teaching.get("hint_reason") == "wrong_note" else "hidden")
 
 
-def project_screen(s: Mapping, *, moving: bool) -> dict:
+def project_screen(s: Mapping, *, moving: bool, flash: tuple[int, str] = (0, "")) -> dict:
     flow = s.get("flow") if isinstance(s.get("flow"), Mapping) else {}
     return {"status": str(flow.get("status", "")),
             "notice": notice(s, moving) if s.get("loaded") else "",
-            "keyboard": keyboard(s)}
+            "keyboard": keyboard(s),
+            "flash": {"id": int(flash[0]), "text": str(flash[1])}}

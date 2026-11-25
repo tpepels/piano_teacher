@@ -157,7 +157,7 @@ class LessonNavigation:
             self.exposure_workflows.prepare_practice(exposure=selected,reason="open_at")
             self.transport.wait_for_player()
             self.notices.feedback = f"Ready to practise from measure {kwargs.get('bar')}"
-            self.notices.next_action = "Press Start to play from the selected measure."
+            self.notices.next_action = "Press Play to play from the selected measure."
 
     def change_stage(self, action: str, kwargs: dict, *, effect=None):
         """Change the active lesson or tempo while preserving scoring state."""

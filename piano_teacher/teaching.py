@@ -45,6 +45,8 @@ class TeachingController:
         self._waiting_since = 0.0
         self._last_press_at = float("-inf")
         self._found: dict | None = None
+        # Free was asked to begin; a piano connected later continues it.
+        self._started = False
 
     def bind(self, *, stage_key: str, revision: int, variant: ExerciseVariant,
              fragment_start: float, fragment_end: float, now: float,
@@ -81,8 +83,10 @@ class TeachingController:
         self._waiting_since = now
         self._last_press_at = float("-inf")
         self._found = None
+        self._started = False
 
     def start(self, *, now: float):
+        self._started = True
         if self._connected and self._phase in ("introducing", "ready"):
             self._target_index = 0
             self._assisted_count = 0
@@ -125,6 +129,7 @@ class TeachingController:
         self._resume_phase = ""
 
     def stop(self):
+        self._started = False
         self._phase = "ready" if self._connected else "disconnected"
         self._resume_phase = ""
         self._target_index = 0
@@ -148,6 +153,11 @@ class TeachingController:
             self._phase = "ready" if connected else "disconnected"
             self._resume_phase = ""
         self._keys.clear()
+        if connected and self._started and self._phase == "ready":
+            # Free had begun without a piano (or lost it): carry on at once
+            # from the current target instead of waiting for a Start.
+            self._phase = "guided_wait" if self._target_index < len(self._targets) else "guided_complete"
+            self._waiting_since = now
         self._blocked_keys.clear()
         self._pressed_at.clear()
         self._candidates.clear()
