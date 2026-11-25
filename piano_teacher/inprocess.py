@@ -53,6 +53,9 @@ class EngineCommands:
             if operation == "learning.statistics":
                 from .learning_statistics_query import validate_query
                 return self._reply(OK, engine.learning_statistics(query=validate_query(values)))
+            if operation == "state.snapshot" and values:
+                engine.report_placement(values)
+                return self._reply(OK, engine.poll_state())
             if operation in self.READS:
                 if values:
                     raise ValueError(f"{operation} takes no input")

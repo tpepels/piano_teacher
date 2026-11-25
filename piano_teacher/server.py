@@ -152,6 +152,14 @@ class PracticeEngine:
             self.runtime_timings.state_ms.append(
                 (time.perf_counter()-began)*1000.0)
 
+    def report_placement(self, facts: dict) -> None:
+        """Godot's current score placement facts, sent with each poll."""
+        unknown = set(facts) - {"ink_ahead_beats", "free_travel_beats"}
+        if unknown:
+            raise ValueError("Unknown placement facts: " + ", ".join(sorted(unknown)))
+        with self.lock:
+            self.transport_timing.update_placement_facts(facts)
+
     def poll_state(self) -> dict:
         """The per-frame snapshot: the full state minus static values."""
         state = self.state()

@@ -175,3 +175,26 @@ def test_free_holds_where_godot_can_draw_its_first_target(practice_session, trav
     deadline = state["playback_timeline"]["guided"]["deadline_at_ms"]/1000
     assert deadline-session.clock.at == pytest.approx(
         min(max(bar, travel)*60/state["bpm"], 3.0), abs=.01)
+
+
+def test_a_return_to_free_uses_the_placement_facts_of_the_latest_poll(practice_session):
+    """Two failures at the floor return to Free with no command from Godot;
+    the facts it sends with every state poll place that Free (owner report
+    2026-11-25: the returned Free stopped short of its target)."""
+    from test_midi_journeys import play, tempo
+    session = practice_session(bars=2)
+    state = tempo(session)
+    state = play(session, state, wrong=(0,))
+    session.ask("state.snapshot", free_travel_beats=9.5, ink_ahead_beats=0.0)
+    free = play(session, state, wrong=(0,))
+    assert (free["mode"], free["flow"]["step"]) == ("learn", "free")
+    session.ask("state.snapshot", free_travel_beats=9.5, ink_ahead_beats=0.0)
+    session.ready_score()
+    hold = session.snapshot()["musical_timeline"]["segments"][-1]
+    assert hold["kind"] == "hold" and hold["world_start"] == pytest.approx(9.5)
+
+
+def test_unknown_placement_facts_are_refused(practice_session):
+    session = practice_session(bars=2)
+    status, body = session.commands.request("state.snapshot", '{"travel":1}')
+    assert status != 0 and b"Unknown placement facts" in body

@@ -29,7 +29,10 @@ func poll() -> void:
         _assets.poll(now_ms)
     if not _inbox.pending and not _commands.state.pending:
         _inbox.begin_request(now_ms)
-        if _request.request("state.snapshot") != OK:
+        # Every poll carries the score's current placement facts, so an
+        # automatic transition (the next take, a return to Free) is placed
+        # from what is on the staff now, not from the last command's facts.
+        if _request.request("state.snapshot",_assets.continuation_geometry()) != OK:
             _inbox.pending = false
 
 func accept_state(state: Dictionary) -> void:
