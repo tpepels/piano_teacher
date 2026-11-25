@@ -102,6 +102,14 @@ class Score:
             lesson.fingerprint, lesson.plan.identity if lesson.plan else "",
             lesson.revision, transport.transport_id))
 
+    def free_target_travel(self, lesson, transport) -> float | None:
+        """Beats the first Free target travels to the playhead."""
+        if transport.mode != "learn":
+            return None
+        return self._publisher.guided_travel((
+            lesson.fingerprint, lesson.plan.identity if lesson.plan else "",
+            lesson.revision, transport.transport_id))
+
     def reset_guided_score(self, *args, **kwargs):
         return self._publisher.reset_guided(*args, **kwargs)
 

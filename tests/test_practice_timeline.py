@@ -170,5 +170,8 @@ def test_free_holds_where_godot_can_draw_its_first_target(practice_session, trav
     assert hold["kind"] == "hold"
     bar = 4.0   # 4/4: Free always travels at least one bar
     assert hold["world_start"] == pytest.approx(max(bar, travel))
+    # It arrives after the travel at the piece's tempo, but within a few
+    # seconds: on a long or slow travel the staff moves faster.
     deadline = state["playback_timeline"]["guided"]["deadline_at_ms"]/1000
-    assert deadline-session.clock.at == pytest.approx(max(bar, travel)*60/state["bpm"], abs=.01)
+    assert deadline-session.clock.at == pytest.approx(
+        min(max(bar, travel)*60/state["bpm"], 3.0), abs=.01)

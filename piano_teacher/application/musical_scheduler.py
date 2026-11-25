@@ -205,9 +205,10 @@ class MusicalScheduler:
     @classmethod
     def guided(cls, *, now: float, previous_deadline: float | None,
                duration_beats: float, count_in_beats: float,
-               horizon_beats: float, bpm: float) -> float:
+               horizon_beats: float, bpm: float,
+               max_lead_seconds: float = float("inf")) -> float:
         """Source-bound untimed guided repeat, using one absolute deadline."""
-        lead = cls.beats_seconds(max(count_in_beats,1.0),bpm)
+        lead = min(cls.beats_seconds(max(count_in_beats,1.0),bpm), max_lead_seconds)
         distance = cls.beats_seconds(
             duration_beats+max(2.0,horizon_beats),bpm)
         if previous_deadline is None:

@@ -107,8 +107,14 @@ class PlaybackAuthorization:
         bpm = float(lesson.plan.bpm)
         timeline = transport.musical_timeline
         if self._free is None or self._free[0] != key or not timeline.segments:
-            timeline.start_free(now=now, bpm=bpm,
-                                travel_beats=max(0.0, arrival-now)*bpm/60.0)
+            # The staff covers the travel distance by the arrival: faster
+            # than the tempo on a slow piece (at most a few seconds).
+            travel = self.transport_timing.score.free_target_travel(lesson, transport)
+            seconds = max(0.0, arrival-now)
+            if travel is None or seconds <= 1e-6:
+                travel = seconds*bpm/60.0
+            travel_bpm = max(bpm, travel*60.0/seconds) if seconds > 1e-6 else bpm
+            timeline.start_free(now=now, bpm=travel_bpm, travel_beats=travel)
             self._free = (key, beat)
         elif beat > self._free[1] + 1e-9:
             timeline.move_hold(now=now, beats=beat-self._free[1], bpm=bpm)

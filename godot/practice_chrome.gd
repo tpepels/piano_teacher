@@ -231,7 +231,9 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
         # A window-relative minimum ignored the keyboard/status heights and
         # pushed the transport below the screen when those became visible.
         for child in practice_controls.get_children():
-            if child is Button:
+            # The metronome switch is a labelled toggle, not a transport key:
+            # sizing it as a 56 px key clipped its "Metronome" text away.
+            if child is Button and not child is CheckButton:
                 var button := child as Button
                 var central: bool = button == start_button
                 button.add_theme_font_size_override("font_size",_ui_font(18 if central else 15))

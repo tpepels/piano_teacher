@@ -34,9 +34,14 @@ class ScoreProjectionFacts:
 class ScoreStatePublisher:
     """One snapshot presentation policy; never authorizes a take."""
 
+    # Free's first target travels in untimed: on a slow piece it moves
+    # faster than the tempo rather than taking many seconds to arrive.
+    MAX_FREE_TRAVEL_SECONDS = 3.0
+
     def __init__(self):
         self.guided_deadline: float | None = None
         self.guided_source: tuple[str, str, int, int] | None = None
+        self.guided_travel_beats = 0.0
 
     def reset_guided(self) -> None:
         self.guided_deadline = None
@@ -58,13 +63,19 @@ class ScoreStatePublisher:
                     ("guided_wait", "introducing", "disconnected")):
             return
         if state.get("phase") != "guided_wait" or self.guided_deadline is None:
+            self.guided_travel_beats = max(1.0, facts.next_count_in_beats, facts.free_travel_beats)
             self.guided_deadline = SCHEDULER.guided(
+                max_lead_seconds=self.MAX_FREE_TRAVEL_SECONDS,
                 now=now, previous_deadline=self.guided_deadline,
                 duration_beats=max(.25,facts.duration_beats),
                 # At least one bar, and long enough for the target to come
                 # in from off-screen: the staff must hold where it is drawn.
                 count_in_beats=max(facts.next_count_in_beats,facts.free_travel_beats),
                 horizon_beats=0.0,bpm=facts.bpm)
+
+    def guided_travel(self, source: tuple[str, str, int, int]) -> float | None:
+        """Beats Free's first target travels to the playhead, for `source`."""
+        return self.guided_travel_beats if source == self.guided_source else None
 
     def guided_open_at(self, source: tuple[str, str, int, int]) -> float | None:
         """When the published Free target reaches the playhead, for `source`."""

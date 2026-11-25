@@ -55,7 +55,8 @@ window to an earlier two-bar guided unit.
 - Keys count only once the target is at the playhead. While it is still
   travelling in, a key earns nothing and a short message says to wait
   until the note reaches the line. The target travels in from beyond the
-  right edge and stops exactly at the playhead.
+  right edge and stops exactly at the playhead, within about three seconds
+  (on a slow piece the staff moves faster than the tempo to get there).
 - A correct note turns green; the staff moves to the next target.
 - A wrong note turns the intended note red, shows the keyboard hint and waits
   for the correct key.
