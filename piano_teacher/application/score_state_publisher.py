@@ -8,7 +8,7 @@ guided display epoch. Headless fixture projection has a separate adapter.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import math
+
 from .musical_scheduler import SCHEDULER
 
 
@@ -88,50 +88,6 @@ class ScoreStatePublisher:
             "bpm":facts.bpm}
 
     @staticmethod
-    def _motion_directive(state: dict, facts: ScoreProjectionFacts) -> dict:
-        """The only domain interpretation of score motion and Free targets.
-
-        The native view owns world-space target placement, but never
-        decides musical transitions by inspecting phases or MIDI notes.
-        A pending, unpresented successor retains the previous visual
-        hold without taking over the currently playing source.
-        """
-        if facts.paused or not facts.has_source or facts.awaiting_score:
-            return {"kind": "hold"}
-        guided = (facts.mode == "learn" and state.get("phase") in
-                  {"guided_wait", "introducing", "disconnected",
-                   "guided_complete"})
-        if guided:
-            teaching = state.get("teaching")
-            notes = teaching.get("expected_notes", ()) if isinstance(teaching, dict) else ()
-            beats = [float(note["beat"]) for note in notes
-                     if isinstance(note, dict) and "beat" in note
-                     and isinstance(note["beat"], (int, float))]
-            beats = [beat for beat in beats if math.isfinite(beat)]
-            return ({"kind": "target", "source_beat": min(beats)}
-                    if beats else {"kind": "hold"})
-        if facts.timeline:
-            transport = facts.timeline.get("current") or {}
-            # An old authorized strip is retained for painting history,
-            # not as permission for perpetual motion once the backend has
-            # definitively failed or reset. A pending successor still uses
-            # the separate retain branch below.
-            if not facts.running and transport.get("state") in ("failed","idle"):
-                return {"kind":"hold"}
-            authorized = transport.get("current")
-            # An initial loaded/ready source does not authorize a tempo
-            # clock. In particular, the first pending Start or Listen
-            # must not make the staff advance at a fallback 40 BPM.
-            if not facts.running and not isinstance(authorized, dict):
-                return {"kind": "hold"}
-            if facts.timeline.get("intent") is not None and not facts.running:
-                # Once an earlier take exists its already painted history
-                # may continue through a written rest. The successor has
-                # not yet obtained permission to change that clock.
-                return {"kind": "retain"}
-        return {"kind": "run", "clear_target": facts.mode != "learn"}
-
-    @staticmethod
     def project_transport_state(state: dict, pending: dict | None,
                                 timeline: dict, *, running: bool,
                                 paused: bool) -> None:
@@ -155,7 +111,6 @@ class ScoreStatePublisher:
     def publish(self, state: dict, facts: ScoreProjectionFacts) -> dict | None:
         """Project authorized desktop score motion and the guided target."""
         guided = self._guided_plan(state, facts)
-        state["presentation_directive"] = self._motion_directive(state, facts)
         # SessionReadModels already projected one canonical committed
         # transport status for both command and frame reads. This method
         # contributes only score motion and the source-bound Free target.

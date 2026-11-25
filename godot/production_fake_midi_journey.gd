@@ -473,6 +473,28 @@ func _process(_delta: float) -> bool:
             if app.score_admission.repeats_from_the_right < 1:
                 _fail("Automatic repeats did not scroll in from the right")
                 return true
+            if _press_primary():
+                _advance("hitch_pause")
+        "hitch_pause":
+            # A real frame hitch: Godot stalls right after Resume, longer
+            # than the take's count-in, so it first sees the resumed take
+            # after its opening note. Python must place it again and the
+            # learner must not see a failure.
+            if not bool(state.get("paused",false)):
+                return false
+            if _press_primary():
+                OS.delay_msec(14000)
+                _advance("hitch_recover")
+        "hitch_recover":
+            var playback: Variant = state.get("playback_timeline")
+            if playback is Dictionary and str(playback.get("state","")) == "failed":
+                _fail("A stalled frame turned the resumed take into a failure")
+                return true
+            if app.score_admission.late_takes_reported < 1 or \
+                    not bool(state.get("running",false)) or \
+                    renderer.bound_segment_id() != str(playback.get("segment_id","")):
+                return false
+            print("FULL_SCENE_FRAME_HITCH_RECOVERED transport=",state.get("transport_id"))
             # End an already accepted take through the production UI port.
             # Pending auto-continuations must be invalidated; no late score
             # status/reply may restart musical grading after Stop.
@@ -495,6 +517,6 @@ func _process(_delta: float) -> bool:
                 return true
             if Time.get_ticks_msec()-stopped_at_ms < 450:
                 return false
-            print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo resume_tempo wrong_tempo auto_repeat second_failure free_again clean_tempo stop")
+            print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo resume_tempo wrong_tempo auto_repeat second_failure free_again clean_tempo frame_hitch stop")
             quit(0)
     return false

@@ -14,6 +14,7 @@ func _init(flow) -> void:
     score_flow = flow
 
 func update_hold(state: Dictionary) -> void:
+    # The staff's motion and Free's holds follow the musical timeline.
     # This is a renderer cache for ONE immutable source revision. A new
     # practice window can enter Free directly without passing through a
     # timed/idle mode; retaining its old plan would hold wrong notes.
@@ -26,38 +27,6 @@ func update_hold(state: Dictionary) -> void:
         world = NAN
         source_from_beat = 0.0
         plan_id = ""
-    var directive: Variant = state.get("presentation_directive",{})
-    # A state without an explicit backend directive cannot authorize
-    # motion. Default to a frozen visible world rather than a native
-    # phase/BPM heuristic that might move unadmitted notation.
-    var kind: String = str(directive.get("kind","hold")) \
-        if directive is Dictionary else "hold"
-    match kind:
-        "hold":
-            score_flow.hold_at(score_flow.project(maxi(0,score_flow.last_ms)))
-            return
-        "retain":
-            # Preserve the previous hold (if any) while the backend
-            # prepares the next source. An outstanding intent alone
-            # cannot release the painted Pause/Free target.
-            return
-        "target":
-            if not is_finite(world):
-                score_flow.hold_at(score_flow.project(maxi(0,score_flow.last_ms)))
-                return
-            var beat: float = float(directive.get("source_beat",NAN))
-            if is_finite(beat):
-                score_flow.hold_at(world+maxf(0.0,beat-source_from_beat))
-            return
-        "run":
-            if bool(directive.get("clear_target",false)):
-                world = NAN
-                plan_id = ""
-            score_flow.release_hold()
-            return
-        _:
-            push_error("Unknown backend score presentation directive: "+kind)
-            score_flow.hold_at(score_flow.project(maxi(0,score_flow.last_ms)))
 
 
 func publish_authorized_target(parsed: Dictionary, renderer,

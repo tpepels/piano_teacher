@@ -79,36 +79,8 @@ def preparation_measure_descriptor(measure, start_beat: float,
     }
 
 
-def source_preparation_measure(source: dict, from_beat: float,
-                               start_beat: float = 0.0) -> dict:
-    """One canonical source context for both silent-rest and retry placement.
-
-    The entire source's authored bar/meter sequence selects the measure.
-    No renderer pixel clearance or transport deadline enters this function.
-    """
-    measures = source["measures"]
-    if not measures:
-        raise ValueError("Cannot prepare a retry without source measures")
-    index = max(
-        (i for i, item in enumerate(measures)
-         if float(item["start_beat"]) <= from_beat+1e-7),default=0)
-    following = measures[index+1] if index+1 < len(measures) else None
-    return preparation_measure_descriptor(
-        measures[index],start_beat,source["staff_order"],
-        following_measure=following)
 
 
-def retry_preparation_rest_beats(source: dict, from_beat: float) -> float:
-    """Read the exact authored preparation meter from original score geometry.
-
-    The retry's silent strip is source-metrical, including pickup and meter
-    changes. It cannot be inferred from visual pixels or a generic 4/4 gap.
-    This function is pure and never chooses or moves a playback deadline.
-    """
-    if not source["measures"]:
-        return float(source["practice_timeline"]["gap"]["duration_beats"])
-    return float(source_preparation_measure(
-        source,from_beat,0.0)["duration_beats"])
 
 
 def practice_timeline_descriptor(measures, duration_beats: float,

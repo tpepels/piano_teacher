@@ -18,33 +18,36 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
+    # Outside a run the staff stands still.
     var flow := Flow.new()
     flow.sample(1000,60.0)
     var first := flow.project(1000)
-    flow.hold_at(first)
     flow.sample(4000,60.0)
     check(near(flow.project(4000),first) and near(flow.project(7000),first),
-        "Free/paused world remains painted at its original held coordinate")
-    var physical: float = flow.physical_travel_ms_to(
-        first+4.0,4000,0.0,60.0,[])
-    check(near(physical,4000.0,.1),
-        "Held constant-tempo score reports exact future physical travel")
-    var future: float = flow.project_authored_future(8000,4000,0.0,60.0,[])
-    check(near(future,first+4.0),
-        "Future admission forecast does not obey the painted Pause hold")
-    check(near(flow.project(8000),first),
-        "A candidate forecast cannot expose notes or release Pause")
+        "Idle world stays where it is")
 
-    var shaped: Array = [
-        {"start_beat":0.0,"end_beat":2.0,"bpm":60.0},
-        {"start_beat":2.0,"end_beat":4.0,"bpm":120.0}
-    ]
-    check(near(flow.physical_travel_ms_to(
-        first+4.0,4000,0.0,60.0,shaped),3000.0,.1),
-        "Held authored slow/fast source integrates by tempo epochs")
-    check(near(flow.project_authored_future(
-        7000,4000,0.0,60.0,shaped),first+4.0),
-        "Hypothetical variable tempo and physical inverse agree")
+    # Free on the timeline: travel to the first target, hold, move on.
+    var free := Flow.new()
+    free.backend_clock = func(): return float(Time.get_ticks_msec())
+    var f0: float = float(Time.get_ticks_msec())
+    var free_state := {"run":7,"end_world":null,"holds_ms":[],"next_take":null,"segments":[
+        {"kind":"rest","world_start":0.0,"start_ms":f0,"beats":2.0,
+            "spans":[[2.0,60.0,60.0]],"hold_ms":null},
+        {"kind":"hold","world_start":2.0,"start_ms":f0+2000.0,"beats":0.0,
+            "spans":[[0.0,60.0,60.0]],"hold_ms":null}]}
+    free.follow(free_state,int(f0))
+    check(near(free.project(int(f0)+1000),1.0,.03),"Free travels to its first target")
+    free.sample(int(f0)+9000)
+    check(near(free.project(int(f0)+9000),2.0,.03) and near(free.hold_world,2.0,.03),
+        "Free holds the target at the playhead while the learner thinks")
+    free_state["segments"][1]["hold_ms"] = 9000.0
+    free_state["segments"].append({"kind":"rest","world_start":2.0,"start_ms":f0+11000.0,
+        "beats":1.0,"spans":[[1.0,60.0,60.0]],"hold_ms":null})
+    free_state["segments"].append({"kind":"hold","world_start":3.0,"start_ms":f0+12000.0,
+        "beats":0.0,"spans":[[0.0,60.0,60.0]],"hold_ms":null})
+    free.follow(free_state,int(f0)+9000)
+    check(near(free.project(int(f0)+11500),2.5,.03) and near(free.project(int(f0)+20000),3.0,.03),
+        "A played target moves the staff on to the next one and holds again")
 
     # A run of timed music: the world follows the published timeline.
     # Godot's clock stands in for the backend clock here (offset zero).
@@ -81,10 +84,6 @@ func run() -> void:
     check(not running.following and near(running.project(int(take_ms)+9000),running.beat),
         "After the run the world holds where the run left it")
 
-    var unbound := Flow.new()
-    unbound.sample_uncommitted(1000,72.0)
-    check(near(unbound.timeline.current_rate(),72.0),
-        "Unbound first source can still initialize its own projected rate")
 
     var guided := Guided.new(flow)
     guided.world = 100.0

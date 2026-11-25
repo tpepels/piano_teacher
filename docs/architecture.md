@@ -151,14 +151,25 @@ function of it; a Pause is a hold that moves every later segment.
      from the paused beat (from its opening when paused in its count-in or
      the rest before it) after the visible ink and one complete count-in
      bar.
-3. Godot follows the published timeline for the scrolling world during a
-   run and draws each take's notes at its world start (they may appear on
-   the visible staff). An abandoned take whose first note never reached
-   the playhead is withdrawn. A take that cannot be drawn is reported
-   (`playback.failure`) and Python stops it.
+3. While a take of an automatic Tempo sequence plays, the timeline also
+   publishes where its repeat would start (`next_take`, bar arithmetic).
+   Godot draws those notes early, beyond the right edge, so the repeat
+   scrolls in; when the repeat is placed there it takes them over, and any
+   other outcome withdraws them.
+4. Free is a run too (`PlaybackAuthorization.sync_free`, after every
+   event): the staff travels to the first target by its published arrival
+   and holds there (a hold segment); each played target appends a short
+   move and a new hold.
+5. Godot follows the published timeline for the scrolling world and draws
+   each take's notes at its world start. An abandoned take whose first
+   note never reached the playhead is withdrawn. A take Godot cannot draw
+   (first seen after its opening note, e.g. after a stalled frame) is
+   reported (`playback.failure`) and placed again once; a second such
+   failure stops it with a message.
 
-Free, idle and the time after a closed run keep the held presentation
-world; a new run continues from where the staff stands.
+Outside a run (idle, after Stop) the world stands where the last run left
+it; a new run continues from there. Settlement after a take raises one
+`continuation_pending` flag; nothing else schedules what comes next.
 
 ## Settlement and failure
 
@@ -202,9 +213,11 @@ composes no lesson text of its own.
 
 - `ScoreAssetSession` requests one source-bound `score.bundle` per stage
   and publishes readiness only after retained native ink compiled.
-- `ContinuousScoreFlow` follows the musical timeline during a run;
-  `ScoreAdmissionGateway` draws each take at its timeline world start in
-  the forward-only `ScoreStreamQueue`; exposed ink is never retimed.
+- `ContinuousScoreFlow` follows the musical timeline (Listen, Tempo and
+  Free); `ScoreAdmissionGateway` draws each take, and the predicted repeat,
+  at its timeline world start in the forward-only `ScoreStreamQueue`;
+  exposed ink is never retimed. `ScoreRunway` keeps an outgoing score
+  layer scrolling out while a new revision takes over.
 - Presentation, metronome, count-in voice and feedback paint the
   authorized segment only.
 

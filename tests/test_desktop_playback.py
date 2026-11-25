@@ -171,70 +171,11 @@ def test_guided_plan_deadline_changes_only_with_authenticated_source():
     assert publisher.publish(dict(state), another_transport) is None
 
 
-def test_backend_publishes_hold_target_and_running_motion_without_ui_phase_policy():
-    """Free and Pause target semantics are decided before Godot sees a frame."""
-    from dataclasses import replace
-    from piano_teacher.application.score_state_publisher import (
-        ScoreProjectionFacts, ScoreStatePublisher)
-
-    projector = ScoreStatePublisher()
-    facts = ScoreProjectionFacts(
-        fingerprint="piece", stage_key="window:1", revision=1,
-        transport_id=1, mode="learn", running=False, paused=False,
-        awaiting_score=False, bpm=40.0, timeline={}, next_count_in_beats=4.0,
-        next_count_in_meter=(4,4),
-        duration_beats=4.0, has_source=True)
-
-    def motion(observation, context):
-        state = dict(observation)
-        projector.publish(state, context)
-        return state["presentation_directive"]
-
-    teaching = {"phase":"guided_wait", "teaching":{
-        "expected_notes":[{"beat":1.0,"pitch":72},{"beat":0.5,"pitch":76}]}}
-    assert motion(teaching, facts) == {"kind":"target","source_beat":0.5}
-    assert motion(teaching, replace(facts, paused=True)) == {"kind":"hold"}
-    assert motion({"phase":"guided_complete","teaching":{"expected_notes":[]}},
-                  facts) == {"kind":"hold"}
-    assert motion(teaching, replace(facts, awaiting_score=True)) == {"kind":"hold"}
-    pending = replace(facts, mode="practice", timeline={
-        "intent":{"intent_id":"next"}, "current":{"state":"awaiting_admission"}})
-    assert motion({"phase":"admitting"}, pending) == {"kind":"hold"}
-    authorized_predecessor = replace(pending,timeline={
-        "intent":{"intent_id":"next"},
-        "current":{"current":{"segment_id":"older"},"state":"playing"}})
-    assert motion({"phase":"admitting"}, authorized_predecessor) == {"kind":"retain"}
-    running = replace(pending, running=True)
-    assert motion({"phase":"playing"}, running) == {
-        "kind":"run","clear_target":True}
-    assert motion({"phase":"ready"}, replace(pending,timeline={},
-        running=False)) == {"kind":"run","clear_target":True}
-    idle = replace(pending,timeline={
-        "intent":None, "current":{"current":None,"state":"idle"}})
-    assert motion({"phase":"ready"}, idle) == {"kind":"hold"}
-    # Failed admission can retain the predecessor's historical segment.
-    # That is not a licence to scroll forever with no playable tempo.
-    old_source = {"segment_id":"old","take_id":"previous"}
-    failed = replace(pending,timeline={
-        "intent":None,"current":{"current":old_source,"state":"failed",
-                                  "failure":"No physical source can be admitted"}})
-    assert motion({"phase":"loading"}, failed) == {"kind":"hold"}
-    # A pending valid successor may continue the old, already authorized
-    # rest without inventing a second clock or resetting the world.
-    still_pending = replace(pending,timeline={
-        "intent":{"intent_id":"next"},
-        "current":{"current":old_source,"state":"playing"}})
-    assert motion({"phase":"admitting"}, still_pending) == {"kind":"retain"}
-
-
-def test_real_state_contract_includes_authoritative_motion_directive(practice_session):
+def test_real_state_satisfies_its_contract(practice_session):
     from piano_teacher.state_contract import VERSION, problems
     session = practice_session(bars=1)
     result = session.snapshot()
-    assert VERSION == 10
-    assert "presentation_directive" in result
-    assert result["presentation_directive"]["kind"] in (
-        "hold", "target", "retain", "run")
+    assert VERSION == 11
     assert not problems(result), problems(result)
 
 

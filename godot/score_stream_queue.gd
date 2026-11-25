@@ -303,9 +303,10 @@ func _is_safe_tail(passes: Array, owner_serial: int, world: float,
     # immutable full-passage owner that wrongly locks its invisible suffix.
     return found and not source.is_empty()
 
-## Number of tail strips that belong to takes whose first note never
-## reached the playhead: an exposure abandoned before it sounded.
-static func unplayed_tail_count(passes: Array, world: float) -> int:
+# Takes that sounded: the playhead reached their first note while live.
+var sounded: Dictionary = {}
+
+static func _take_starts(passes: Array) -> Dictionary:
     var starts: Dictionary = {}
     for item in passes:
         if str(item.get("kind","source")) != "source":
@@ -313,10 +314,29 @@ static func unplayed_tail_count(passes: Array, world: float) -> int:
         var take: int = int(item.get("take_owner",owner_id(item)))
         var at: float = float(item["world_origin"])+float(item.get("source_floor",0.0))
         starts[take] = minf(float(starts.get(take,INF)),at)
+    return starts
+
+func mark_sounded(take_owner: int, world: float) -> void:
+    if sounded.has(take_owner):
+        return
+    var starts: Dictionary = _take_starts(online)
+    if starts.has(take_owner) and float(starts[take_owner]) <= world+.0001:
+        sounded[take_owner] = true
+
+## Number of tail strips that belong to takes which never sounded (an
+## exposure abandoned before it began). Free's ink counts as sounded once
+## its first target reached the playhead.
+func unplayed_tail_count(passes: Array, world: float) -> int:
+    var starts: Dictionary = _take_starts(passes)
     var count := 0
     for index in range(passes.size()-1,-1,-1):
-        var take: int = int(passes[index].get("take_owner",owner_id(passes[index])))
-        if not starts.has(take) or float(starts[take]) <= world+.0001:
+        var item: Dictionary = passes[index]
+        var take: int = int(item.get("take_owner",owner_id(item)))
+        if not starts.has(take) or sounded.has(take):
+            break
+        var guided: bool = str(item.get("take_key","")).begins_with("guided:") or \
+            bool(item.get("pending",false)) and not str(item.get("take_key","")) in ["prepared","predicted"]
+        if guided and float(starts[take]) <= world+.0001:
             break
         count += 1
     return count
@@ -503,6 +523,7 @@ func reset(owner: Control) -> bool:
             return false
     while not online.is_empty():
         Lifecycle.retire(owner,online.pop_front())
+    sounded.clear()
     return true
 
 func has_take(take_serial: int) -> bool:

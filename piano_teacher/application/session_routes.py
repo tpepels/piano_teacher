@@ -99,6 +99,8 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
         def run(event):
             result = handler(event)
             playback_authorization.start_pending()
+            playback_authorization.presentation.prepare_score_presentation()
+            playback_authorization.sync_free()
             return result
         return run
 

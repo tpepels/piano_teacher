@@ -97,7 +97,7 @@ banning historical module names.
 | [Learning history](../tests/test_learning_history.py) | Actual outcomes/signed timing, unknown detail, stable paging, redacted atomic export, scoped deletion, preserved reset history and captured mastery criteria. |
 | [Desktop playback](../tests/test_desktop_playback.py) | Takes placed on the musical timeline: repeat after one eased count-in bar, display failure, Retry, paused count-in, ungraded Listen. |
 | [MIDI journeys](../tests/test_midi_journeys.py) | Wrong, missing, extra and late notes; Free return at the floor; slower after two failures; mastery at target; a take Godot could not draw placed again; seeded long journeys with Pause/Retry/Stop never fail. |
-| [Failure grading](../tests/test_failure_grading.py) | Twenty kinds of mistake (missing chord notes, nothing played, random keys, wrong pitches, extra/doubled keys, early/late just outside and far outside the tolerance, a rushed take, count-in presses) graded note by note, counted in the history and followed by the same tempo; tolerance edges; hold grading on/off; two failures returning to Free or slowing down. |
+| [Failure grading](../tests/test_failure_grading.py) | Five window kinds (right, left, both hands, two bars, MusicXML) and twenty kinds of mistake (missing chord notes, nothing played, random keys, wrong pitches, extra/doubled keys, early/late just outside and far outside the tolerance, a rushed take, count-in presses) graded note by note, counted in the history and followed by the same tempo; tolerance edges; hold grading on/off; two failures returning to Free or slowing down. |
 
 [Test inputs](../tests/session_inputs.py) supply small actual MIDI files, one
 injected input clock and external ports; the production engine decides grading
@@ -134,6 +134,11 @@ copy on completion. Without this setting it prints a **PENDING** marker rather
 than implying that Pathétique has been tested; this source-specific gate
 does not replace physical piano/audio acceptance.
 
+The synthetic-MIDI journey (4/4 and 2/4) plays the real scene: a wrong key
+in Free, Pause/Resume in Free and Tempo, a failed take, a second failure at
+50% returning to Free, Free again, a clean take that gets faster, repeats
+scrolling in from the right, and a deliberate 14 s frame stall after Resume
+that the take must survive (placed again, no failure).
 The verifier runs embedded startup, a real default Practice Flow fixture, and Moonlight,
 Peace Piece and Chopin journeys with explicitly selected Coda/Fukuda.
 Full mode also builds and boots the relocated standalone package. These checks

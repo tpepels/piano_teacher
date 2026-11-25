@@ -70,6 +70,8 @@ static func beat_at(segment: Dictionary, seconds: float) -> float:
 
 static func bpm_at(segment: Dictionary, beats: float) -> float:
     var spans: Array = segment.get("spans",[])
+    if spans.is_empty() or str(segment.get("kind","")) == "hold":
+        return 0.0
     for span in spans:
         var length: float = float(span[0])
         if beats < length:
@@ -79,6 +81,9 @@ static func bpm_at(segment: Dictionary, beats: float) -> float:
     return float(last[2])
 
 static func end_ms(segment: Dictionary) -> float:
+    if str(segment.get("kind","")) == "hold":
+        var held: Variant = segment.get("hold_ms")
+        return INF if held == null else float(segment["start_ms"])+float(held)
     return float(segment["start_ms"])+seconds_at(segment,_beats(segment))*1000.0
 
 func world_at(t_ms: float) -> float:
@@ -102,6 +107,15 @@ func world_at(t_ms: float) -> float:
     else:
         world = float(chosen["world_start"])+beat_at(chosen,(m-float(chosen["start_ms"]))/1000.0)
     return minf(world,end_world)
+
+## World beat of the hold the timeline rests in at `t_ms` (NAN while moving).
+func hold_world_at(t_ms: float) -> float:
+    var segment: Dictionary = segment_at(t_ms)
+    if segment.is_empty() or str(segment.get("kind","")) != "hold":
+        return NAN
+    if musical_ms(t_ms) >= end_ms(segment):
+        return NAN
+    return float(segment["world_start"])
 
 func segment_at(t_ms: float) -> Dictionary:
     if segments.is_empty():

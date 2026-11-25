@@ -94,8 +94,23 @@ Resume without timing out; a failure to start a take no longer breaks the
 MIDI key or tick that triggered it; cancelled exposures no longer publish a
 failure reason. New MIDI journeys (`tests/test_midi_journeys.py`) cover
 wrong, missing, extra and late notes, the Free return, slowing down,
-mastery and seeded long journeys with Pause/Retry/Stop. Piano acceptance
-(sound, clicks, motion) is pending.
+mastery and seeded long journeys with Pause/Retry/Stop.
+
+Second round (owner request, same day): the remaining take bookkeeping
+(next-take deadline, announced continuation, preparation/rewind schedule,
+next-step preloads and the runway's prepared renderer, scheduled start,
+tempo epoch) is gone; the seek, section-review and partial-take routes were
+proven unreachable and removed; grading times notes with the take's tempo
+as placed on the timeline; Free runs on the timeline as holds, so Godot's
+presentation epochs are deleted and so is the motion directive (state
+contract 11). Owner decisions restored: Resume always gives a full
+count-in bar; a too-early first note in the count-in is graded early;
+repeats scroll in from the right (predicted repeat drawn early). Tests:
+the failure matrix (`tests/test_failure_grading.py`) runs on right, left,
+both hands, a two-bar window and MusicXML; a late decision adds a whole
+rest bar; the native journey walks two failures back to Free and survives
+a 14 s frame stall. Piano acceptance (sound, clicks, motion, the eased
+count-in) is pending.
 
 ## Structural decoupling plan (R1–R8, adopted 2026-11-23)
 

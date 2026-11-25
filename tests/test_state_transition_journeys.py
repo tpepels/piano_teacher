@@ -322,7 +322,7 @@ def test_real_lesson_passage_shortcuts_keep_exercise_not_skip_semantics(practice
     assert back["controls"]["passage_previous"]["action"] == ""
 
 
-def test_real_state_rejects_missing_control_and_invalid_motion_contract(practice_session):
+def test_real_state_rejects_missing_control_and_timeline(practice_session):
     """A malformed published snapshot must not be consumed by Godot."""
     from copy import deepcopy
     from piano_teacher.state_contract import problems
@@ -335,11 +335,8 @@ def test_real_state_rejects_missing_control_and_invalid_motion_contract(practice
     del missing["controls"]["primary"]["enabled"]
     assert any("controls.primary" in issue for issue in problems(missing))
     missing = deepcopy(valid)
-    del missing["presentation_directive"]
-    assert any("presentation_directive" in issue for issue in problems(missing))
-    missing = deepcopy(valid)
-    missing["presentation_directive"] = {"kind":"target"}  # No target beat.
-    assert any("target has no source_beat" in issue for issue in problems(missing))
+    del missing["playback_timeline"]
+    assert any("playback_timeline" in issue for issue in problems(missing))
 
 @pytest.mark.parametrize("grade_holds,next_bpm", [
     (False,"faster"), (True,40),

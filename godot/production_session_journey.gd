@@ -73,13 +73,12 @@ func _fail(message: String) -> void:
             "armed":renderer.stream_owner_status().get("armed_serial",-1),
             "last_take":renderer.stream_owner_status().get("last_take",""),
             "passes":passages}
-        var timeline = app.score_flow.timeline
         witness["projection"] = {
-            "flow_hold":timeline.hold_world,
-            "flow_rate":timeline.current_rate(),
+            "flow_hold":app.score_flow.hold_world,
+            "flow_rate":app.score_flow.bpm,
             "flow_world":app.score_flow.project(Time.get_ticks_msec()),
-            "world_sample":timeline.last_world,
-            "last_ms":timeline.last_ms,
+            "world_sample":app.score_flow.beat,
+            "last_ms":app.score_flow.last_ms,
             "intent":state.get("playback_intent"),
             "placed_segment":app.score_admission.placed_segment,
             "reservation_problem":app.score_admission.last_problem()

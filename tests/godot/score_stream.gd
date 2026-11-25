@@ -58,6 +58,9 @@ func run() -> void:
     controller.attach_compiled()
     for item in controller.queue.online:
         Lifecycle.project(item,5.0,330.0,100.0,20.0,Vector2(1000,600),4.0)
+    # The live take has sounded: the playhead passed its first note.
+    controller.queue.mark_sounded(int(controller.queue.online[0].get("take_owner",
+        controller.queue.online[0]["serial"])),5.0)
     var first: Dictionary = controller.queue.online[0]
     check(bool(first.get("ever_visible",false)),"The admitted source reaches the visible score")
     var before_x: float = first.clip.position.x+first.segment.position.x
@@ -109,10 +112,14 @@ func run() -> void:
         "Count-in rest reserves physical header space without changing the musical bar")
     # Source sounds from world 4 through 8. Its one-bar count-in rest
     # occupies [8,12); the repeat's first note is at 12.
+    automatic_controller.queue.mark_sounded(int(automatic_controller.queue.online[0].get(
+        "take_owner",automatic_controller.queue.online[0]["serial"])),9.0)
     var next_armed: Dictionary = automatic_controller.place_timeline_take(
         geometry(9.0),0.0,12.0,6.7,0.4,4.0)
     check(not next_armed.is_empty(),
         "A one-bar repeat after the written rest is drawn at its timeline place")
+    for item in automatic_controller.queue.online:
+        automatic_controller.queue.mark_sounded(int(item.get("take_owner",item["serial"])),13.0)
     var overlapping: Dictionary = automatic_controller.place_timeline_take(
         geometry(13.0),0.0,14.0,6.7,0.4,4.0)
     check(overlapping.is_empty(),"A take may never overlap ink already drawn")
@@ -137,16 +144,15 @@ func run() -> void:
         "The abandoned unplayed take makes way for the new one")
     abandon_canvas.free()
     var flow := Flow.new()
-    flow.sample(1000,60.0)
-    var previous: float = flow.sample(2000,60.0)
-    check(flow.sample(3000,90.0) > previous and flow.sample(2500,90.0) >= previous,
-        "Pause/retry handoffs and delayed frames cannot rewind the score world")
-    flow.hold_at(flow.beat+1.0)
-    flow.sample(10000,90.0)
-    var held: float = flow.beat
-    check(is_equal_approx(flow.project(20000),held),"Free holds the target while the learner thinks")
-    flow.hold_at(held+1.0)
-    check(flow.sample(21000,90.0) > held,"A correct Free target permits forward motion to the next target")
+    flow.backend_clock = func(): return float(Time.get_ticks_msec())
+    var t0: float = float(Time.get_ticks_msec())
+    flow.follow({"run":1,"end_world":null,"holds_ms":[],"next_take":null,"segments":[
+        {"kind":"rest","world_start":0.0,"start_ms":t0,"beats":8.0,
+            "spans":[[8.0,60.0,60.0]],"hold_ms":null}]},int(t0))
+    flow.sample(int(t0)+1000)
+    var previous: float = flow.sample(int(t0)+2000)
+    check(flow.sample(int(t0)+3000) > previous and flow.sample(int(t0)+2500) >= previous,
+        "Delayed frames cannot rewind the score world")
     canvas.free()
     print("SCORE_STREAM_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

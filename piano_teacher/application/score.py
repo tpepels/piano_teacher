@@ -120,6 +120,3 @@ class Score:
     def stop_successor(self) -> None:
         self._successor.stop()
 
-    @property
-    def successor_schedule(self):
-        return self._successor.schedule

@@ -3,12 +3,11 @@ extends RefCounted
 ## piano_teacher/state_contract.py. Do not edit by hand.
 ## The versioned contract of the per-frame state snapshot.
 
-const VERSION := 10
+const VERSION := 11
 const STATIC_KEYS := ["import_warnings"]
 const REQUIRED := ["schema_version", "loaded", "controls"]
-const LOADED_REQUIRED := ["mode", "phase", "running", "paused", "revision", "transport_id", "piece_fingerprint", "stage_key", "presentation_directive", "playback_timeline"]
+const LOADED_REQUIRED := ["mode", "phase", "running", "paused", "revision", "transport_id", "piece_fingerprint", "stage_key", "playback_timeline"]
 const CONTROL_ACTIONS := ["primary", "pause", "retry", "listen", "review_previous", "passage_previous", "passage_next", "stop", "hints", "midi_start", "tempo_up", "tempo_down"]
-const MOTION_KINDS := ["hold", "target", "retain", "run"]
 const SCHEMA := {
     "auto": ["bool"],
     "automatic_tempo_steps": ["number"],
@@ -91,7 +90,6 @@ const SCHEMA := {
     "playback_intent": ["dict", "null"],
     "playback_timeline": ["dict"],
     "practice_timeline": ["dict"],
-    "presentation_directive": ["dict"],
     "progress": ["number"],
     "recovery_beat": ["null", "number"],
     "recovery_notice": ["dict", "null"],
@@ -165,14 +163,4 @@ static func problems(state: Dictionary) -> Array[String]:
                     kind_of(choice.get("enabled")) != "bool" or \
                     kind_of(choice.get("action")) != "string":
                 found.append("controls.%s lacks an action/enabled projection" % key)
-    if state.get("loaded",false) == true:
-        var directive: Variant = state.get("presentation_directive")
-        if directive is Dictionary:
-            var kind: Variant = directive.get("kind")
-            if kind not in MOTION_KINDS:
-                found.append("invalid presentation_directive.kind %s" % str(kind))
-            elif kind == "target" and (
-                    kind_of(directive.get("source_beat")) != "number" or
-                    not is_finite(float(directive.get("source_beat", NAN)))):
-                found.append("presentation_directive target has no source_beat or has a nonfinite source_beat")
     return found

@@ -84,13 +84,42 @@ class PlaybackAuthorization:
             capture=self.transport_timing.playback_facts,
             abort=self.abort_playback)
 
+    _free: tuple | None = None
+
+    def sync_free(self) -> None:
+        """Free on the musical timeline: the staff travels to the first
+        target by its published arrival, holds there while the learner
+        thinks, and moves on to each next target once it is played."""
+        lesson, transport = self.lesson, self.transport
+        controller = lesson.guided_controller
+        if transport.mode != "learn" or controller is None or lesson.plan is None:
+            self._free = None
+            return
+        if transport.paused:
+            return
+        now = self.clock()
+        arrival = self.transport_timing.score.free_target_arrival(lesson, transport)
+        notes = controller.snapshot(now=now).get("expected_notes") or []
+        if arrival is None or not notes:
+            return
+        beat = min(float(note["beat"]) for note in notes)
+        key = (lesson.fingerprint, lesson.revision, transport.transport_id, round(arrival, 6))
+        bpm = float(lesson.plan.bpm)
+        timeline = transport.musical_timeline
+        if self._free is None or self._free[0] != key or not timeline.segments:
+            timeline.start_free(now=now, bpm=bpm,
+                                travel_beats=max(0.0, arrival-now)*bpm/60.0)
+            self._free = (key, beat)
+        elif beat > self._free[1] + 1e-9:
+            timeline.move_hold(now=now, beats=beat-self._free[1], bpm=bpm)
+            self._free = (key, beat)
+
     @staticmethod
     def _resume_placement(timeline, take, now):
         """Resume always gives the take one complete count-in bar (owner
         decision 2026-11-08): the run ends where it was paused and the take
         continues from the paused beat (or its opening, when the pause came
         in the count-in or rest) after the visible ink and a fresh bar."""
-        paused_at = timeline.holds[-1][0] if timeline.paused else now
         timeline.resume(now)
         timeline.cut_at(now)
         return None

@@ -31,7 +31,6 @@ for script in \
   res://command_success_effects.gd \
   res://practice_command_coordinator.gd \
   res://score_admission_gateway.gd \
-  res://presentation_timeline.gd \
   res://guided_presentation_session.gd \
   res://practice_presentation_session.gd \
   res://metronome_frame_coordinator.gd \

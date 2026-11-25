@@ -29,13 +29,16 @@ LATE_GRACE_SECONDS = 0.25
 # A new run's count-in starts at least this long after the request, so the
 # state carrying it reaches Godot before the first click.
 RUN_LEAD_SECONDS = 0.35
+# A Free move starts this much after the played target, so the state that
+# carries it reaches Godot first and the staff glides instead of jumping.
+MOVE_LEAD_SECONDS = 0.12
 # Past segments kept in the published snapshot (their ink is still leaving).
 KEPT_PAST_SEGMENTS = 6
 
 
 @dataclass(frozen=True, slots=True)
 class TimelineSegment:
-    kind: str                       # "count_in" | "take" | "rest"
+    kind: str                       # "count_in" | "take" | "rest" | "hold"
     world_start: float              # world beats
     start_at: float                 # musical seconds
     spans: tuple[TempoSpan, ...]
@@ -47,9 +50,11 @@ class TimelineSegment:
     meter: tuple[int, int] = (4, 4)
     # A take cut short by Resume (its remainder continues in a new take).
     cut_beats: float | None = None
+    # A hold (Free waiting at its target): how long it lasted, None while it lasts.
+    hold_seconds: float | None = None
 
     def __post_init__(self):
-        if self.kind not in ("count_in", "take", "rest"):
+        if self.kind not in ("count_in", "take", "rest", "hold"):
             raise ValueError("Unknown timeline segment kind")
         if not self.spans or not all(map(math.isfinite, (
                 self.world_start, self.start_at))):
@@ -93,6 +98,8 @@ class TimelineSegment:
 
     @property
     def seconds(self) -> float:
+        if self.kind == "hold":
+            return math.inf if self.hold_seconds is None else self.hold_seconds
         return self.seconds_at(self.beats)
 
     @property
@@ -115,6 +122,8 @@ class TimelineSegment:
             "take_id": self.take_id, "mode": self.mode,
             "source_from_beat": self.source_from_beat,
             "meter": list(self.meter),
+            "hold_ms": (None if self.kind != "hold" or self.hold_seconds is None
+                        else self.hold_seconds * 1000.0),
         }
 
 
@@ -377,6 +386,28 @@ class MusicalTimeline:
         self.end_world = None
         self.next_take = None
 
+    def start_free(self, *, now: float, travel_beats: float, bpm: float) -> None:
+        """Free: the staff travels `travel_beats` at `bpm` to the first
+        target, then holds there until the target is played."""
+        self.reset()
+        m = self.musical(now)
+        rest = self.append(TimelineSegment(
+            "rest", 0.0, m, (TempoSpan(max(0.0, travel_beats), bpm, bpm),)))
+        self.append(TimelineSegment("hold", rest.world_end, rest.end_at,
+                                    (TempoSpan(0.0, bpm, bpm),)))
+
+    def move_hold(self, *, now: float, beats: float, bpm: float) -> None:
+        """Free: the target was played; move on `beats` to the next one."""
+        if not self.segments or self.segments[-1].kind != "hold":
+            return
+        last = self.segments[-1]
+        m = max(last.start_at, self.musical(now)) + MOVE_LEAD_SECONDS
+        self.segments[-1] = replace(last, hold_seconds=m - last.start_at)
+        rest = self.append(TimelineSegment(
+            "rest", last.world_start, m, (TempoSpan(max(0.0, beats), bpm, bpm),)))
+        self.append(TimelineSegment("hold", rest.world_end, rest.end_at,
+                                    (TempoSpan(0.0, bpm, bpm),)))
+
     def predict_repeat(self, *, bar_beats: float, source_from_beat: float) -> None:
         """Publish where a repeat of the last take would start by bar
         arithmetic (rest to its barline, one count-in bar)."""
@@ -388,14 +419,6 @@ class MusicalTimeline:
         self.next_take = (last.world_start + full + last.rest_after_beats + bar_beats,
                           float(source_from_beat))
 
-    def cut_take(self, t: float) -> None:
-        """End the current take at wall instant `t` (Resume continues it in a
-        new take after its own count-in)."""
-        if not self.segments or self.segments[-1].kind != "take":
-            return
-        last = self.segments[-1]
-        beats = last.beat_at(self.musical(t) - last.start_at)
-        self.segments[-1] = replace(last, cut_beats=beats)
 
     # --- publication ---------------------------------------------------
 

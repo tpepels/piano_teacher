@@ -396,7 +396,7 @@ func withdraw_predicted_take(facts: StreamGeometry, owner_serial: int) -> void:
 ## live peer layers), or -INF when the staff ahead is empty.
 func ink_end(facts: StreamGeometry) -> float:
     var played: Array = queue.online.slice(0,queue.online.size()-
-        StreamQueue.unplayed_tail_count(queue.online,facts.world))
+        queue.unplayed_tail_count(queue.online,facts.world))
     var preview: Dictionary = queue.preview_tail_withdrawal(facts.world,
         facts.density,facts.gap,facts.duration,facts.width,facts.playhead,
         -1,false,-1,played)
@@ -518,6 +518,11 @@ func acknowledge_arm() -> bool:
 func observe_state(facts: StreamGeometry, state: Dictionary, graded_beat: float,
         allow_admission: bool) -> void:
     _binding.observe_state(facts,state,graded_beat,allow_admission,trim,cancel_arm)
+    # A take has sounded once the playhead reached its first note while it
+    # was the live take; only takes that never sounded may be withdrawn.
+    var live: int = _binding.live_owner()
+    if live >= 0 and not bool(state.get("paused",false)):
+        queue.mark_sounded(live,facts.world)
 
 func unscored_take_status() -> String:
     return _binding.unscored_take

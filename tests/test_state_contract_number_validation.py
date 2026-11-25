@@ -31,21 +31,3 @@ def test_finite_numeric_ports_remain_valid():
     state = _state()
     state.update(bpm=20, clock_beat=-4.0)
     assert problems(state) == []
-
-
-@pytest.mark.parametrize("value", [nan, inf, -inf, None, "beat"])
-def test_invalid_target_source_beat_is_rejected(value):
-    state = _state()
-    state.update({
-        "loaded": True,
-        "mode": "practice",
-        "phase": "ready",
-        "running": False,
-        "paused": False,
-        "revision": 1,
-        "transport_id": 1,
-        "piece_fingerprint": "original",
-        "presentation_directive": {"kind": "target", "source_beat": value},
-        "playback_timeline": {},
-    })
-    assert any("finite source_beat" in error for error in problems(state))

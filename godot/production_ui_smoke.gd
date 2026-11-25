@@ -61,14 +61,13 @@ func _process(_delta: float) -> bool:
     if Time.get_ticks_msec() - begun_ms > MAX_MS:
         var state: Dictionary = app.current_state()
         var gateway = app.score_admission
-        var timeline = app.score_flow.timeline
         var renderer = app.practice_view.stage.renderer
         print("PHASE6_RESUME_DIAGNOSTIC:",JSON.stringify({
             "state_phase":state.get("phase"),"mode":state.get("mode"),
             "paused":state.get("paused"),"intent":state.get("playback_intent"),
-            "flow_hold":timeline.hold_world,"flow_rate":timeline.current_rate(),
+            "flow_hold":app.score_flow.hold_world,"flow_rate":app.score_flow.bpm,
             "flow_world":app.score_flow.project(Time.get_ticks_msec()),
-            "world_sample":timeline.last_world,"world_ms":timeline.last_ms,
+            "world_sample":app.score_flow.beat,"world_ms":app.score_flow.last_ms,
             "renderer_world":renderer.stream_world_beat,
             "placed_segment":gateway.placed_segment,
             "reservation_problem":gateway.last_problem()

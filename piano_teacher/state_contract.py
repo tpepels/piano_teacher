@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-VERSION = 10
+VERSION = 11
 
 # Values that do not change frame to frame. They travel in command replies
 # (library.open, practice.command, ...) and are omitted from state.snapshot.
@@ -26,7 +26,7 @@ KINDS = ("bool", "number", "string", "list", "dict", "null")
 REQUIRED = ("schema_version", "loaded", "controls")
 LOADED_REQUIRED = (
     "mode", "phase", "running", "paused", "revision", "transport_id",
-    "piece_fingerprint", "stage_key", "presentation_directive", "playback_timeline",
+    "piece_fingerprint", "stage_key", "playback_timeline",
 )
 # Buttons and native shortcuts must never supply their own action meaning.
 # These names are presentation ports, generated to Godot from this owner.
@@ -35,7 +35,6 @@ CONTROL_ACTIONS = (
     "passage_previous", "passage_next", "stop",
     "hints", "midi_start", "tempo_up", "tempo_down",
 )
-MOTION_KINDS = ("hold", "target", "retain", "run")
 
 SCHEMA: dict[str, tuple[str, ...]] = {
     "auto": ('bool',),
@@ -119,7 +118,6 @@ SCHEMA: dict[str, tuple[str, ...]] = {
     "piece_fingerprint": ('string',),
     "piece_last_bar": ('number',),
     "play_from_beat": ('number',),
-    "presentation_directive": ('dict',),
     "practice_timeline": ('dict',),
     "progress": ('number',),
     "recovery_beat": ('null', 'number'),
@@ -189,14 +187,4 @@ def problems(state: dict) -> list[str]:
                     or type(choice.get("enabled")) is not bool
                     or not isinstance(choice.get("action"), str)):
                 found.append(f"controls.{key} lacks an action/enabled projection")
-    if state.get("loaded") is True:
-        directive = state.get("presentation_directive")
-        if isinstance(directive, dict):
-            kind = directive.get("kind")
-            if kind not in MOTION_KINDS:
-                found.append(f"invalid presentation_directive.kind {kind!r}")
-            elif kind == "target" and (
-                    kind_of(directive.get("source_beat")) != "number"
-                    or not math.isfinite(directive["source_beat"])):
-                found.append("presentation_directive target has no source_beat or has a nonfinite source_beat")
     return found

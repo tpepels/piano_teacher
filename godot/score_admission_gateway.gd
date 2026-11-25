@@ -23,6 +23,9 @@ var placed_segment := ""
 var predicted := {}
 # Repeats whose notes were drawn in advance and scrolled in from the right.
 var repeats_from_the_right := 0
+# Takes first seen after their opening note passed (a stalled frame),
+# reported so Python places them again.
+var late_takes_reported := 0
 var missing_score_frames := 0
 var unplaced_frames := 0
 var reported_failure_segment := ""
@@ -149,6 +152,8 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
     # A take first seen after its opening note passed can never be drawn:
     # Python places it again at once. Otherwise give the renderer time.
     if outcome == "passed" or unplaced_frames >= MAX_UNPLACED_FRAMES:
+        if outcome == "passed" and reported_failure_segment != segment_id:
+            late_takes_reported += 1
         _report_problem("The score for this take could not be drawn")
         _report_authorized_failure(str(current.get("take_id","")),segment_id,
             "timeline_take_not_drawn")

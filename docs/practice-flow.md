@@ -154,8 +154,10 @@ The music is the focus:
 - Use one small status label indicating the current window, hand and step.
 - Hide the piano keyboard except for a wrong-note hint in Free.
 - **Pause** freezes both the visible score and the graded/untimed exercise.
-  Resume continues the selected passage without presenting new notes during
-  the pause. In Free, the next target holds still until the correct key.
+  Resume continues the selected passage after one complete count-in bar
+  (from the paused beat, or from the window's opening when paused in its
+  count-in), without presenting new notes during the pause. In Free, the
+  next target holds still until the correct key.
 - Every control type has its own look, so you can see what can be pressed:
   menu choices are large words with a key notch (lit when chosen); actions
   are raised key caps (danger ones rose); a pick-one group is a row of keys
@@ -180,6 +182,9 @@ Listen lighting is ungraded and cannot award performance credit.
 
 A slightly early/late attack remains green. An onset error counts only outside
 the greater of **150 ms** and **one sixteenth note at the current local tempo**.
+A first note pressed in the count-in is graded early when it is close enough
+to belong to that note; a key further into the count-in is not part of the
+take.
 This is an owner-selected tolerance, not a validated universal teaching constant.
 Detailed timing/hold observations remain distinct in local evidence even though
 the display uses two feedback colours. Key-release timing is always recorded. With hold grading off, short, long
