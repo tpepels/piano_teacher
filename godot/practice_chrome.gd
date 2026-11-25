@@ -20,6 +20,7 @@ var practice_header: HBoxContainer
 var practice_navigation: HBoxContainer
 var title_label: Label
 var practice_controls: HFlowContainer
+var controls_row: MarginContainer
 var practice_retry_button: Button
 var start_button: Button
 var listen_button: Button
@@ -126,10 +127,24 @@ func build() -> void:
     var controls := HFlowContainer.new()
     practice_controls = controls
     controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    controls.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     controls.alignment = FlowContainer.ALIGNMENT_CENTER
     controls.add_theme_constant_override("h_separation", 8)
     controls.add_theme_constant_override("v_separation", 8)
-    practice_layout.add_child(controls)
+    # One transport row: the wrong-note keyboard at its left, the buttons
+    # centred, the keys you are holding on a small staff at its right. Its
+    # height is fixed, so the hint appearing never moves the score.
+    controls_row = MarginContainer.new()
+    controls_row.name = "TransportRow"
+    controls_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    practice_layout.add_child(controls_row)
+    controls_row.add_child(controls)
+    stage.keyboard.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    stage.keyboard.size_flags_vertical = Control.SIZE_FILL
+    controls_row.add_child(stage.keyboard)
+    stage.held_staff.size_flags_horizontal = Control.SIZE_SHRINK_END
+    stage.held_staff.size_flags_vertical = Control.SIZE_FILL
+    controls_row.add_child(stage.held_staff)
     practice_retry_button = _transport_button("Retry", func(): retry_requested.emit(), "retry")
     practice_retry_button.tooltip_text = "Repeat the current passage · R"
     # Retry is the R shortcut only; Practice Flow shows Pause/Resume and
@@ -207,6 +222,9 @@ func apply_viewport(view_size: Vector2, scale: float) -> void:
             else:
                 button.custom_minimum_size = Vector2(120,40)
     practice_music_button.custom_minimum_size = Vector2(40,40)
+    if controls_row != null:
+        controls_row.custom_minimum_size.y = stage.keyboard.custom_minimum_size.y
+        stage.keyboard.custom_minimum_size.x = minf(330.0*scale, maxf(200.0, width*.26))
     if practice_controls != null:
         practice_layout_box.add_theme_constant_override("separation", 4 if compact else 6)
         # The expanding score panel gets all remaining vertical space.

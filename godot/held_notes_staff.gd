@@ -21,7 +21,7 @@ func _init() -> void:
 
 func set_ui_scale(value: float) -> void:
     ui_scale = value
-    custom_minimum_size.x = 132.0 * value
+    custom_minimum_size.x = 112.0 * value
     queue_redraw()
 
 func present(held: Array, key_fifths: int, atlas) -> void:
@@ -63,10 +63,11 @@ func _draw() -> void:
     var half := (size.y - 4.0) / float(high - low)   # one diatonic step
     var gap := half * 2.0                             # one staff space
     var y := func(step: int) -> float: return 2.0 + float(high - step) * half
-    var left := 4.0 * ui_scale
-    var right := size.x - 4.0 * ui_scale
-    var line_ink := Design.STAFF_MUTED
-    var ink := Design.SCORE_INK
+    # The staff is only as wide as it needs and sits at the right edge.
+    var right := size.x - 2.0 * ui_scale
+    var left := maxf(2.0, right - gap * 11.5)
+    var line_ink := Color(Design.STAFF_INK, .78)
+    var ink := Design.STAFF_INK
     var width := maxf(1.0, gap * .09)
     for staff in [[30, 38], [18, 26]]:
         for step in range(staff[0], staff[1] + 1, 2):
@@ -74,8 +75,8 @@ func _draw() -> void:
     draw_line(Vector2(left, y.call(38)), Vector2(left, y.call(18)), line_ink, width * 1.4, true)
     var ready: bool = glyphs != null and glyphs.textures.has("clef_g")
     if ready:
-        glyphs.paint(self, "clef_g", left + gap * 1.6, y.call(32), gap, line_ink.lightened(.2), true)
-        glyphs.paint(self, "clef_f", left + gap * 1.6, y.call(24), gap, line_ink.lightened(.2), true)
+        glyphs.paint(self, "clef_g", left + gap * 1.6, y.call(32), gap, Color(ink, .9), true)
+        glyphs.paint(self, "clef_f", left + gap * 1.6, y.call(24), gap, Color(ink, .9), true)
     if notes.is_empty():
         return
     # Notes a step apart in a chord sit on either side of a shared stem

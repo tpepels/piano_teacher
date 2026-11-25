@@ -12,7 +12,6 @@ const GlowField := preload("res://mint_glow_field.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameCountIn := preload("res://game_countin.gd")
 const PLAYHEAD_FRACTION := preload("res://notation/shared/spacing_policy.gd").PLAYHEAD_FRACTION
-const StepTimeline := preload("res://score_step_timeline.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 const HeldNotesStaff := preload("res://held_notes_staff.gd")
 signal navigation_requested(destination: String)
@@ -23,7 +22,6 @@ var score_margin_box: MarginContainer
 var score_frame: Control
 var renderer: Control
 var playhead_glow: ColorRect
-var runway_steps: Control
 var feedback: Node # note-status ledger; strips paint its ink
 var effects: Control
 var phase_cue: Control
@@ -34,7 +32,6 @@ var _hand_cue_identity := ""
 var _hand_cue_previous_phase := ""
 var count_in: Control
 var keyboard: Control
-var keyboard_slot: Control
 var held_staff: Control
 var score_status_panel: CenterContainer
 var score_status_label: Label
@@ -45,10 +42,6 @@ var practice_note_feedback_panel: PanelContainer
 var practice_note_feedback_label: Label
 var _state: Dictionary = {}
 var _view_size := Vector2(800,600)
-var _marker_renderer
-var _marker_revision := -999999
-var _marker_hand := ""
-var _first_attack_offset := INF
 
 func _clear_progress_rail(child: Node) -> void:
     var layout: Variant = child.get("layout")
@@ -61,6 +54,18 @@ func _ready() -> void:
     practice_playback_banner.visible = false
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    practice_playback_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    # A message must stay readable where it crosses the score's ink.
+    var banner_style := StyleBoxFlat.new()
+    banner_style.bg_color = Color(Design.NIGHT, .92)
+    banner_style.border_color = Color(Design.AMBER, .45)
+    banner_style.set_border_width_all(1)
+    banner_style.set_corner_radius_all(10)
+    banner_style.content_margin_left = 18.0
+    banner_style.content_margin_right = 18.0
+    banner_style.content_margin_top = 8.0
+    banner_style.content_margin_bottom = 8.0
+    practice_playback_banner.add_theme_stylebox_override("normal", banner_style)
     var score_panel: PanelContainer = self
     # One continuous performance stage, not another grey website card.
     # Practice is one continuous score canvas, without a framed card.
@@ -92,7 +97,7 @@ func _ready() -> void:
     score_frame.add_child(effects)
     playhead_glow = GlowField.new()
     playhead_glow.name = "PlayheadBloom"
-    playhead_glow.configure(0,1.35,Color("#54F9B7"))
+    playhead_glow.configure(0,1.0,Color("#54F9B7"))
     playhead_glow.visible = false
     score_frame.add_child(playhead_glow)
     renderer = NativeNotation.new()
@@ -103,16 +108,6 @@ func _ready() -> void:
     renderer.visible = true
     score_frame.add_child(renderer)
 
-    runway_steps = StepTimeline.new()
-    runway_steps.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    runway_steps.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-    runway_steps.custom_minimum_size.y = 30
-    runway_steps.offset_left = 0
-    runway_steps.offset_right = 0
-    runway_steps.offset_top = 2
-    runway_steps.offset_bottom = 32
-    runway_steps.z_index = 8
-    score_frame.add_child(runway_steps)
     effects.surface_visible = false
     effects.z_index = 1
     feedback = preload("res://native_score_feedback.gd").new()
@@ -179,7 +174,8 @@ func _ready() -> void:
     practice_playback_banner.offset_left = 20.0
     practice_playback_banner.offset_right = -20.0
     practice_playback_banner.offset_top = 54.0
-    practice_playback_banner.offset_bottom = 112.0
+    practice_playback_banner.offset_bottom = 54.0
+    practice_playback_banner.grow_vertical = Control.GROW_DIRECTION_END
     score_frame.add_child(practice_playback_banner)
     # A stationary feedback badge stays visible even after a missed note
     # scrolls left out of view. It never covers the playing cursor.
@@ -203,25 +199,11 @@ func _ready() -> void:
     practice_note_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     practice_note_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_note_feedback_panel.add_child(practice_note_feedback_label)
-    # The hint keyboard has a permanent slot of constant height, so showing
-    # or hiding it never resizes the score (the staff must not jump).
-    keyboard_slot = Control.new()
-    keyboard_slot.name = "HintKeyboardSlot"
-    keyboard_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    keyboard_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    score_region.add_child(keyboard_slot)
+    # The hint keyboard and the held-notes staff sit at either end of the
+    # transport row (practice_chrome places them), not under the score.
     keyboard = HintKeyboard.new()
-    keyboard.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    keyboard_slot.add_child(keyboard)
-    keyboard_slot.custom_minimum_size.y = keyboard.custom_minimum_size.y
-    # What you are holding on the piano right now, beside the keyboard.
     held_staff = HeldNotesStaff.new()
-    held_staff.set_anchors_and_offsets_preset(Control.PRESET_LEFT_WIDE)
-    held_staff.offset_left = 8.0
-    held_staff.offset_right = 8.0 + held_staff.custom_minimum_size.x
     held_staff.visible = false
-    keyboard_slot.add_child(held_staff)
-    keyboard.side_reserve = held_staff.offset_right + 12.0
 
 
 func present_playhead_glow(score_ready: bool) -> void:
@@ -239,32 +221,6 @@ func present_playhead_glow(score_ready: bool) -> void:
     if playhead_glow.size != desired_size:
         playhead_glow.size = desired_size
 
-
-func present_runway_steps(state: Dictionary, global_visual: float,
-        next_start: float = INF, next_label: String = "",
-        next_density: float = NAN) -> void:
-    if runway_steps == null or renderer == null:
-        return
-    runway_steps.set_density(renderer.timeline.pixels_per_beat)
-    # The section introduction follows the first engraved ATTACK, not the
-    # barline of a measure which may still contain a written rest.
-    # Recompute only after a renderer/revision/active-hand change.
-    var hand: String = str(state.get("hand","both"))
-    if (_marker_renderer != renderer or
-            _marker_revision != renderer.timeline.revision or
-            _marker_hand != hand):
-        _marker_renderer = renderer
-        _marker_revision = renderer.timeline.revision
-        _marker_hand = hand
-        var model: Dictionary = renderer.timeline.model if renderer.timeline.model is Dictionary else {}
-        _first_attack_offset = StepTimeline.first_playable_beat(model,hand)
-    # A step title is attached to an already reserved source copy, never
-    # positioned from a READY-only camera or backend scroll offset.
-    # Read the online queue in place; never copy it on the frame path.
-    var current_start: float = renderer.first_strip_origin_after(
-        global_visual-.001-_first_attack_offset)+_first_attack_offset
-    runway_steps.present(state,global_visual,current_start,
-        next_start,next_label,next_density,global_visual)
 
 func present(state: Dictionary, busy: bool) -> void:
     _state = state.duplicate(true)
@@ -284,9 +240,30 @@ func present(state: Dictionary, busy: bool) -> void:
     keyboard.update_state(teaching)
     held_staff.visible = bool(state.get("loaded", false))
     held_staff.present(state.get("midi_held_pitches", []) if state.get("midi_held_pitches") is Array else [],
-        int(state.get("key_fifths", 0)), renderer.glyphs if renderer != null else null)
+        int(state.get("key_fifths", 0)), _loaded_glyphs())
 
 var _flow_message_id := -1
+
+# The keyboard and held-notes staff are placed by the practice chrome; free
+# them here when no row adopted them (a stage built on its own).
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_PREDELETE:
+        for node in [keyboard, held_staff]:
+            if is_instance_valid(node) and node.get_parent() == null:
+                node.free()
+var _glyph_atlas = null
+
+# The glyph atlas of whichever notation view has loaded the score's font
+# (views are replaced as stages are pre-engraved and promoted).
+func _loaded_glyphs():
+    if _glyph_atlas != null and _glyph_atlas.ready():
+        return _glyph_atlas
+    for view in score_frame.get_children():
+        var atlas = view.get("glyphs") if view.has_method("set_density_from_env") else null
+        if atlas != null and atlas.ready():
+            _glyph_atlas = atlas
+            return atlas
+    return null
 
 func _present_flow_message(flow: Dictionary) -> void:
     # One short message per step/tempo change (practice flow), shown once.
@@ -348,10 +325,7 @@ func _present_hand_cue(state: Dictionary) -> void:
 func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     _view_size = view_size
     keyboard.set_ui_scale(scale)
-    keyboard_slot.custom_minimum_size.y = keyboard.custom_minimum_size.y
     held_staff.set_ui_scale(scale)
-    held_staff.offset_right = held_staff.offset_left + held_staff.custom_minimum_size.x
-    keyboard.side_reserve = held_staff.offset_right + 12.0
     score_frame.custom_minimum_size.y = 135.0
     for side in ["left","right","top","bottom"]:
         score_margin_box.add_theme_constant_override("margin_" + side,1 if compact else 6)

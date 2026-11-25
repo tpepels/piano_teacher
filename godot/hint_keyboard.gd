@@ -79,7 +79,7 @@ func set_ui_scale(value: float) -> void:
     _update_compact_height()
 
 func _update_compact_height() -> void:
-    custom_minimum_size.y = (80 if get_viewport_rect().size.y < 720 else 92) * ui_scale
+    custom_minimum_size.y = (72 if get_viewport_rect().size.y < 720 else 84) * ui_scale
     _layout_keys()
 
 func update_state(teaching: Dictionary) -> void:
@@ -207,9 +207,9 @@ func _layout_keys() -> void:
     var total := width * white_total + gaps
     var x := (size.x - total) / 2.0
     _expected_label.position = Vector2(x, 0)
-    _expected_label.size = Vector2(maxf(0, total * .58 - 8), 20 * ui_scale)
-    _heard_label.position = Vector2(x + total * .58, 0)
-    _heard_label.size = Vector2(maxf(0, total * .42), 20 * ui_scale)
+    _expected_label.size = Vector2(maxf(0, total * .5 - 6), 20 * ui_scale)
+    _heard_label.position = Vector2(x + total * .5, 0)
+    _heard_label.size = Vector2(maxf(0, total * .5), 20 * ui_scale)
     if white_total == 0:
         queue_redraw()
         return
@@ -243,6 +243,7 @@ func _draw() -> void:
         var case: Rect2 = register.rect
         draw_rect(Rect2(case.position - Vector2(3, 0), Vector2(case.size.x + 6, 5.0 * ui_scale)), CASE, true)
         draw_rect(Rect2(case.position + Vector2(0, 5.0 * ui_scale - 2), Vector2(case.size.x, 2)), FELT, true)
+    var labels: Array = []
     for black in [false, true]:
         for pitch in _keys:
             var key: Dictionary = _keys[pitch]
@@ -273,17 +274,29 @@ func _draw() -> void:
             if bool(key.heard) and not _live_mode:
                 var heard_at := Vector2(rect.get_center().x, rect.position.y + rect.size.y * (.35 if black else .55))
                 draw_circle(heard_at, maxf(2.0, rect.size.x * .16), Design.SLATE if black else Design.CHARCOAL)
-            var label := ""
-            if bool(key.expected):
-                label = str(_expected[pitch])
-            elif bool(key.heard) or (_live_mode and _pressed.has(pitch)) or int(pitch) % 12 == 0:
-                label = _pitch_name(int(pitch))
-            if not label.is_empty() and not black:
-                var font_size := _ui_font(10)
-                var text_width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-                var position := Vector2(rect.get_center().x - text_width / 2, rect.end.y - 6)
-                draw_string(font, position, label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size,
-                    Color("#173B30") if bool(key.expected) else Color("#5E5A50"))
+            if not black:
+                if bool(key.expected):
+                    labels.append([0, rect, str(_expected[pitch]), Color("#173B30")])
+                elif bool(key.heard) or (_live_mode and _pressed.has(pitch)):
+                    labels.append([1, rect, _pitch_name(int(pitch)), Color("#3A372F")])
+                elif int(pitch) % 12 == 0:
+                    labels.append([2, rect, _pitch_name(int(pitch)), Color("#8A8577")])
+    # Names on the white keys, most important first; a name that would
+    # touch one already drawn is left out rather than overlapping it.
+    labels.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+    var taken: Array[Rect2] = []
+    var font_size := _ui_font(10)
+    for entry in labels:
+        var rect: Rect2 = entry[1]
+        var text: String = entry[2]
+        var text_width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+        var box := Rect2(rect.get_center().x - text_width / 2 - 1, rect.end.y - 6 - font_size,
+            text_width + 2, font_size + 2)
+        if taken.any(func(other: Rect2): return other.intersects(box)):
+            continue
+        taken.append(box)
+        draw_string(font, Vector2(box.position.x + 1, rect.end.y - 6), text,
+            HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, entry[3])
     for index in range(1, _registers.size()):
         var register_rect: Rect2 = _registers[index].rect
         var center := Vector2(register_rect.position.x - REGISTER_GAP / 2, register_rect.get_center().y)

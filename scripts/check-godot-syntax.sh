@@ -45,7 +45,6 @@ for script in \
   res://score_asset_queue.gd \
   res://score_asset_session.gd \
   res://score_runway.gd \
-  res://score_step_timeline.gd \
   res://demo_player.gd \
   res://library_catalog_coordinator.gd \
   res://midi_device_coordinator.gd; do

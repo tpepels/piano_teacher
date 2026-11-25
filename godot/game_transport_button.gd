@@ -28,7 +28,7 @@ func _ready() -> void:
     set_process(false)
     primary_glow = GlowField.new()
     primary_glow.name = "TransportBloom"
-    primary_glow.configure(1,1.05,Color("#187FBB"))
+    primary_glow.configure(1,.9,Color("#3DE0A8"))
     primary_glow.show_behind_parent = true
     primary_glow.visible = action_kind in ["play","pause"]
     add_child(primary_glow)
@@ -71,8 +71,13 @@ func _sync_primary_glow() -> void:
     if primary_glow == null:
         return
     primary_glow.visible = action_kind in ["play","pause"] and not disabled
-    primary_glow.position = Vector2(-49.0,-39.0)
-    primary_glow.size = size + Vector2(98.0,78.0)
+    # A thin rim: never as far as the neighbouring Listen key (8 px away).
+    var margin := Vector2(7.0,12.0)
+    primary_glow.position = -margin
+    primary_glow.size = size + margin*2.0
+    var glow_material := primary_glow.material as ShaderMaterial
+    glow_material.set_shader_parameter("quad_px",primary_glow.size)
+    glow_material.set_shader_parameter("box_half_px",size*.5)
 
 func _wake_motion() -> void:
     if disabled or not is_visible_in_tree():

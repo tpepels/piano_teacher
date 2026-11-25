@@ -68,14 +68,6 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
             stage.present_playhead_glow(score_ready and screen == "practice")
         # Score transport/ink reconciliation happens only in
         # PracticePresentationSession, before this visual-effects frame.
-        if stage.runway_steps != null:
-            # Stage labels/markers are bound to the same retained source
-            # world origin, not a second progression clock. Never hide this
-            # layer on every animation tick.
-            stage.runway_steps.visible = score_ready and \
-                bool(state.get("loaded",false))
-            if stage.runway_steps.visible:
-                stage.present_runway_steps(state,visual_beat)
     if stage.effects != null and moving:
         stage.effects.sync_beat(
             beat,maxi(1,int(round(float(state.get("count_in_bar_beats",4))))),

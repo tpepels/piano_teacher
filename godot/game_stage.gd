@@ -59,7 +59,7 @@ func _init() -> void:
 func _ready() -> void:
     rail_glow = GlowField.new()
     rail_glow.name = "ProgressBloom"
-    rail_glow.configure(2,1.16,Color("#4DFBB3"))
+    rail_glow.configure(2,.9,Color("#4DFBB3"))
     rail_glow.show_behind_parent = true
     rail_glow.visible = false
     add_child(rail_glow)
@@ -276,11 +276,6 @@ func _draw() -> void:
             # rail looked like a border. Keep the cue at the real play point.
             var played_x := clampf(segment_x+segment_width*filled,
                 segment_x,segment_x+segment_width)
-            var halo_width := minf(segment_width,78.0)
-            var halo_left := clampf(played_x-halo_width*.5,segment_x,
-                segment_x+segment_width-halo_width)
-            draw_rect(Rect2(halo_left,track_y-3.0,halo_width,12.0),
-                Color(Design.MINT,.11),true)
             draw_circle(Vector2(played_x,track_y+2.5),6.0,
                 Color(Design.MINT,.20))
             draw_circle(Vector2(played_x,track_y+2.5),3.0,Design.HIGHLIGHT)
@@ -295,5 +290,5 @@ func _draw() -> void:
         var illuminate: bool = is_finite(progress_light_position.x)
         rail_glow.visible = illuminate
         if illuminate:
-            rail_glow.position = progress_light_position-Vector2(46.0,25.0)
-            rail_glow.size = Vector2(92.0,50.0)
+            rail_glow.position = progress_light_position-Vector2(22.0,22.0)
+            rail_glow.size = Vector2(44.0,44.0)

@@ -217,10 +217,15 @@ func _draw_menu_key() -> void:
 	if not lit and not button_pressed:
 		draw_rect(key, Color(Design.STONE, .10 if disabled else .32), true)
 		return
-	# Soft bloom kept inside the button: three widening, fading layers.
+	# Soft bloom kept inside the button: three widening, fading, rounded
+	# layers (square ones showed hard corners).
 	for i in range(3, 0, -1):
-		var grow := float(i)*3.0
-		draw_rect(key.grow(grow), Color(tone, .07), true)
+		var grow := float(i)*2.5
+		var layer := StyleBoxFlat.new()
+		layer.bg_color = Color(tone, .05)
+		layer.set_corner_radius_all(int(grow+2.5))
+		layer.anti_aliasing = true
+		draw_style_box(layer, key.grow(grow))
 	draw_rect(key, tone, true)
 
 func _draw() -> void:
