@@ -7,6 +7,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 
+FREE_WITHOUT_PIANO = ("No piano connected. Switch on or plug in your MIDI piano; practice "
+                      "continues as soon as it is found. A new piano: choose it in Settings.")
+
+
 def notice(s: Mapping, moving: bool) -> str:
     """One problem line, only while the flow cannot continue by itself."""
     timeline = s.get("playback_timeline")
@@ -15,8 +19,9 @@ def notice(s: Mapping, moving: bool) -> str:
     teaching = s.get("teaching") if isinstance(s.get("teaching"), Mapping) else {}
     if s.get("mode") == "learn" and teaching.get("phase") == "disconnected" and not s.get("paused"):
         # Free waits for a piano: say so, or it looks as if it just stopped.
-        parts = [str(s.get(key) or "") for key in ("feedback", "next_action")]
-        return " ".join(part for part in parts if part)
+        # One fixed text: the feedback line may still describe an earlier
+        # step ("Preparing a short idea") while the piano is missing.
+        return FREE_WITHOUT_PIANO
     if moving or s.get("paused") or s.get("mode") == "learn":
         return ""
     parts = [str(s.get(key) or "") for key in ("feedback", "next_action")]

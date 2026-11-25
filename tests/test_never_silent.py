@@ -31,7 +31,9 @@ def why_still(state):
                 "Free waits for a piano without saying so"
         if phase in ("guided_wait", "introducing", "guided_complete", "loading", None):
             return ""
-        if phase == "ready":
+        if phase == "ready" and state.get("awaiting_score_revision") is None:
+            # (While Godot has yet to confirm the new score, Free starts
+            # on that confirmation.)
             return "Free is ready but never starts"
         return ""
     # Stopped in Tempo: a message, or a control that continues.
