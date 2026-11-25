@@ -213,7 +213,8 @@ and MIDI grading follow the same authorized musical deadline.
 ### Feedback
 
 Colour every played or missed note promptly: **green** for correct and **red**
-for wrong or missed. A wrong key also produces a red ghost at the played pitch.
+for wrong or missed. The glow around a notehead is the notehead's own
+colour. A wrong key also produces a red ghost at the played pitch.
 Listen lighting is ungraded and cannot award performance credit.
 
 A slightly early/late attack remains green. An onset error counts only outside
