@@ -151,3 +151,24 @@ def test_live_and_final_feedback_keep_the_same_authentic_source_heads(practice_s
     assert all(event["transport_id"] == state["transport_id"] and event["release_advisory"] for event in final)
     assert all(event["note_id"] == layout["attack_map"][event["source_id"]] for event in final)
     assert after["bpm"] > 40  # Short releases remain acceptable in normal flow.
+
+
+@pytest.mark.parametrize("travel", [0.0, 9.5])
+def test_free_holds_where_godot_can_draw_its_first_target(practice_session, travel):
+    """Godot reports, with score_ready, how far ahead a Free passage may
+    open (off-screen, after ink still on the staff). Python's Free hold is
+    never nearer, so the staff stops exactly at the drawn target (owner
+    report 2026-11-25: it stopped short of the line)."""
+    session = practice_session(bars=2)
+    command = session.command
+    session.command = lambda action, **values: command(action, **(
+        {**values, "free_travel_beats": travel} if action == "score_ready" else values))
+    session.finish_listen()
+    state = session.snapshot()
+    assert state["mode"] == "learn"
+    hold = state["musical_timeline"]["segments"][-1]
+    assert hold["kind"] == "hold"
+    bar = 4.0   # 4/4: Free always travels at least one bar
+    assert hold["world_start"] == pytest.approx(max(bar, travel))
+    deadline = state["playback_timeline"]["guided"]["deadline_at_ms"]/1000
+    assert deadline-session.clock.at == pytest.approx(max(bar, travel)*60/state["bpm"], abs=.01)

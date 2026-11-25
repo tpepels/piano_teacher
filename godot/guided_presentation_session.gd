@@ -9,6 +9,7 @@ var source_from_beat := 0.0
 var plan_id := ""
 var source_fingerprint := ""
 var source_revision := -1
+const MISPLACED_BEATS := .02
 
 func _init(flow) -> void:
     score_flow = flow
@@ -63,6 +64,12 @@ func publish_authorized_target(parsed: Dictionary, renderer,
     if not admitted:
         return
     var admitted_world: float = renderer.scheduled_plan_opening(key)
+    if is_finite(admitted_world) and admitted_world > target_world+MISPLACED_BEATS:
+        # Python holds the staff at target_world; a later opening would stop
+        # the staff short of the note (Python schedules from Godot's own
+        # free_travel_beats, so this means that contract was broken).
+        push_error("FREE_TARGET_MISPLACED: held at %.3f, drawn at %.3f" % [
+            target_world,admitted_world])
     if is_finite(admitted_world):
         world = admitted_world
         source_from_beat = float(guided["source_from_beat"])

@@ -346,12 +346,21 @@ func _stream_header_beats(opening: float) -> float:
 func placement_facts() -> Dictionary:
     return {"ink_ahead_beats":ink_ahead_beats(),"free_travel_beats":free_travel_beats()}
 
-## Beats a Free passage needs to come in from beyond the right edge (with
-## its clef header) to the playhead: Free opens there, never on screen.
+## Beats from the playhead to where a Free passage may open now (the same
+## rule admission applies), plus a little headroom for the moment between
+## this report and Python's schedule. Python's Free hold is never earlier,
+## so the staff always stops exactly where the target is drawn.
+const FREE_TRAVEL_HEADROOM_BEATS := .25
 func free_travel_beats() -> float:
     if not native_ready or not retained_ready():
         return 0.0
-    return clampf(_stream_right_beats()+_stream_header_beats(0.0)+.25,0.0,256.0)
+    var facts = _stream_facts(stream_world_beat)
+    var opening: float = Admission.earliest_opening(_stream_controller.queue.online,
+        facts.world,_stream_right_beats(),_stream_header_beats(0.0),
+        facts.density,facts.gap,facts.duration)
+    if not is_finite(opening):
+        return 0.0
+    return clampf(opening-facts.world+FREE_TRAVEL_HEADROOM_BEATS,0.0,256.0)
 
 ## Beats of printed ink still ahead of the playhead that a new take must
 ## follow (Python starts the next run's count-in after it).
@@ -511,6 +520,7 @@ func _new_paint_frame(clock: float, playhead_x: float, gap: float,
         active_hand,pass_index,pass_start)
 
 const StreamGeometry := preload("res://notation/native/stream_geometry.gd")
+const Admission := preload("res://score_stream_admission.gd")
 func _stream_facts(world: float):
     return StreamGeometry.new(native_ready and retained_ready(),world,
         timeline.pixels_per_beat,staff_gap(),timeline.sounding_duration_beats,

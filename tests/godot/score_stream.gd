@@ -143,6 +143,31 @@ func run() -> void:
             func(i): return str(i.get("kind","")) == "source").size() == 1,
         "The abandoned unplayed take makes way for the new one")
     abandon_canvas.free()
+    # Free (owner report 2026-11-25): Python holds the staff at the target
+    # it schedules from the view's reported travel distance; the passage
+    # must be drawn exactly there, on an empty staff and after a take.
+    for with_take in [false, true]:
+        var free_controller := Controller.new()
+        var free_pool := Pool.new()
+        var free_canvas := Control.new()
+        root.add_child(free_canvas)
+        free_pool.install(free_canvas,windows)
+        free_controller.bind_surface(free_canvas,free_pool,
+            func(_beat: float) -> Array[Vector2]: return windows)
+        var world := 0.0
+        if with_take:
+            free_controller.place_timeline_take(geometry(0.0),0.0,4.0,6.7,0.4,4.0)
+            acknowledge(free_controller,0.0,"piece|7|10|practice","take")
+            world = 0.5   # its notes are still ahead on the staff
+        var travel: float = Admission.earliest_opening(free_controller.queue.online,
+            world,6.7,0.4,100.0,20.0,4.0)-world+.25
+        var target: float = world+travel
+        var placed: bool = free_controller.schedule_recovery(geometry(world),world,0.0,
+            target,6.7,0.4,"free:%s" % str(with_take),false,0.0,false,true)
+        check(placed and absf(free_controller.scheduled_plan_opening(
+            "free:%s" % str(with_take))-target) < .0001,
+            "A Free target is drawn exactly where Python holds the staff (after a take: %s)" % str(with_take))
+        free_canvas.free()
     var flow := Flow.new()
     flow.backend_clock = func(): return float(Time.get_ticks_msec())
     var t0: float = float(Time.get_ticks_msec())

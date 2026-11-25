@@ -74,6 +74,14 @@ static func _future_start(passes: Array, world: float,
         start = maxf(start,occupied + REST_GAP_BEATS + header_beats)
     return start
 
+## The earliest world at which new music may open now: the same rule
+## every admission uses (off the right edge with its header, after any ink
+## still on the staff). Python schedules Free's first target from it.
+static func earliest_opening(passes: Array, world: float, right_beats: float,
+        header_beats: float, density: float, gap: float, score_duration: float) -> float:
+    return _future_start(passes,world,right_beats,header_beats,
+        maxf(1.0,density),gap,score_duration)
+
 # All graded reservation claims (ready, paused and active) use one
 # identity-checked traversal. Type-specific callers must not scan
 # stream_passes or calculate a different on-screen placement policy.
