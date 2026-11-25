@@ -180,3 +180,21 @@ def test_mastery_statistics_report_the_actual_two_target_success_rule(practice_s
     assert mastered[0]["accepted_eligible_target_attempts"] == 2
     assert mastered[0]["required_accepted_runs"] == 2
     assert mastered[0]["criterion_evidence_complete"]
+
+
+def test_a_damaged_progress_database_is_set_aside_and_the_app_starts(practice_session, tmp_path):
+    """A crash mid-write or a full disk can leave progress.db unreadable; the
+    app still starts, keeps the damaged file and says so."""
+    session = practice_session(bars=2)
+    session.close()
+    database = session.data/"progress.db"
+    for suffix in ("-wal", "-shm"):
+        database.with_name(database.name+suffix).unlink(missing_ok=True)
+    database.write_bytes(b"\x00not a database\x00"*512)
+    session.open()
+    kept = list(session.data.glob("progress.db.damaged-*"))
+    assert len(kept) == 1 and kept[0].read_bytes().startswith(b"\x00not a database")
+    notice = session.ask("library.catalog")["notice"]
+    assert notice.startswith("Saved progress could not be read")
+    assert kept[0].name in notice
+    assert session.snapshot()["screen"]["flash"]["text"] == notice

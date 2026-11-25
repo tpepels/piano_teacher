@@ -116,9 +116,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var flash: Dictionary = screen.get("flash",{}) if screen.get("flash") is Dictionary else {}
     if int(flash.get("id",0)) != _flash_id:
         # A short message about the key just played, shown once.
-        var first := _flash_id < 0
         _flash_id = int(flash.get("id",0))
-        if not first and not str(flash.get("text","")).is_empty():
+        if not str(flash.get("text","")).is_empty():
             present_message(str(flash["text"]))
     flow_status_label.visible = not status.is_empty()
     if flow_status_label.text != status:

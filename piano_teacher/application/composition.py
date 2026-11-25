@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+import time
+import sqlite3
 import os
 import threading
 
@@ -172,9 +174,29 @@ def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
         tempo_maps=r.tempo_map_cache)
 
 
+def _set_aside(path: Path) -> Path:
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    target = path.with_name(f"{path.name}.damaged-{stamp}")
+    for suffix in ("", "-wal", "-shm"):
+        source = path.with_name(path.name + suffix)
+        if source.exists():
+            source.replace(target.with_name(target.name + suffix))
+    return target
+
+
 def _persistence_and_settlement(r) -> None:
     """One SQLite connection: progress, evidence, learner state, settlement."""
-    r.progress = ProgressRepository(r._data_dir / "progress.db")
+    r.startup_notice = ""
+    try:
+        r.progress = ProgressRepository(r._data_dir / "progress.db")
+    except sqlite3.DatabaseError:
+        # A damaged database (a crash mid-write, a full disk) must not stop
+        # the app starting. Keep the file for recovery and start afresh.
+        damaged = _set_aside(r._data_dir / "progress.db")
+        r.progress = ProgressRepository(r._data_dir / "progress.db")
+        r.startup_notice = (f"Saved progress could not be read, so practice starts afresh. "
+                            f"The old file was kept as {damaged.name}.")
+        r.notices.flash(r.startup_notice)
     # Keep the public db handle for LearnerStateStore and existing clients.
     r.db = r.progress.db
     r.measurement = LearningCapture(r.progress.ledger, clock=r.now)

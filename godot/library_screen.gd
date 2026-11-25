@@ -195,6 +195,8 @@ func _render_message() -> void:
         library_message.text = _operation_message
     elif not issue.is_empty():
         library_message.text = issue
+    elif not str(library_info.get("notice", "")).is_empty():
+        library_message.text = str(library_info["notice"])
     elif pieces.is_empty():
         library_message.text = "Add MIDI or MusicXML files to your music folder."
     elif _visible_count == 0:
@@ -207,7 +209,8 @@ func _render_message() -> void:
         Color("#FF8B82") if not library_error.is_empty() else MUTED)
     library_message.visible = _viewport_width >= 1100.0 or not library_error.is_empty() \
         or not _request_error.is_empty() or not _operation_message.is_empty() \
-        or not issue.is_empty() or _visible_count == 0
+        or not issue.is_empty() or _visible_count == 0 \
+        or not str(library_info.get("notice", "")).is_empty()
 
 func _last_library_entry() -> Dictionary:
     var identifier: String = str(library_info.get("last_piece", ""))
