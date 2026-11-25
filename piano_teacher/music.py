@@ -192,6 +192,9 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     for track_idx, track in enumerate(midi.tracks):
         tick = 0
         open_notes: dict[tuple[int, int], deque[tuple[int, int, int]]] = {}
+        # Unmatched releases by key, with their tick: a zero-length note
+        # (a MusicXML grace note, for one) may be written release-first.
+        orphan_release_at: dict[tuple[int, int], int] = {}
         for ordinal, msg in enumerate(track):
             tick += msg.time
             if msg.type == "track_name":
@@ -210,6 +213,13 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
                 continue  # percussion is not piano practice material
             key = (msg.channel, msg.note)
             if msg.type == "note_on" and msg.velocity > 0:
+                if orphan_release_at.get(key) == tick:
+                    # Its release came first on this same tick: the pair has
+                    # no sounding duration, exactly like an on/off pair below.
+                    del orphan_release_at[key]
+                    discarded_orphan_releases -= 1
+                    discarded_zero_duration += 1
+                    continue
                 if key in open_notes:
                     overlap_warnings.append(
                         f"Ambiguous overlapping MIDI notes on track {track_idx}, "
@@ -244,6 +254,7 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
                 # releases from pedal/voice processing. With no corresponding
                 # attack they cannot sound or affect a practice exercise.
                 discarded_orphan_releases += 1
+                orphan_release_at[key] = tick
         if open_notes:
             channel, pitch = next(iter(open_notes))
             raise ValueError(f"unterminated MIDI note on track {track_idx}, channel {channel}, pitch {pitch}")

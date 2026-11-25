@@ -292,8 +292,9 @@ def test_a_configured_end_key_in_the_exercise_remains_a_musical_note(practice_se
     session.reach_free_target()
     session.strike(72)
     assert session.snapshot()["teaching"]["target_index"] == 1
+    session.tick(.2)
     session.strike(79)
-    session.tick()
+    session.tick(.1)
     state = session.ready_score()
     assert state["flow"]["step"] == "tempo" and not state["paused"]
     assert state["bpm"] == 40

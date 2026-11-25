@@ -34,7 +34,7 @@ def load_musicxml(path: Path) -> Piece:
     """Written score -> MIDI timeline -> the canonical MIDI importer.
 
     Each staff becomes one MIDI track, so a grand staff keeps its two hands.
-    Repeats are played as written (not expanded). Written fingers are kept
+    Repeats are expanded as written; malformed ones are read straight through. Written fingers are kept
     as authored fingering (matched by onset and pitch; grace notes, which
     the timeline drops, keep none).
     """
@@ -44,7 +44,14 @@ def load_musicxml(path: Path) -> Piece:
         score = converter.parse(str(path), format="musicxml")
     except Exception as exc:  # music21 raises many unrelated types
         raise ValueError(f"Cannot read MusicXML: {exc}") from exc
-    midi = streamToMidiFile(score)
+    from music21.repeat import ExpanderException
+    try:
+        midi = streamToMidiFile(score)
+    except ExpanderException:
+        # Repeats that cannot be expanded (a start repeat never closed, a
+        # D.C. with no Fine) would leave the piece unopenable. Read it once
+        # straight through instead, as the notes are written.
+        midi = streamToMidiFile(_without_repeats(score))
     with tempfile.TemporaryDirectory() as folder:
         converted = Path(folder) / f"{path.stem}.mid"
         midi.open(str(converted), "wb")
@@ -54,6 +61,22 @@ def load_musicxml(path: Path) -> Piece:
             midi.close()
         piece = load_midi(converted)
     return replace(piece, authored_fingerings=_authored_fingerings(score, piece))
+
+
+def _without_repeats(score):
+    from music21 import bar, repeat
+    plain = score.coreCopyAsDerivation("withoutRepeats")
+    for measure in plain.recurse().getElementsByClass("Measure"):
+        for side in ("leftBarline", "rightBarline"):
+            if isinstance(getattr(measure, side), bar.Repeat):
+                setattr(measure, side, bar.Barline("regular"))
+        for mark in list(measure.getElementsByClass(repeat.RepeatExpression)):
+            measure.remove(mark)
+    from music21 import spanner
+    for site in plain.recurse(includeSelf=True, streamsOnly=True):
+        for bracket in list(site.getElementsByClass(spanner.RepeatBracket)):
+            site.remove(bracket)
+    return plain
 
 
 def _authored_fingerings(score, piece: Piece) -> tuple[tuple[str, int], ...]:

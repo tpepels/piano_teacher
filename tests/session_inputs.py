@@ -1,6 +1,7 @@
 """Inputs for real engine scenarios; no grading or progression decisions."""
 from dataclasses import dataclass
 import json
+import shutil
 import time
 
 import mido
@@ -114,12 +115,17 @@ def take(state):
 
 
 class PracticeSession:
-    def __init__(self, directory, monkeypatch, musicxml=False, **midi_options):
+    def __init__(self, directory, monkeypatch, musicxml=False, source=None, **midi_options):
         self.clock = InputClock()
         self.music = directory/"music"
         self.music.mkdir(parents=True)
-        self.path = (write_musicxml(self.music/"lesson.musicxml", **midi_options) if musicxml
-                     else write_midi(self.music/"lesson.mid", **midi_options))
+        if source is not None:
+            # A real piece from tests/fixtures/pieces, copied as the library.
+            self.path = self.music/source.name
+            shutil.copyfile(source, self.path)
+        else:
+            self.path = (write_musicxml(self.music/"lesson.musicxml", **midi_options) if musicxml
+                         else write_midi(self.music/"lesson.mid", **midi_options))
         self.data = directory/"learner"
         self.monkeypatch = monkeypatch
         monkeypatch.delenv("PIANO_TEACHER_SOUNDFONT", raising=False)
@@ -238,11 +244,14 @@ class PracticeSession:
             if state["mode"] != "learn" or state["revision"] != initial["revision"]:
                 return state
             assert teaching and teaching["expected_notes"], state
+            # A hand needs a moment between targets; keys a few ms apart
+            # are one movement and find nothing.
+            self.clock.at += .15
             for target in teaching["expected_notes"]:
                 self.key(target["pitch"])
             for target in teaching["expected_notes"]:
                 self.key(target["pitch"], False)
-            self.tick()
+            self.tick(.1)   # the last target counts once its movement ends
         raise AssertionError("Free did not finish after its published targets")
 
     def select(self, first=None, last=None, hand="right", *, final=False):

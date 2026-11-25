@@ -14,6 +14,10 @@ from .music import note_name
 @dataclass(frozen=True)
 class TeachingConfig:
     chord_window_seconds: float = .25
+    # Keys pressed this close together are one movement of the hand. A
+    # target is found only by a movement of its own keys, so a cluster or a
+    # sweep over the keyboard that happens to include them finds nothing.
+    gesture_seconds: float = .08
     stall_seconds: float = 3.0
     persistent_hints: bool = False
 
@@ -39,6 +43,8 @@ class TeachingController:
         self._hint_reason = ""
         self._hint_used = False
         self._waiting_since = 0.0
+        self._last_press_at = float("-inf")
+        self._found: dict | None = None
 
     def bind(self, *, stage_key: str, revision: int, variant: ExerciseVariant,
              fragment_start: float, fragment_end: float, now: float,
@@ -73,6 +79,8 @@ class TeachingController:
         self._hint_reason = ""
         self._hint_used = False
         self._waiting_since = now
+        self._last_press_at = float("-inf")
+        self._found = None
 
     def start(self, *, now: float):
         if self._connected and self._phase in ("introducing", "ready"):
@@ -85,6 +93,8 @@ class TeachingController:
             self._event_floor = now
             self._hint_reason = ""
             self._hint_used = self._persistent_hints
+            self._last_press_at = float("-inf")
+            self._found = None
 
     def pause(self, *, now: float):
         if self._phase not in ("guided_wait", "introducing", "disconnected"):
@@ -169,12 +179,28 @@ class TeachingController:
             return
         fresh = not any(held_pitch == pitch for _, held_pitch in self._keys)
         self._keys.add(key)
-        if not fresh or self._phase != "guided_wait":
+        if not fresh or self._phase not in ("guided_wait", "guided_complete"):
+            return
+        previous_press, self._last_press_at = self._last_press_at, at
+        found = self._found
+        if (found is not None and at - found["at"] <= self.config.gesture_seconds
+                and pitch not in found["pitches"]):
+            # Another key in the same movement: the target was not found on
+            # its own after all. Take it back and show it as wrong.
+            self._target_index -= 1
+            self._assisted_count -= int(found["assisted"])
+            self._phase = "guided_wait"
+            self._found = None
+        elif self._phase != "guided_wait":
             return
         self.tick(now=at)
         expected = self._targets[self._target_index]
         required = {note["pitch"] for note in expected}
-        if pitch not in required:
+        if pitch not in required or (not self._candidates
+                and at - previous_press <= self.config.gesture_seconds):
+            # A wrong key, or the first key of this target arriving in the
+            # same movement as other keys.
+            self._candidates.clear()
             self._hint_reason = "wrong_note"
             self._hint_used = True
             for note in expected:
@@ -193,6 +219,7 @@ class TeachingController:
                     "status": "assisted" if self._hint_used else "correct",
                     "hint_used": self._hint_used,
                 }
+            self._found = {"at": at, "pitches": required, "assisted": self._hint_used}
             self._target_index += 1
             self._assisted_count += int(self._hint_used)
             self._candidates.clear()
@@ -218,9 +245,13 @@ class TeachingController:
 
     def snapshot(self, *, now: float) -> dict:
         active_hint = self._phase == "guided_wait" and (self._persistent_hints or bool(self._hint_reason))
+        # The last target only counts once its movement has ended.
+        settled = self._found is None or now - self._found["at"] > self.config.gesture_seconds
+        complete = self._phase == "guided_complete" and settled
         return {
-            "phase": self._phase, "revision": self._revision,
-            "completed": self._phase == "guided_complete", "mastery_eligible": False,
+            "phase": self._phase if complete or self._phase != "guided_complete" else "guided_wait",
+            "revision": self._revision,
+            "completed": complete, "mastery_eligible": False,
             "assisted_count": self._assisted_count,
             "completion": ("assisted" if self._assisted_count else "unassisted")
                 if self._phase == "guided_complete" else None,

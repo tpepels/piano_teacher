@@ -56,7 +56,11 @@ window to an earlier two-bar guided unit.
   travelling in, the prompt says to wait and a key earns nothing.
 - A correct note turns green; the staff moves to the next target.
 - A wrong note turns the intended note red, shows the keyboard hint and waits
-  for the correct key. No keyboard appears simply because the learner waits.
+  for the correct key.
+- A target is found only by its own keys. Keys pressed within 80 ms of each
+  other are one movement of the hand: a cluster, a sweep over the keyboard or
+  a smudge from a neighbouring key that includes the right note finds nothing
+  and turns the target red. No keyboard appears simply because the learner waits.
 - After every target has been found, Tempo begins automatically.
 
 ### Tempo

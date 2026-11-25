@@ -37,7 +37,7 @@ def test_listen_then_free_waits_for_every_note_of_the_four_bar_window(practice_s
     assert waiting["teaching"]["hint_reason"] != "wrong_note"
     for pitch in (72,79,73,80):
         session.strike(pitch)
-        session.tick()
+        session.tick(.2)   # a hand's moment between targets
     halfway = session.snapshot()
     assert halfway["flow"]["step"] == "free"
     assert halfway["teaching"]["target_index"] == 4
@@ -60,6 +60,7 @@ def test_wrong_free_key_waits_and_correction_does_not_credit_future_notes(practi
     assert wrong["target_index"] == 0
     assert wrong["hint_reason"] == "wrong_note"
     assert {mark["id"] for mark in wrong["note_feedback"]} == {first["id"]}
+    session.tick(.2)   # a separate movement, not a smudge into the right key
     session.strike(first["pitch"])
     corrected = session.snapshot()["teaching"]
     assert corrected["target_index"] == 1
