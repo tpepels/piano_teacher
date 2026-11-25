@@ -92,6 +92,6 @@ func record(state: Dictionary, now_ms: int, renderer,
     if now_ms - _debug_beat_ms >= 1000:
         _debug_beat_ms = now_ms
         _debug_file.store_line("%s STAFF heads=%d world=%.2f passes=%d keyboard=%s staff=%s visible=%s" % [
-            stamp, heads, world, renderer.stream_passes.size() if renderer != null else -1,
+            stamp, heads, world, (renderer.get("stream_passes") as Array).size() if renderer != null and renderer.get("stream_passes") is Array else -1,
             str(keyboard_visible), staff, str(renderer.visible if renderer != null else false)])
     _debug_file.flush()

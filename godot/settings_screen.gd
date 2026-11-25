@@ -365,7 +365,7 @@ func _build_learning_controls(parent: VBoxContainer) -> void:
     delete_piece_button.disabled = true
     actions.add_child(delete_piece_button)
     delete_learner_button = _button("Delete all history", func():
-        delete_learner_dialog.popup_centered(), false, "danger")
+        _popup_confirmation(delete_learner_dialog), false, "danger")
     actions.add_child(delete_learner_button)
     history_actions_body.add_child(_label(
         "Deleting history also deletes saved progress. Your music files stay.",
@@ -379,26 +379,61 @@ func _build_learning_controls(parent: VBoxContainer) -> void:
     export_dialog.file_selected.connect(func(path: String):
         history_export_requested.emit(path, export_detail_toggle.button_pressed))
     add_child(export_dialog)
-    delete_piece_dialog = ConfirmationDialog.new()
-    delete_piece_dialog.title = "Delete current piece history?"
-    delete_piece_dialog.dialog_text = (
-        "Permanently delete this piece's learning history and all saved learning progress " +
-        "and generator feedback? Source MIDI and device settings remain. " +
-        "Previously exported files are outside this deletion.")
-    delete_piece_dialog.ok_button_text = "Delete piece history"
+    delete_piece_dialog = _confirmation("Delete this piece's history?",
+        "This permanently deletes the learning history and saved progress of " +
+        "this piece. Your music files, settings and earlier exports stay.",
+        "Delete piece history")
     delete_piece_dialog.confirmed.connect(func():
         piece_history_delete_requested.emit(_deletion_fingerprint))
     add_child(delete_piece_dialog)
-    delete_learner_dialog = ConfirmationDialog.new()
-    delete_learner_dialog.title = "Delete all learner history?"
-    delete_learner_dialog.dialog_text = (
-        "Permanently delete all local learning history and learning progress, including " +
-        "mastery, tempo credit, guidance and generator feedback? A new local learner " +
-        "starts on next use. Source MIDI and device settings remain. " +
-        "Previously exported files are outside this deletion.")
-    delete_learner_dialog.ok_button_text = "Delete all learner history"
+    delete_learner_dialog = _confirmation("Delete all history?",
+        "This permanently deletes all learning history and saved progress on " +
+        "this computer, for every piece. Your music files, settings and earlier " +
+        "exports stay.",
+        "Delete all history")
     delete_learner_dialog.confirmed.connect(func(): learner_history_delete_requested.emit())
     add_child(delete_learner_dialog)
+
+## A confirmation in the app's own look whose text wraps: it is never wider
+## than the window (a long line made the box run off the screen).
+func _confirmation(title: String, text: String, ok_text: String) -> ConfirmationDialog:
+    var dialog := ConfirmationDialog.new()
+    dialog.title = title
+    dialog.dialog_text = text
+    dialog.dialog_autowrap = true
+    dialog.ok_button_text = ok_text
+    dialog.theme = Design.create()
+    var panel := StyleBoxFlat.new()
+    panel.bg_color = Design.PANEL_RECESSED
+    panel.set_content_margin_all(22)
+    dialog.add_theme_stylebox_override("panel", panel)
+    # The window frame and title bar in the same dark look, not Godot grey.
+    var frame := StyleBoxFlat.new()
+    frame.bg_color = Design.PANEL_RECESSED
+    frame.border_color = Color(Design.CORAL, .55)
+    frame.set_border_width_all(1)
+    frame.set_corner_radius_all(12)
+    frame.expand_margin_top = 40
+    frame.expand_margin_left = 2
+    frame.expand_margin_right = 2
+    frame.expand_margin_bottom = 2
+    for name in ["embedded_border", "embedded_unfocused_border"]:
+        dialog.add_theme_stylebox_override(name, frame)
+    dialog.add_theme_color_override("title_color", INK)
+    dialog.get_label().add_theme_color_override("font_color", INK)
+    dialog.get_ok_button().add_theme_color_override("font_color", Design.CORAL)
+    return dialog
+
+func _popup_confirmation(dialog: ConfirmationDialog) -> void:
+    var view: Vector2 = get_viewport_rect().size
+    var width: int = int(minf(620.0*ui_scale, view.x*.86))
+    dialog.size = Vector2i(width, 0)
+    dialog.popup_centered(Vector2i(width, 0))
+    # After the wrapped text is laid out at this width, shrink the box to
+    # its content and centre it inside the window.
+    await get_tree().process_frame
+    dialog.size = Vector2i(width, 0)
+    dialog.position = Vector2i((Vector2(view) - Vector2(dialog.size))*.5)
 
 func _browse_history_export() -> void:
     if not _history_default_path.is_empty():
@@ -419,7 +454,7 @@ func _confirm_piece_history_delete() -> void:
     if _current_fingerprint.is_empty() or _history_busy:
         return
     _deletion_fingerprint = _current_fingerprint
-    delete_piece_dialog.popup_centered()
+    _popup_confirmation(delete_piece_dialog)
 
 func present_learning_status(values: Dictionary) -> void:
     history_summary_label.text = str(values.get("summary", "Local learning history"))
