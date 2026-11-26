@@ -73,3 +73,6 @@ Uploaded Python run: 215 passed, 140 failed, 3 warnings. No commit SHA in log; i
 
 - Reduce further scrolling frame overhead.
   - **Implemented; verification pending:** Share cached exact-time timeline calculations across source beat, world position, rate and holds; index take IDs when a timeline is published; measure monotonic offsets once per run/process instead of every state poll. Fully visible retained clips preserve their exact width and local source position during translation. No smoothing filter, delayed MIDI or secondary clock. Frame diagnostics remain available; target-display measurement required.
+
+- Smooth the practice background and playhead glow (visible concentric colour bands).
+  - **Implemented; visual verification pending (2026-11-26):** Dedicated practice backdrop shader with a continuous teal gradient and static sub-code-value screen-space dithering; softer elongated capsule playhead bloom with a pixel-sized core/halo, smoothly feathered ends, stationary alpha dithering and no playhead brightness pulse. Existing placement, notation and other glow shapes remain unchanged. No extra viewport, texture or postprocessing pass. Verify on the target OpenGL display.

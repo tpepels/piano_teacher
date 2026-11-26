@@ -329,18 +329,8 @@ func _build_interface() -> void:
     practice_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     practice_backdrop.color = Color.WHITE
     practice_backdrop.visible = false
-    var backdrop_shader := Shader.new()
-    backdrop_shader.code = """shader_type canvas_item;
-void fragment() {
-    vec2 offset = (UV - vec2(0.46,0.47)) * vec2(1.14,0.98);
-    float vignette = smoothstep(0.10,0.86,length(offset));
-    vec3 center = vec3(0.004,0.120,0.111);
-    vec3 edge = vec3(0.002,0.062,0.059);
-    COLOR = vec4(mix(center,edge,vignette),1.0);
-}
-"""
     var backdrop_material := ShaderMaterial.new()
-    backdrop_material.shader = backdrop_shader
+    backdrop_material.shader = preload("res://practice_backdrop.gdshader")
     practice_backdrop.material = backdrop_material
     add_child(practice_backdrop)
 

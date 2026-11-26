@@ -179,6 +179,7 @@ func present_playhead_glow(score_ready: bool) -> void:
         playhead_glow.position = desired_position
     if playhead_glow.size != desired_size:
         playhead_glow.size = desired_size
+        (playhead_glow.material as ShaderMaterial).set_shader_parameter("quad_px",desired_size)
 
 
 func present(state: Dictionary, busy: bool) -> void:
