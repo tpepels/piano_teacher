@@ -18,6 +18,9 @@ func present(message: String, path: String, queued_library_failed: bool) -> void
     if path == "sight_reading.start" and sight_reading_view != null:
         sight_reading_view.present_message(message)
         return
+    if path == "fingering.correct":
+        practice_view.present_message("Cannot update fingering: " + message)
+        return
     if path == "library.open":
         library_view.present_open_status("Cannot open score: " + message, true)
     elif queued_library_failed:

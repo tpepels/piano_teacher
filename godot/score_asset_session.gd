@@ -38,6 +38,7 @@ var _rendered_hand := ""
 var _state: Dictionary = {}
 var _layout: Dictionary = {}
 var _generation := 0
+var _annotation_version := -1
 # Retry is a genuine replay of the same source/layout request. If a
 # deterministic native failure repeats unchanged, surface that fact and
 # keep Browse visible rather than presenting an identical mysterious Retry.
@@ -68,6 +69,7 @@ func replace_renderer(next_renderer) -> void:
             _renderer.is_connected("retained_ink_compiled",_finish_native_score):
         _renderer.disconnect("retained_ink_compiled",_finish_native_score)
     _renderer = next_renderer
+    _annotation_version = -1
     if is_instance_valid(next_renderer) and \
             next_renderer.has_signal("retained_ink_compiled") and \
             not next_renderer.is_connected("retained_ink_compiled",_finish_native_score):
@@ -143,10 +145,27 @@ func update_context(state: Dictionary, now_ms: int) -> void:
         _preparing_since_ms = now_ms if _loaded else -1
         if _loaded:
             request_layout()
+    _apply_fingering_annotations()
     if str(_state.get("phase","")) == "loading" and is_ready():
         # A busy action port may drop an intent. The next backend loading poll
         # repeats it, just as the accepted snapshot presentation path does.
         action_requested.emit({"action":"score_ready","revision":revision})
+
+func _apply_fingering_annotations() -> void:
+    if not is_instance_valid(_renderer) or not bool(_renderer.native_ready) or \
+            layout_revision != revision or native_score_piece_fingerprint != _fingerprint:
+        return
+    var fingering: Variant = _state.get("fingering")
+    if not fingering is Dictionary or not fingering.get("annotations") is Dictionary:
+        return
+    var version: int = int(fingering.get("annotation_version",-1))
+    if version <= _annotation_version:
+        return
+    _renderer.annotations.apply_assignments(fingering["annotations"])
+    _annotation_version = version
+    if is_instance_valid(_renderer.retained_annotations):
+        _renderer.retained_annotations.queue_redraw()
+    _renderer.queue_redraw()
 
 func layout_snapshot() -> Dictionary:
     return _layout.duplicate(true)
@@ -299,6 +318,8 @@ func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
     _rendered_stage_key = _stage_key
     _rendered_hand = str(_state.get("hand",""))
     native_score_piece_fingerprint = _fingerprint
+    _annotation_version = -1
+    _apply_fingering_annotations()
     _retained_started_ms = now_ms
     _renderer.visible = true
     if is_instance_valid(_feedback):
@@ -343,6 +364,7 @@ func _reset_assets() -> bool:
     # Supersede both in-flight operations immediately on score change or Retry.
     # The queue cancels the old adapter when its replacement is dispatched.
     _requests.clear()
+    _annotation_version = -1
     if not _hide_renderer():
         # Keep exposed native ink and its feedback binding alive. No new
         # atlas/model may overwrite the source whose journal could not close.

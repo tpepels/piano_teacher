@@ -114,7 +114,7 @@ class SourcePreparationSession:
         current = self._require_current(corrected.identity,piece=piece,
                                         fingerprint=fingerprint)
         return FingeringInstall(replace(current,fingering_plan=corrected.fingering),
-                                score_revision+1)
+                                score_revision)
 
     def prepare(self, source: Path, *, preprocessing, fingering,
                 progress, state_lock, importer,

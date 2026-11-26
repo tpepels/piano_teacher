@@ -49,7 +49,13 @@ class ScoreSelection:
     @property
     def identity(self) -> tuple:
         phrase = self.phrase
-        return (id(self.piece), self.fingerprint, self.stage_key, self.hand,
+        # Replacing only the derived fingering plan must not invalidate
+        # admitted geometry. All authored inputs retain their identity.
+        piece = self.piece
+        return (id(piece.notes), id(piece.phrases), piece.title, piece.bpm,
+                piece.bar_boundaries, piece.time_signatures, piece.key_signatures,
+                piece.clef_changes, piece.barlines, piece.source_format,
+                self.fingerprint, self.stage_key, self.hand,
                 self.transformed_rhythm, self.revision,
                 phrase.first_bar, phrase.last_bar, phrase.start, phrase.end)
 
@@ -69,6 +75,7 @@ class ScoreArtifacts:
             self._notation_model: dict | None = None
             self._model: dict | None = None
             self._projected_model: dict | None = None
+            self._projected_fingering = None
             self._prepared_layout_identity: tuple | None = None
             self._prepared_layout: dict | None = None
             # (identity, layout, source_bpm, cache_key), replaced atomically.
@@ -118,9 +125,10 @@ class ScoreArtifacts:
         # selected stage and revision; return isolated snapshots to consumers.
         with self._model_lock:
             source = self.source_model(selected)
-            if self._projected_model is None:
-                self._projected_model = project_model(deepcopy(source),
-                    selected.piece.fingering_plan)
+            fingering = selected.piece.fingering_plan
+            if self._projected_model is None or self._projected_fingering is not fingering:
+                self._projected_model = project_model(deepcopy(source), fingering)
+                self._projected_fingering = fingering
             return deepcopy(self._projected_model)
 
     def bundle(self, selected: ScoreSelection) -> dict:

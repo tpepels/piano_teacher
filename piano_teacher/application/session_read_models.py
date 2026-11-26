@@ -12,6 +12,8 @@ from .control_projection import project_controls
 from .screen_projection import project_screen
 from ..practice_flow_course import checkpoints
 from ..live_feedback import live_assessment
+from ..notation.display_envelope import display_envelope
+from ..music import source_note_id
 from .session_snapshot_builder import SnapshotValues, capture as capture_session_snapshot
 from ..state_projection import SessionSnapshot, project_session_state
 
@@ -196,6 +198,43 @@ class SessionReadModels:
         self.extras = extras
         self.lock = lock
         self.clock = clock
+        self._annotation_plan = None
+        self._annotation_key = None
+        self._annotation_version = 0
+        self._annotation_values = {}
+
+    def _publish_annotations(self, state: dict) -> None:
+        """A compact, source-bound overlay, independent of physical score ink.
+
+        Cache the display-window assignments across state polls. A correction
+        may recompute adjacent fingers, so send the complete window, including
+        explicit absence via omission, rather than patching just the clicked digit.
+        """
+        plan = self.lesson.plan
+        fingering = plan.piece.fingering_plan if plan is not None else None
+        if fingering is None or not isinstance(state.get("fingering"), dict):
+            self._annotation_plan = None
+            self._annotation_key = None
+            self._annotation_values = {}
+            return
+        selected = self.score.selection()
+        key = selected.identity
+        if self._annotation_plan is not fingering or self._annotation_key != key:
+            envelope = display_envelope(selected.piece, selected.phrase,
+                                        transformed=selected.transformed_rhythm)
+            values = {}
+            for i, note in enumerate(envelope.phrase.notes):
+                source = source_note_id(note, i)
+                assignment = fingering.assignments.get(source)
+                if assignment is not None and assignment.finger is not None:
+                    values[source] = {"source_id": source, "finger": assignment.finger,
+                                      "hand": assignment.hand, "origin": assignment.origin}
+            self._annotation_plan = fingering
+            self._annotation_key = key
+            self._annotation_version += 1
+            self._annotation_values = values
+        state["fingering"].update(annotation_version=self._annotation_version,
+                                  annotations=self._annotation_values)
 
     def _committed_base(self, now: float) -> tuple[dict, dict | None, dict]:
         """Project the same locked transport/lesson state for all consumers.
@@ -230,6 +269,7 @@ class SessionReadModels:
             state, pending, timeline = self._committed_base(now)
             facts = self.presentation.score_facts(pending,timeline)
             self.score.publish_score_state(state, facts)
+            self._publish_annotations(state)
             self.extras.add(state, now)
             state["controls"] = project_controls(state)
             accuracy, live = self.extras.performance_accuracy(now)

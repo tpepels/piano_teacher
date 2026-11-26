@@ -86,8 +86,6 @@ class SourceInstallation:
             fingerprint=self.lesson.fingerprint,
             score_revision=self.lesson.revision)
         self.listen_outcomes.apply_failure()
+        # Fingering is an annotation on immutable original notes. Keep the
+        # score revision, admitted layout, take and transport untouched.
         selected.piece = installed.piece
-        self.score.invalidate_artifacts()
-        self.lesson.publish_revision(installed.score_revision)
-        if self.transport.source_revised(self.lesson.revision):
-            self.listen.retarget_score(self.lesson.revision)

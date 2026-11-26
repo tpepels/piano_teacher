@@ -41,6 +41,22 @@ func clear() -> void:
     if fingering_popup != null:
         fingering_popup.hide()
 
+func apply_assignments(values: Dictionary) -> void:
+    # ScoreIndex's ordered events and expression index share the semantic
+    # event dictionaries. Only annotation fields change; no retained ink,
+    # source-note IDs or musical positions are rebuilt.
+    for event in score_layout.ordered_events:
+        if str(event.get("kind","")) != "note" or not bool(event.get("is_attack",false)):
+            continue
+        var source: String = str(event.get("source_id",""))
+        if source.is_empty():
+            continue
+        if values.has(source):
+            event["fingering"] = values[source].duplicate(true)
+        else:
+            event.erase("fingering")
+    clear()
+
 func layout_fingerings(gap: float, play_from_beat: float = 0.0) -> void:
     fingering_layout.clear()
     fingering_placement_issues.clear()
