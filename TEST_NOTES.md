@@ -35,4 +35,11 @@ These notes are filled by Tom after he plays on the piano. These serve as input 
   - **Implemented; verification pending (2026-11-26):** While paused, fresh C in any octave resumes; the attack and release are consumed before grading. Main transport button shows a miniature piano-key C hint; the advanced Pause menu shows C as well.
 
 - Allow playing warm-up notes in the rests and count-ins between timed takes without registering or showing a message.
-  - **Implemented; verification pending (2026-11-26):** Ordinary attacks outside actual graded timeline segments are excluded before deferral, recording and score feedback; physical held-key display and explicit transport shortcuts remain available.
+  - **Revised; verification pending (2026-11-26):** Ordinary attacks in inter-take rests and count-in outside the existing early matching window appear as neutral fading glyphs only. No assessment or notification. The new measure-tail rule also applies within takes.
+
+- Ignore new attacks in the held-note or rest tail after each measure's last attack; preserve the existing first-note and late-note timing tolerance.
+  - **Implemented; verification pending (2026-11-26):** Uses selected-hand attack times and authored measure boundaries on the grading clock. Internal rests remain graded; releases still reach the recorder. First attacks can be matched early, and admitted current-take notes bypass premature deferral. Five measure admission regression tests added.
+- Redesign the large yellow notification banner so it is readable close to the music.
+  - **Implemented; visual verification pending (2026-11-26):** Compact mint text aligned above the playhead, without a box or yellow border, with short fades and invariant layout. Count-in remains separate.
+- Actual wrong-pitch ghosts must fade; show warm-up pitches briefly too.
+  - **Implemented; visual verification pending (2026-11-26):** Red wrong-pitch ghosts fade over 600 ms, neutral warm-up ghosts over 380 ms. They never change authored note marks or the grading ledger; the warm-up layer works without a graded source strip.

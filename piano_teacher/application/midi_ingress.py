@@ -71,6 +71,7 @@ class MidiIngressEffect:
     consumed: bool = False
     action: str | None = None
     completed_range: tuple | None = None
+    warmup: bool = False
 
 
 class MidiIngress:
@@ -111,6 +112,11 @@ class MidiIngress:
         if effect.action or effect.completed_range is not None:
             apply_shortcut(effect)
         if effect.consumed:
+            if effect.warmup:
+                adjusted = (received_at-midi_offset_seconds
+                            if corrected_at is None else corrected_at)
+                self.publish_warmup(message, facts, adjusted, musical_seconds(adjusted),
+                                    feedback_take())
             return
         # A trailing-rest or inter-take key is audible/visible, but never
         # enters the recorder, accuracy, or the authoritative note ledger.
@@ -180,7 +186,8 @@ class MidiIngress:
             is_on = message.type == "note_on" and message.velocity > 0
             if is_on and now < self.resume_grading_after and facts.running:
                 self.resume_ignored_pitches.add(message.note)
-                return MidiIngressEffect(consumed=True)
+                return MidiIngressEffect(consumed=True,
+                    warmup=facts.mode in ("practice", "perform"))
             if message.note in self.resume_ignored_pitches:
                 if not is_on:
                     self.resume_ignored_pitches.remove(message.note)

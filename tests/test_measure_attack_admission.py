@@ -32,3 +32,8 @@ def test_measure_tail_uses_authored_tempo():
     assert admitted(0.75, tempo=tempo)
     assert not admitted(1.2, tempo=tempo)
     assert admitted(1.9, tempo=tempo)
+
+
+def test_late_last_attack_can_cross_barline_into_empty_measure():
+    assert admitted(4.1, notes=(0, 3.75))
+    assert not admitted(4.5, notes=(0, 3.75))

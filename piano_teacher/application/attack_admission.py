@@ -47,6 +47,12 @@ def accepts_attack(phrase, *, hand, boundaries, bpm, tempo, from_beat,
             last = max(bar)
             if elapsed <= at(last)+window(last):
                 return True
+    # A final attack immediately before the barline may still be late
+    # within its original match window, including in an empty next bar.
+    if 0 <= index-1 < len(attacks) and attacks[index-1]:
+        last = max(attacks[index-1])
+        if elapsed <= at(last)+window(last):
+            return True
     # A first attack of the next measure can legitimately be played early
     # while the current measure is already in its ungraded tail.
     if 0 <= index+1 < len(attacks) and attacks[index+1]:

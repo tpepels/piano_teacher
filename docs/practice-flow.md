@@ -144,8 +144,9 @@ what to do, in words that match the controls on screen:
 - The piano is lost during a Tempo take: the take stops, the banner says so,
   and once it is back: "Piano connected again … Press Play when you are
   ready."
-- Keys played during the inter-take rest or count-in are silent warm-up input:
-  no grading, no note ghosts and no notification. Explicit shortcuts still work.
+- Keys outside a timed take's matching window are warm-up input:
+  no grading or notification, only a briefly fading neutral played-pitch
+  glyph. Explicit shortcuts still work.
 - The first Tempo attempt reads its selected tempo percentage (the 50% floor
   is labelled 50% even when rounding to a whole BPM moves it slightly).
 
@@ -225,13 +226,20 @@ and MIDI grading follow the same authorized musical deadline.
 
 Colour every played or missed note promptly: **green** for correct and **red**
 for wrong or missed. The glow around a notehead is the notehead's own
-colour. A wrong key also produces a red ghost at the played pitch.
+colour. A wrong key also produces a red ghost at the played pitch that fades
+out within 600 ms. Warm-up pitches fade within 380 ms, in neutral ink near the
+playhead, without changing any authored note's assessment colour.
 Listen lighting is ungraded and cannot award performance credit.
 
 A slightly early/late attack remains green. An onset error counts only outside
 the greater of **150 ms** and **one sixteenth note at the current local tempo**.
-The first playable attack belongs to the take only from its actual scheduled
-start. Attacks in the count-in or inter-take rest never enter grading.
+Allow the original matching window before the first attack, including at a
+measure boundary. Within a timed measure, grade ordinary attacks until the
+last authored attack for the selected hand has passed its matching window.
+New attacks after that window and before the next measure's early matching
+window are ungraded warm-up, even during held notes or trailing rests.
+Internal gaps before the final attack remain graded. Releases continue to
+the recorder, including during a trailing rest, so hold grading is unchanged.
 This is an owner-selected tolerance, not a validated universal teaching constant.
 Detailed timing/hold observations remain distinct in local evidence even though
 the display uses two feedback colours. Key-release timing is always recorded. With hold grading off, short, long
@@ -240,7 +248,11 @@ release errors affect both feedback and progression.
 
 ### Transitions
 
-Show a short message for about **2 seconds** during the automatic transition, in one fixed notification row above the score and separate from the count-in. Course changes, graded results with timing accuracy, command notices and input messages use this same row. The reserved row never changes the score geometry when a message appears or disappears:
+Show a short message for about **2 seconds** during the automatic transition,
+as compact mint text aligned just above the fixed playhead, without a box or
+yellow border. Course changes, graded results with accuracy, command notices
+and input messages use this same softly fading lane, separate from count-in
+and source ink. Its reserved height never changes score geometry:
 “Now in tempo — 50%”, “Faster: 72 BPM”, “Slower: 58 BPM”, or a short compliment
 after a hand/window completes. Announce a simplified aid before it starts.
 Messages overlay the single count-in/handoff; they do not add another pause.
@@ -261,4 +273,8 @@ revision and remaining physical/clean-machine gates belong in
 
 ### Warm-up between takes
 
-Ordinary piano attacks during inter-take rests and count-ins do not count toward a take and do not produce messages or score feedback. Explicit transport gestures and the physical held-key display remain available. Within a timed take, authored rests remain part of the graded music.
+Ordinary attacks in inter-take rests, early count-in outside the matching
+window, and the silent tail after a measure's final attack window produce
+only a brief neutral fading pitch. They do not affect assessment or trigger
+messages. Explicit transport gestures and physical held-key display remain
+available. Internal authored rests before the last attack remain graded.
