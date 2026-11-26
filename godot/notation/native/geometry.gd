@@ -69,10 +69,10 @@ static func key_signature_spelling(pitch: int, fifths: int) -> Dictionary:
     # First prefer the exact diatonic spelling, including C-flat and B-sharp.
     var pc: int = posmod(pitch,12)
     for index in range(7):
-        var alter: int = int(signature.get(letters[index],0))
-        if posmod(int(naturals[index])+alter,12) == pc:
-            return {"step":letters[index],"alter":alter,
-                "octave":floori(float(pitch-int(naturals[index])-alter)/12.0)-1,
+        var key_alter: int = int(signature.get(letters[index],0))
+        if posmod(int(naturals[index])+key_alter,12) == pc:
+            return {"step":letters[index],"alter":key_alter,
+                "octave":floori(float(pitch-int(naturals[index])-key_alter)/12.0)-1,
                 "accidental":""}
     # A natural that cancels the key signature needs an explicit natural.
     for index in range(7):

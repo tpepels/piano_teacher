@@ -229,6 +229,18 @@ for wrong or missed. The glow around a notehead is the notehead's own
 colour. A wrong key also produces a red ghost at the played pitch that fades
 out within 600 ms. Warm-up pitches fade within 380 ms, in neutral ink near the
 playhead, without changing any authored note's assessment colour.
+Transient pitch spelling follows the key signature at the played source
+beat. In-key pitches have no printed accidental; natural cancellations and
+other chromatic alterations are explicit. Ghosts do not change the measure's
+authored accidental memory.
+
+Every ordinary physical attack on the musical timeline also leaves a small
+glowing bump on the outer rule of its staff. Its horizontal coordinate is
+the calibrated hardware attack's actual world beat, never the expected note
+position or feedback receipt time. The mark scrolls with the same score
+world and fades within 1.1 seconds. Mint indicates accepted timing, amber
+an early/late judgement, coral an unexpected attack, and muted ink ungraded
+input. The trace is presentation only and cannot affect assessment.
 Listen lighting is ungraded and cannot award performance credit.
 
 A slightly early/late attack remains green. An onset error counts only outside

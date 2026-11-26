@@ -43,3 +43,8 @@ These notes are filled by Tom after he plays on the piano. These serve as input 
   - **Implemented; visual verification pending (2026-11-26):** Compact mint text aligned above the playhead, without a box or yellow border, with short fades and invariant layout. Count-in remains separate.
 - Actual wrong-pitch ghosts must fade; show warm-up pitches briefly too.
   - **Implemented; visual verification pending (2026-11-26):** Red wrong-pitch ghosts fade over 600 ms, neutral warm-up ghosts over 380 ms. They never change authored note marks or the grading ledger; the warm-up layer works without a graded source strip.
+
+- Spell wrong and warm-up pitches in the written key signature (e.g. G-flat without a flat in G-flat major; G-natural with a natural).
+  - **Implemented; visual verification pending (2026-11-26):** Both transient glyph types use the measure's staff-specific signature, including enharmonic octave boundaries. Diatonic pitches omit accidentals; natural cancellations and out-of-key alterations are explicit. Ghosts do not mutate authored accidental state.
+- Show every ordinary attack as a small glowing bump on the moving staff so actual timing is visible.
+  - **Implemented; visual verification pending (2026-11-26):** The backend stamps the calibrated attack's musical-world coordinate and run identity onto existing feedback events. Godot projects the mark on the relevant outer staff rule using the same scrolling world, with mint/amber/coral/neutral ink and a 1.1-second fade. No snapping to a target note, and no changes to grading. Requires physical verification of early/late alignment, chord attacks, Free and handoffs.
