@@ -122,8 +122,12 @@ func ingest(event: Dictionary) -> String:
         event = event.duplicate()
         event["trace_seen"] = true
         var world: Variant = event.get("attack_world_beat")
-        if (world is float or world is int) and is_finite(float(world)):
+        var trace_pitch: int = int(event.get("pitch",-1))
+        var trace_beat: float = float(event.get("played_source_beat",NAN))
+        if (world is float or world is int) and is_finite(float(world)) and \
+                trace_pitch >= 0 and trace_pitch <= 127 and is_finite(trace_beat):
             _attack_markers.append({"world":float(world),"run":int(event.get("attack_run",-1)),
+                "revision":revision,"pitch":trace_pitch,"beat":trace_beat,
                 "staff":str(event.get("staff","right")),"status":str(event.get("status","heard")),
                 "graded":bool(event.get("graded",false)),"shown_ms":Time.get_ticks_msec()})
     # Ephemeral ink expires independently of source-note grades.
@@ -283,6 +287,17 @@ func warmup_ghosts_for_revision(revision: int) -> Array:
 
 func attack_markers() -> Array:
     return _attack_markers
+
+## Resolve the renderer that owns an attack's clef/key and staff layout.
+## Outgoing ink retains that context during automatic handoffs.
+func renderer_for_attack(revision: int):
+    if is_instance_valid(score) and score_revision == revision and score.native_ready:
+        return score
+    for entry in _live_renderers():
+        var renderer = entry["renderer"].get_ref()
+        if int(entry["revision"]) == revision and renderer.native_ready:
+            return renderer
+    return null
 
 func _expire_ghosts() -> void:
     var now := Time.get_ticks_msec()

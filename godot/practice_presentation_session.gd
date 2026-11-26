@@ -132,7 +132,7 @@ func present_frame(state: Dictionary, beat: float, world: float) -> void:
     # The trace uses the shared world projection, including run offsets.
     # It owns no musical clock and never assigns a grade.
     practice_view.stage.attack_trace.present(
-        practice_view.stage.feedback.attack_markers(),renderer,score_flow,world)
+        practice_view.stage.feedback.attack_markers(),practice_view.stage.feedback,score_flow,world)
 
 
 func accept(state: Dictionary, request_midpoint_ms: int,

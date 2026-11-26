@@ -1,8 +1,9 @@
 extends Control
-## Physical attack positions on the scrolling staff's outer rules.
+## Physical attack positions at their actual pitch on the scrolling staff.
 ## This surface is visual only. It reads the committed world clock; the
 ## grade, pitch and timestamp are supplied by the sequenced backend event.
 const Design := preload("res://practice_theme.gd")
+const GhostNotePainter := preload("res://notation/native/ghost_note_painter.gd")
 const PLAYHEAD_FRACTION := preload("res://notation/shared/spacing_policy.gd").PLAYHEAD_FRACTION
 const LIFETIME_MS := 1100.0
 var _points: Array = []
@@ -12,12 +13,10 @@ func _ready() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     z_index = 2
 
-func present(markers: Array, renderer, flow, world: float) -> void:
+func present(markers: Array, feedback, flow, world: float) -> void:
     var had_points := not _points.is_empty()
     _points.clear()
-    if renderer != null and is_instance_valid(renderer) and renderer.native_ready and flow.following:
-        var gap: float = renderer.staff_gap()
-        var density: float = renderer.timeline.pixels_per_beat
+    if flow.following:
         var now := Time.get_ticks_msec()
         for marker in markers:
             if int(marker["run"]) != flow.musical.run:
@@ -25,12 +24,17 @@ func present(markers: Array, renderer, flow, world: float) -> void:
             var age: float = maxf(0.0,float(now-int(marker["shown_ms"])))
             if age >= LIFETIME_MS:
                 continue
+            var renderer = feedback.renderer_for_attack(int(marker["revision"]))
+            if renderer == null or not is_instance_valid(renderer):
+                continue
+            var density: float = renderer.timeline.pixels_per_beat
             var x: float = size.x*PLAYHEAD_FRACTION + (flow.run_world(float(marker["world"]))-world)*density
             if x < 29.0 or x > size.x:
                 continue
-            var staff: String = str(marker["staff"])
-            # Bumps sit on the outside staff rule so the noteheads stay clear.
-            var y: float = renderer.layout.staff_center(staff) + (2.0 if staff == "left" else -2.0)*gap
+            var pitch_position := GhostNotePainter.pitch_position(renderer.painter,marker)
+            if pitch_position.is_empty():
+                continue
+            var y: float = float(pitch_position["y"])
             var color: Color = Design.HIGHLIGHT
             if not bool(marker["graded"]):
                 color = Design.SECONDARY_INK

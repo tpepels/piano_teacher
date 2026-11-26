@@ -235,7 +235,8 @@ other chromatic alterations are explicit. Ghosts do not change the measure's
 authored accidental memory.
 
 Every ordinary physical attack on the musical timeline also leaves a small
-glowing bump on the outer rule of its staff. Its horizontal coordinate is
+glowing dot at the actual played pitch on its staff, with the same
+key-aware vertical placement as transient note glyphs. Its horizontal coordinate is
 the calibrated hardware attack's actual world beat, never the expected note
 position or feedback receipt time. The mark scrolls with the same score
 world and fades within 1.1 seconds. Mint indicates accepted timing, amber
