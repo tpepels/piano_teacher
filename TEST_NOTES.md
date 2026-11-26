@@ -3,7 +3,8 @@ These notes are filled by Tom after he plays on the piano. These serve as input 
 
 ## Remarks
 - Connecting or selecting the keyboard after the application started gives strange results. I think this needs a test because I'm not sure what happens.
-- Please keep track of accuracy and show it in the top-left corner next to the tempo ... 
+- Please keep track of accuracy and show it in the top-left corner next to the tempo ...
+  - **Implemented; verification pending (2026-11-26):** The header shows the last completed graded take's timing accuracy, using the existing timing-quality metric (0–100%). It persists across automatic repeats and resets on Stop. Pitch errors remain independent. No live partial-take estimate.
 - After performing correctly twice at 100% please ask if I want to do it again or if I want to proceed. Let me practice again at 100% by playing a C and proceed with the next by playing an F. Mention the accuracy, so I can make a good decision.
 - The on-screen notifications are a bit wierd there are several kinds and they don't have a common place. Please make 1 type of notification, make sure that it's not overlapped by the count-in and display all messages there. Also make sure that the messages are "user-facing" not development speech leaking into the ui. Make them a bit interesting and fun. Examples:
   - New tempo
@@ -14,7 +15,8 @@ These notes are filled by Tom after he plays on the piano. These serve as input 
   - Well done: xx% accuracy!
   - Try again: xx% accuracy!
   - Etc.
-- Once we have a good measure for accuracy I will ask you to also force retry on low accuracy, you can add that functionality now, but I have to find a good value for it, so please let it always pass now (i.e. even 0% accuracy passes) and later we can increase it. But this is seperate from missed notes, missed notes or wrong notes always trigger a retry. 
+- Once we have a good measure for accuracy I will ask you to also force retry on low accuracy, you can add that functionality now, but I have to find a good value for it, so please let it always pass now (i.e. even 0% accuracy passes) and later we can increase it. But this is seperate from missed notes, missed notes or wrong notes always trigger a retry.
+  - **Implemented; verification pending (2026-11-26):** The single Practice Flow verdict checks `minimum_timing_accuracy_percent` in `piano_teacher/lesson_settings.json` (validated 0–100, default 0). Existing failure conditions are unchanged; a positive threshold rejects otherwise passing takes below the minimum.
 - For the non-tempo play, please be more tollerant regarding when the note can be pressed, now the bar really needs to be stopped, that's not necessary, though we should check if we are somewhat in range of the note, but not too strict.
 - After the first measure, the key-signature and cleff symbols are no longer shown which is problematic because we need to know them for each practice session, so please just always show them.
   - **Implemented for every practice-window opening; visual verification pending (2026-11-26):** The painter now identifies the selected opening rather than the first atlas measure, and draws its full current clef, key signature and meter regardless of hidden predecessor context. Repeats reuse the same opening ink. This is a scrolling opening header, not a fixed screen overlay; check later measures, nonzero key signatures and repeats at the piano.

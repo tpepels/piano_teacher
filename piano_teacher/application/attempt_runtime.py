@@ -22,6 +22,7 @@ class AttemptRuntime:
     retry_range: dict | None = None
     recovery_notice: dict | None = None
     guided_recovery_pending: bool = False
+    latest_timing_accuracy: float | None = None
 
     def begin_timed_review(self) -> None:
         """Clear the previous review when a new graded take begins."""
@@ -74,6 +75,8 @@ class AttemptRuntime:
         self.recorder = None
         self.performance_summary = summary
         self.review_stage_identity = stage_key
+        if summary is not None and "timing_accuracy_percent" in summary:
+            self.latest_timing_accuracy = summary["timing_accuracy_percent"]
 
     def reset_for_stop(self) -> None:
         """Reset every attempt/review/recovery field in one stable owner."""
@@ -86,3 +89,4 @@ class AttemptRuntime:
         self.retry_range = None
         self.recovery_notice = None
         self.guided_recovery_pending = False
+        self.latest_timing_accuracy = None

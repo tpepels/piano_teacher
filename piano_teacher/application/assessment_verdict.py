@@ -7,6 +7,7 @@ override a flow-specific decision.
 """
 from __future__ import annotations
 from dataclasses import dataclass
+from ..lesson_settings import SETTINGS
 
 @dataclass(frozen=True, slots=True)
 class AssessmentVerdict:
@@ -23,6 +24,11 @@ class AssessmentVerdict:
             raise ValueError("Unknown assessment acceptance policy")
         accepted = bool(result and
             (result.flow_passed if policy == "practice-flow" else result.passed))
+        # A zero threshold is deliberately disabled. The existing note,
+        # onset and optional release checks must still pass independently.
+        threshold = SETTINGS.minimum_timing_accuracy_percent
+        if accepted and policy == "practice-flow" and threshold > 0.0:
+            accepted = result.timing_accuracy_percent >= threshold
         clean = bool(result and result.clean)
         return AssessmentVerdict(
             policy=policy, accepted=accepted,

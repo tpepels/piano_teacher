@@ -42,6 +42,7 @@ class LessonSettings:
     grading_duration_floor_seconds: float
     grading_match_window_min_seconds: float
     grading_match_window_beats: float
+    minimum_timing_accuracy_percent: float = 0.0
 
 
 def load_lesson_settings(path: Path | None = None) -> LessonSettings:
@@ -51,6 +52,7 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
         # Retired policy keys still load; they no longer change anything.
         raw = {key: value for key, value in raw.items()
                if key not in RETIRED_KEYS}
+        raw.setdefault("minimum_timing_accuracy_percent", 0.0)
     expected = set(LessonSettings.__dataclass_fields__)
     if not isinstance(raw, dict) or set(raw) != expected:
         raise ValueError(f"Lesson settings keys must match {sorted(expected)}")
@@ -80,6 +82,7 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
             or data.grading_duration_floor_seconds <= 0
             or data.grading_match_window_min_seconds < data.grading_onset_tolerance_seconds
             or data.grading_match_window_beats <= 0
+            or not 0 <= data.minimum_timing_accuracy_percent <= 100
             or not 0 < data.recovery_tempo_multiplier < 1):
         raise ValueError("Invalid lesson target, BPM limit, or adaptive tempo multiplier")
     return data

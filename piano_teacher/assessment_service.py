@@ -82,6 +82,7 @@ class AssessmentService:
         timing = {status: sum(entry.status == status for entry in result.notes)
                   for status in ("early", "late", "short", "long")}
         return {"accuracy_percent": round(100*result.correct/max(1, len(result.notes)), 1),
+                "timing_accuracy_percent": result.timing_accuracy_percent,
                 "correct": result.correct, "total": len(result.notes), **timing, "timing": timing,
                 "missed_pitches": sorted({entry.note.pitch for entry in result.notes if entry.status == "missed"}),
                 "missed": sum(entry.status == "missed" for entry in result.notes),

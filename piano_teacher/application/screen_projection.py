@@ -35,9 +35,14 @@ def keyboard(s: Mapping) -> str:
             and teaching.get("hint_reason") == "wrong_note" else "hidden")
 
 
-def project_screen(s: Mapping, *, moving: bool, flash: tuple[int, str] = (0, "")) -> dict:
+def project_screen(s: Mapping, *, moving: bool, flash: tuple[int, str] = (0, ""),
+                   latest_timing_accuracy: float | None = None) -> dict:
     flow = s.get("flow") if isinstance(s.get("flow"), Mapping) else {}
-    return {"status": str(flow.get("status", "")),
+    status = str(flow.get("status", ""))
+    if s.get("loaded") and latest_timing_accuracy is not None:
+        accuracy = f"Last accuracy: {latest_timing_accuracy:.1f}%"
+        status = f"{status} · {accuracy}" if status else accuracy
+    return {"status": status,
             "notice": notice(s, moving) if s.get("loaded") else "",
             "keyboard": keyboard(s),
             "flash": {"id": int(flash[0]), "text": str(flash[1])}}

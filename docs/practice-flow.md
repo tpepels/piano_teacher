@@ -82,6 +82,8 @@ bar; do not make the learner sit through it.
 | Two failures in a row at 50% | Return to Free |
 | Two consecutive clean attempts at target | Complete this window/hand and advance |
 
+The header shows the last completed graded take's timing accuracy (timing quality × 100%), separately from wrong, missed and extra notes. It stays visible between attempts and is cleared on Stop. The developer-tunable `minimum_timing_accuracy_percent` in `lesson_settings.json` defaults to 0; a higher value makes otherwise clean takes below that threshold fail without weakening existing note or hold checks.
+
 Timing quality is 1 when every attack is centred and 0 when attacks sit at
 the edge of their window (1 − mean |onset error| / tolerance). The length
 factor is 8 ÷ attacks, clamped to 1–2.5, so a short window climbs quickly:

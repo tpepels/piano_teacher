@@ -106,6 +106,11 @@ class Assessment:
         return 1.0-sum(ratios)/len(ratios) if ratios else 0.0
 
     @property
+    def timing_accuracy_percent(self) -> float:
+        """Timing precision of measured attacks; pitch errors are separate."""
+        return 100.0 * self.timing_quality
+
+    @property
     def attacks(self) -> int:
         """Distinct attack times in the graded notes (a chord is one)."""
         return len({round(n.note.start, 4) for n in self.notes})

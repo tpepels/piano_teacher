@@ -216,5 +216,6 @@ class SessionReadModels:
             state["controls"] = project_controls(state)
             state["screen"] = project_screen(
                 state, moving=state["controls"]["transport_active"],
-                flash=(self.capture.notices.flash_id, self.capture.notices.flash_text))
+                flash=(self.capture.notices.flash_id, self.capture.notices.flash_text),
+                latest_timing_accuracy=self.capture.take.latest_timing_accuracy)
             return state
