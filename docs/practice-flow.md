@@ -80,7 +80,7 @@ bar; do not make the learner sit through it.
 | One failed attempt | Repeat at the same tempo |
 | Two failures in a row above 50% | Decrease by 10% of target, never below 50% |
 | Two failures in a row at 50% | Return to Free |
-| Two consecutive clean attempts at target | Complete this window/hand and advance |
+| Two consecutive clean attempts at target | Complete this hand; automatically enter the next hand, or offer the section choice after the final hand |
 
 The header shows live accuracy for the entire current graded take. Each correctly pitched note earns `max(0, 1 − |onset error| / onset tolerance)` credit; wrong and missed notes earn zero, and extra presses add zero-credit entries to the denominator. Future notes are excluded until played near their onset or their matching window expires. Before any evidence the display is blank (—); the final percentage uses the same metric. The separate timing-quality metric still controls tempo increases. The developer-tunable `minimum_accuracy_percent` in `lesson_settings.json` defaults to 0; a higher value rejects otherwise passing takes below that threshold without weakening existing note or hold checks.
 
@@ -105,7 +105,12 @@ be limited during the repeat rather than delaying it or overlapping active ink.
 
 ## Grow the window and finish
 
-After both hands complete a window, continue the trailing-window sequence.
+After all required hands complete a window, save mastery and show the final
+accuracy with a persistent choice: **C** repeats the final hand at target tempo;
+**F** proceeds to the next unmastered window. The visible Repeat and Next
+section controls offer the same actions. A repeat follows the normal two-clean
+rule again. The choice is never offered between tempo increases or hand stages.
+The staff continues through ungraded rests while awaiting the decision.
 There is no separate phrase-link generator that silently selects longer or
 different music. The next new measure starts alone again.
 
@@ -139,8 +144,8 @@ what to do, in words that match the controls on screen:
 - The piano is lost during a Tempo take: the take stops, the banner says so,
   and once it is back: "Piano connected again … Press Play when you are
   ready."
-- A key in the count-in (too far before the first note to be graded):
-  "Too early – wait for the count-in, then play", briefly.
+- Keys played during the inter-take rest or count-in are silent warm-up input:
+  no grading, no note ghosts and no notification. Explicit shortcuts still work.
 - The first Tempo attempt reads its selected tempo percentage (the 50% floor
   is labelled 50% even when rounding to a whole BPM moves it slightly).
 
@@ -204,8 +209,9 @@ The music is the focus:
   are raised key caps (danger ones rose); a pick-one group is a row of keys
   with the chosen one filled; list rows are cards with an ivory key edge and
   a play badge; checkpoints are small cards. Plain text is never framed.
-- Keep **Pause/Resume** and **Listen again** as the practice controls. Everything
-  else progresses automatically. This controls the visible normal flow;
+- Keep **Pause/Resume** and **Listen again** as the practice controls; show
+  **Repeat (C)** and **Next section (F)** only at a completed section boundary.
+  Everything else progresses automatically. This controls the visible normal flow;
   configured physical MIDI shortcuts and existing keyboard/API tools remain.
 
 ### Count-in and metronome
@@ -224,9 +230,8 @@ Listen lighting is ungraded and cannot award performance credit.
 
 A slightly early/late attack remains green. An onset error counts only outside
 the greater of **150 ms** and **one sixteenth note at the current local tempo**.
-A first note pressed in the count-in is graded early when it is close enough
-to belong to that note; a key further into the count-in is not part of the
-take.
+The first playable attack belongs to the take only from its actual scheduled
+start. Attacks in the count-in or inter-take rest never enter grading.
 This is an owner-selected tolerance, not a validated universal teaching constant.
 Detailed timing/hold observations remain distinct in local evidence even though
 the display uses two feedback colours. Key-release timing is always recorded. With hold grading off, short, long
@@ -241,6 +246,10 @@ after a hand/window completes. Announce a simplified aid before it starts.
 Messages overlay the single count-in/handoff; they do not add another pause.
 The backend selects the transition deadline; message animation cannot create
 another progression clock or independently delay an already authorized take.
+Automatic handoffs preserve the musical world through ungraded rests while
+preparing the next score. The outgoing renderer retains the staff/playhead
+until the incoming engraving is published. Explicit Stop resets the run;
+Pause and Free target holds retain their existing semantics.
 
 ## Acceptance
 
