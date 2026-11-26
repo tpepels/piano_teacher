@@ -67,17 +67,19 @@ func staff_renderer():
 func active_revision_published(_revision: int) -> void:
     # Called by ScoreAssetSession only once the replacement has completed
     # authentic engraving. This is the handoff of staff/cursor ownership.
-    if _manual_staff_tail == null:
-        return
     if is_instance_valid(_manual_staff_tail):
         _manual_staff_tail.runway_overlay = true
         _manual_staff_tail.set_transport_overlay_enabled(false)
         _manual_staff_tail.queue_redraw()
+        if is_instance_valid(_manual_staff_tail.retained_annotations):
+            _manual_staff_tail.retained_annotations.queue_redraw()
     _manual_staff_tail = null
     if stage != null and is_instance_valid(stage.renderer):
         stage.renderer.runway_overlay = false
         stage.renderer.set_transport_overlay_enabled(true)
         stage.renderer.queue_redraw()
+        if is_instance_valid(stage.renderer.retained_annotations):
+            stage.renderer.retained_annotations.queue_redraw()
 
 func _advance_tails(global_beat: float) -> void:
     # The renderer layers are ONE ordered FIFO of successive score sources.
@@ -101,8 +103,13 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     # Every new revision uses the same forward-only stream. Swap the asset
     # destination BEFORE ScoreAssetSession.update_context() resets it.
     # Otherwise reset_assets() clears still-visible outgoing noteheads.
-    if not bool(state.get("loaded",false)) or stage == null or \
-            not score_session.is_ready() or not is_instance_valid(stage.renderer):
+    if stage == null or not is_instance_valid(stage.renderer):
+        return false
+    if not bool(state.get("loaded",false)):
+        # Closing a piece must not keep its staff/glow as a permanent tail.
+        active_revision_published(-1)
+        return false
+    if not score_session.is_ready():
         return false
     if score_session.matches_ready_state(state):
         return false

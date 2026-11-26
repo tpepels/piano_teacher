@@ -47,6 +47,7 @@ var _last_native_failure := ""
 var _retry_attempted := false
 var _identical_failure_repeats := 0
 var _retained_started_ms := -1
+var _slow_status_published := false
 var _timing_diagnostics: bool = OS.get_cmdline_user_args().has("--frame-diagnostics") or \
     OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
 var _published_retained_generation := -1
@@ -220,10 +221,18 @@ func status() -> Dictionary:
 func poll(now_ms: int) -> void:
     if not _loaded or not score_error.is_empty():
         return
-    if layout_revision == revision and rendered_revision != revision and \
-            _retained_started_ms >= 0 and \
-            now_ms - _retained_started_ms >= RETAINED_INK_TIMEOUT_MS:
-        _fail("Retained notation did not finish compiling. Retry the score.")
+    if layout_revision == revision and rendered_revision != revision and _retained_started_ms >= 0:
+        # Godot does not deliver draw notifications to hidden controls.
+        # Time spent browsing the library is not a compilation failure.
+        if is_instance_valid(_renderer) and not _renderer.is_visible_in_tree():
+            _retained_started_ms = now_ms
+        elif now_ms - _retained_started_ms >= RETAINED_INK_TIMEOUT_MS:
+            _fail("Retained notation did not finish compiling. Retry the score.")
+            return
+    if not _slow_status_published and not is_ready() and _preparing_since_ms >= 0 and \
+            now_ms-_preparing_since_ms >= SLOW_PREPARATION_MS:
+        _slow_status_published = true
+        _publish_status()
 
 func pending_id(kind: String) -> int:
     return int(_requests.get(kind,{}).get("id",-1))
@@ -314,6 +323,9 @@ func _start_worker_if_possible() -> void:
         _renderer.size,float(_renderer.configured_density))
     _queued.clear()
     _worker_id = WorkerThreadPool.add_task(_worker.run,false,"Prepare authentic score")
+    if _worker_id < 0:
+        _worker = null
+        _fail("Cannot start score preparation worker")
 
 func _same_preparation_viewport(job) -> bool:
     return is_instance_valid(_renderer) and _renderer.size == job.viewport and \
@@ -325,12 +337,12 @@ func _requeue(job) -> void:
 
 func advance_preparation() -> void:
     if _worker_id >= 0 and WorkerThreadPool.is_task_completed(_worker_id):
-        WorkerThreadPool.wait_for_task_completion(_worker_id)
+        var joined: Error = WorkerThreadPool.wait_for_task_completion(_worker_id)
         _worker_id = -1
         var completed = _worker
         _worker = null
         if _request_is_current(completed.request):
-            if completed.result.has("error") or not completed.result.has("engraving"):
+            if joined != OK or completed.result.has("error") or not completed.result.has("engraving"):
                 _requests.erase("bundle")
                 _fail(str(completed.result.get("error","Score preparation did not produce an engraving")))
             elif not _same_preparation_viewport(completed):
@@ -440,6 +452,7 @@ func _reset_assets() -> bool:
     _requests.clear()
     _queued.clear()
     _uploading = null
+    _slow_status_published = false
     _annotation_version = -1
     if not _hide_renderer():
         # Keep exposed native ink and its feedback binding alive. No new

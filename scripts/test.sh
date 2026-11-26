@@ -24,5 +24,5 @@ else
 fi
 if (( ! python_only )); then
   bash scripts/check-godot-syntax.sh
-  bash scripts/test-godot-behavior.sh
+  PYTHON="$PYTHON" bash scripts/test-godot-behavior.sh
 fi

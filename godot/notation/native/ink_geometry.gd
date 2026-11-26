@@ -38,9 +38,11 @@ func texture_ink_bands(texture, box: Array, origin: Vector2, gap: float) -> Arra
     # Cache finite alpha-row envelopes once per authentic texture. Unlike
     # enclosing sprite rectangles these do not reserve empty flag margins
     # above a short/tick barline or outside the grand staff.
-    var picture: Image = score.glyphs.source_image(texture)
-    var key: int = picture.get_instance_id()
+    var key: int = texture.get_instance_id()
+    if texture is Texture2D and texture.has_meta("verovio_cpu_image"):
+        key = texture.get_meta("verovio_cpu_image").get_instance_id()
     if not texture_bands.has(key):
+        var picture: Image = score.glyphs.source_image(texture)
         var rows: Array = []
         for y in range(picture.get_height()):
             var left := picture.get_width()

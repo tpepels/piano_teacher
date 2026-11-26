@@ -318,6 +318,9 @@ func install_prepared_score(prepared) -> bool:
     failure_reason = ""
     _retained_pool.install(self,engraving.source_windows(maxf(0.0,play_from_beat)),true)
     native_ready = true
+    # The segment draw can run before the parent _draw on the next frame.
+    # Give it the installed geometry and exact viewport immediately.
+    _sync_painter()
     queue_redraw()
     return true
 

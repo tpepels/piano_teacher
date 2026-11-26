@@ -1,111 +1,110 @@
 extends SceneTree
-## The asset port supplies completion/failure facts; ScoreAssetSession makes
-## every readiness, stale-response and recovery decision. A genuine native
-## renderer also checks rejection of incomplete engraving.
+## Exercise real detached CPU preparation, texture upload and retained drawing.
+## The bundle is produced by the production Python/Verovio engine.
 const Session := preload("res://score_asset_session.gd")
 const Native := preload("res://notation/native/view.gd")
-
-class GlyphFacts:
-    extends RefCounted
-    var accepted := false
-    func ready() -> bool: return accepted
-
-class AssetPort:
-    extends RefCounted
-    signal retained_ink_compiled
-    var glyphs := GlyphFacts.new()
-    var native_ready := false
-    var visible := false
-    var compiled := false
-    var failure_reason := "Incomplete source engraving"
-    var notice := ""
-    func set_verovio_glyphs(_font, _notes, _ties, _chords, _beams, _tuplets,
-            _slurs, _required_slurs, _slurs_complete, _required_beams, _beams_complete) -> bool:
-        glyphs.accepted = true
-        return true
-    func load_score(_candidate: Dictionary) -> bool:
-        native_ready = true
-        return true
-    func retained_ready() -> bool: return compiled
-    func retained_generation() -> int: return 0
-    func clear_score() -> bool:
-        native_ready = false
-        glyphs.accepted = false
-        compiled = false
-        return true
-    func queue_redraw() -> void: pass
-
+const Meter := preload("res://moving_meter_grid.gd")
 var failures := 0
+var fixture: Dictionary
+var view
+var session
+var actions: Array = []
+
 func check(ok: bool, message: String) -> void:
     if not ok:
         failures += 1
         printerr("SCORE_READINESS_FAIL: ",message)
 
 func state(revision: int) -> Dictionary:
-    return {"loaded":true,"revision":revision,"piece_fingerprint":"piece-%d" % revision,
-        "stage_key":"stage-%d" % revision,"hand":"right",
+    return {"loaded":true,"revision":revision,"piece_fingerprint":fixture["fingerprint"],
+        "stage_key":fixture["stage_key"],"hand":fixture["hand"],
         "phase":"loading","awaiting_score_revision":revision}
 
 func bundle(revision: int) -> PackedByteArray:
-    # One source-bound bundle carries both engraving and original-note model.
-    return JSON.stringify({"status":"ready","fingerprint":"piece-%d" % revision,
-        "revision":revision,"hand":"right","stage_key":"stage-%d" % revision,
-        "source_note_ids":["source"],
-        "layout":{"revision":revision,"anchors":[{"id":"head"}]},
-        "model":{"revision":revision,"active_note_ids":["source"]}}).to_utf8_buffer()
+    var data: Dictionary = fixture.duplicate(true)
+    data["revision"] = revision
+    data["model"]["revision"] = revision
+    data["layout"]["revision"] = revision
+    return JSON.stringify(data).to_utf8_buffer()
 
-func reply(session, revision: int, at_ms: int = 0) -> void:
-    session.complete_response("bundle",session.pending_id("bundle"),0,bundle(revision),at_ms)
+func reply(revision: int) -> void:
+    session.complete_response("bundle",session.pending_id("bundle"),0,bundle(revision),Time.get_ticks_msec())
+
+func wait_until_finished(revision: int) -> void:
+    var deadline: int = Time.get_ticks_msec()+15000
+    while Time.get_ticks_msec() < deadline and not session.is_ready() and session.score_error.is_empty():
+        session.advance_preparation()
+        view.present_flow(0.0,{},0.0,false)
+        session.poll(Time.get_ticks_msec())
+        if session.layout_revision == revision and not view.retained_ready():
+            check(actions.is_empty(),"Incomplete retained notation cannot authorize a take")
+        await process_frame
 
 func _initialize() -> void:
-    print("SCORE_READINESS: expected SCORE_ASSET_FAILURE logs exercise rejection and recovery")
-    var assets := AssetPort.new()
-    var session := Session.new(assets)
-    var actions: Array = []
+    call_deferred("run")
+
+func run() -> void:
+    var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(OS.get_environment("PIANO_TEST_SCORE_BUNDLE")))
+    if not data is Dictionary or data.get("status") != "ready":
+        printerr("SCORE_READINESS_FAIL: missing authentic score fixture")
+        quit(1)
+        return
+    fixture = data
+    root.size = Vector2i(1280,800)
+    view = Native.new()
+    root.add_child(view)
+    view.size = Vector2(1200,650)
+    session = Session.new(view)
     session.action_requested.connect(func(value: Dictionary): actions.append(value))
-    session.update_context(state(1),0)
-    var old_failure: int = session.pending_id("bundle")
-    session.update_context(state(2),1)
-    session.complete_response("bundle",old_failure,3,JSON.stringify({"error":"old failure"}).to_utf8_buffer(),2)
-    check(session.score_error.is_empty() and not session.is_ready(),"A previous piece's delayed failure cannot poison the selected music")
-    var old_bundle: int = session.pending_id("bundle")
-    session.update_context(state(3),3)
-    session.complete_response("bundle",old_bundle,0,bundle(2),4)
-    check(not session.is_ready() and actions.is_empty(),"A previous piece's score cannot authorize playback")
-    reply(session,3)
-    check(not session.is_ready() and actions.is_empty(),"Available note data cannot start music before retained notation finishes")
-    assets.compiled = true
-    assets.retained_ink_compiled.emit()
-    check(session.is_ready() and not session.status().visible
-        and actions == [{"action":"score_ready","revision":3}],"The complete selected score unblocks playback and clears preparation")
-    session.update_context(state(4),5)
-    var before_retry: int = session.pending_id("bundle")
-    check(session.retry(5),"Retry can supersede a preparation that is still pending")
-    session.complete_response("bundle",before_retry,1,
-        JSON.stringify({"error":"Obsolete preparation failed"}).to_utf8_buffer(),6)
-    check(session.score_error.is_empty(),"A late result from before Retry cannot reinstate its old error")
-    session.complete_response("bundle",session.pending_id("bundle"),1,
-        JSON.stringify({"error":"Cannot engrave this source"}).to_utf8_buffer(),6)
-    check(not session.is_ready() and not session.status().error.is_empty()
-        and session.status().retry_visible and session.status().browse_visible,
-        "A failed score blocks playback and offers Retry or different music")
-    check(actions.size() == 1,"Failed preparation cannot authorize an attempt")
-    check(session.retry(7),"The learner can retry failed score preparation")
-    reply(session,4)
-    assets.compiled = true
-    assets.retained_ink_compiled.emit()
-    check(session.is_ready() and session.score_error.is_empty()
-        and actions[-1] == {"action":"score_ready","revision":4},"Retry recovers the selected score and removes its error")
-    session.update_context({"loaded":false,"revision":4},8)
-    check(not session.is_ready() and session.status().browse_visible,"Closing music revokes playback readiness")
-    var native := Native.new()
-    var native_session := Session.new(native)
-    native_session.update_context(state(5),0)
-    reply(native_session,5)
-    check(not native_session.is_ready() and not native_session.score_error.is_empty()
-        and native_session.status().retry_visible,"The real native renderer rejects absent authentic glyphs visibly")
+    view.active_hand = str(fixture["hand"])
+    session.update_context(state(1),Time.get_ticks_msec())
+    reply(1)
+    check(session.layout_pending and not session.is_ready() and actions.is_empty(),
+        "Received data does not authorize playback before background preparation")
+    # Supersede a real in-flight job before the session joins it.
+    session.update_context(state(2),Time.get_ticks_msec())
+    reply(2)
+    await wait_until_finished(2)
+    check(session.is_ready() and session.rendered_revision == 2 and
+        actions == [{"action":"score_ready","revision":2}],
+        "Only the selected revision becomes ready after authentic retained drawing: "+session.score_error)
+    if session.is_ready():
+        check(view.glyphs.textures.values()[0] is Texture2D,
+            "Published glyphs have completed their texture upload")
+        var original = view.engraving
+        var selected: Dictionary = state(2)
+        var source: String = str(fixture["source_note_ids"][0])
+        selected["fingering"] = {"annotation_version":1,"annotations":{
+            source:{"source_id":source,"finger":1,"hand":fixture["hand"],"origin":"manual"}}}
+        session.update_context(selected,Time.get_ticks_msec())
+        check(session.is_ready() and view.engraving == original,
+            "Changing fingering retains the admitted engraving")
+    actions.clear()
+    session.update_context(state(3),Time.get_ticks_msec())
+    var old: int = session.pending_id("bundle")
+    reply(3)
+    check(session.retry(Time.get_ticks_msec()),"Retry supersedes the in-flight worker")
+    session.complete_response("bundle",old,1,JSON.stringify({"error":"obsolete"}).to_utf8_buffer(),Time.get_ticks_msec())
+    check(session.score_error.is_empty(),"An obsolete error cannot poison Retry")
+    reply(3)
+    await wait_until_finished(3)
+    check(session.is_ready() and session.rendered_revision == 3 and
+        actions == [{"action":"score_ready","revision":3}],"Retry installs the selected score: "+session.score_error)
+    actions.clear()
+    session.update_context(state(4),Time.get_ticks_msec())
+    session.complete_response("bundle",session.pending_id("bundle"),0,"{}".to_utf8_buffer(),Time.get_ticks_msec())
+    await wait_until_finished(4)
+    check(not session.is_ready() and not session.score_error.is_empty() and
+        session.status().retry_visible and actions.is_empty(),"Malformed score fails visibly without authorizing playback")
+    session.update_context({"loaded":false,"revision":4},Time.get_ticks_msec())
+    check(not session.is_ready() and session.status().browse_visible,"Closing music revokes readiness")
+    var grid: Array = [{"start_beat":0.0,"end_beat":4.0}]
+    check(Meter.visible_lines(4000.0,1000.0,330.0,100.0,0.0,grid).has(4000.0),
+        "Barlines persist far beyond the written score")
+    check(Meter.visible_lines(-4000.0,1000.0,330.0,100.0,0.0,grid).has(-4000.0),
+        "Barlines persist far before the written score")
+    session.shutdown_preparation()
     session.replace_renderer(null)
-    native_session.replace_renderer(null)
-    native.free()
+    view.queue_free()
     print("SCORE_READINESS_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

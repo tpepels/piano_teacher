@@ -29,10 +29,40 @@ def test_real_models_assign_playable_fingers_to_both_hands_and_respect_held_key(
 
 
 @pytest.mark.usefixtures("lumikey_runtime")
-def test_six_simultaneous_keys_in_one_hand_remain_unknown():
-    source = piece([Note(0, 1, 60 + i, 0, 0, "right", f"n{i}") for i in range(6)])
+@pytest.mark.parametrize("hand,pitches", [
+    ("right", (61, 63, 65, 67, 69, 72)),
+    ("left", (48, 50, 53, 55, 61, 63)),
+])
+def test_six_keys_with_adjacent_thumb_pair_are_playable(hand, pitches):
+    source = piece([Note(0, 1, pitch, 0, 0, hand, f"n{i}")
+                    for i, pitch in enumerate(pitches)])
     result = LumikeyProvider().predict(source, {})
-    assert all(a.finger is None and a.reason for a in result.values())
+    assert all(a.finger in range(1, 6) for a in result.values())
+    assert [result[f"n{i}"].finger for i in range(6)] == (
+        [1, 1, 2, 3, 4, 5] if hand == "right" else [5, 4, 3, 2, 1, 1])
+    fixed = {"n0": 1, "n1": 1} if hand == "right" else {"n4": 1, "n5": 1}
+    corrected = LumikeyProvider().predict(source, fixed)
+    assert all(corrected[k].finger == v and not corrected[k].reason for k, v in fixed.items())
+
+
+@pytest.mark.usefixtures("lumikey_runtime")
+def test_impossible_fixed_thumb_does_not_erase_unrelated_note():
+    source = piece([Note(0, 2, 60, 0, 0, "right", "held"),
+                    Note(1, 1, 62, 0, 0, "right", "conflict"),
+                    Note(1, 1, 67, 0, 0, "right", "playable")])
+    result = LumikeyProvider().predict(source, {"held": 1, "conflict": 1})
+    assert result["conflict"].finger == 1 and result["conflict"].reason
+    assert result["playable"].finger in range(2, 6)
+    assert not result["playable"].reason
+
+
+@pytest.mark.usefixtures("lumikey_runtime")
+def test_mixed_height_thumb_pair_is_not_automatically_shared():
+    source = piece([Note(0, 1, pitch, 0, 0, "right", f"n{i}")
+                    for i, pitch in enumerate((60, 61, 64, 65, 67, 69))])
+    result = LumikeyProvider().predict(source, {})
+    assert any(a.finger is None and a.reason for a in result.values())
+    assert sum(a.finger is not None for a in result.values()) <= 5
 
 
 def test_unavailable_runtime_keeps_manual_correction_across_reopen_and_source_scope(tmp_path):

@@ -136,8 +136,14 @@ func invalidate(view: Control, online: Array) -> void:
     # Unstage before recompilation: Godot cannot rebuild draw commands
     # beneath an invisible clipping parent.
     StreamLifecycle.prepare_recompile(view,online)
+    var initial_pending: bool = not _initial_compilation.is_empty()
+    if initial_pending:
+        _initial_compilation.clear()
     for segment in [first_once] + repeat_segments + rest_segments:
         if segment != null and is_instance_valid(segment):
             segment.compiled = false
+            if initial_pending:
+                segment.compile_enabled = false
+                _initial_compilation.append(segment)
             segment.queue_redraw()
     StreamLifecycle.present_pool(all_segments)

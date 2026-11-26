@@ -66,6 +66,30 @@ function chordCanFinish(chord, active, groupFixed, current, finger, left) {
   return visit(0,0,0);
 }
 
+// A failed complete-chord search must not erase unrelated playable notes.
+// The occupied notes are actual previous choices and explicit constraints,
+// not speculative guesses for notes the network has not yet processed.
+function partialAllowed(n, finger, occupied, left) {
+  const ordinal = f => left ? 6-f : f;
+  const thumbKeys = new Set([n.note]);
+  for (const a of occupied) {
+    if (!overlaps(n,a)) continue;
+    if (a.note===n.note) {
+      if (a.finger!==finger) return false;
+      continue;
+    }
+    if (a.finger===finger) {
+      if (finger!==1 || !sharedThumb(n,a)) return false;
+      thumbKeys.add(a.note);
+      if (thumbKeys.size>2) return false;
+    }
+    if (a.time===n.time && a.finger!==finger &&
+        ((a.note<n.note && ordinal(a.finger)>=ordinal(finger)) ||
+         (a.note>n.note && ordinal(a.finger)<=ordinal(finger)))) return false;
+  }
+  return true;
+}
+
 async function handInference(notes, left, session) {
   const sorted = notes.filter(n => n.left===left).sort((a,b)=>a.time-b.time || a.note-b.note);
   const reasons = new Map();
@@ -106,8 +130,11 @@ async function handInference(notes, left, session) {
     if (chosen) {
       if (!allowed(chosen)) reasons.set(n.source_id,'Conflicting fixed fingering or unplayable overlap');
     } else {
-      const candidates=raw.map((score,i)=>({score,finger:i+1}))
-        .filter(a=>allowed(a.finger));
+      const scored=raw.map((score,i)=>({score,finger:i+1}));
+      let candidates=scored.filter(a=>allowed(a.finger));
+      if (!candidates.length) {
+        candidates=scored.filter(a=>partialAllowed(n,a.finger,[...active,...groupFixed],left));
+      }
       if (!candidates.length) {
         reasons.set(n.source_id,'No physically available finger for these overlapping keys/constraints');
         // Upstream still advances its model history using its genuine best
