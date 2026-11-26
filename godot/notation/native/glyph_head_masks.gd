@@ -76,6 +76,7 @@ func cutout(source: String, key: String, index: int, head: String,
         head_only.blit_rect_mask(template,mask,
             Rect2i(Vector2i.ZERO,template.get_size()),Vector2i.ZERO)
         cutout = ImageTexture.create_from_image(head_only)
+        cutout.set_meta("verovio_cpu_image",head_only)
     _head_cutouts[cache_key] = cutout
     return cutout
 

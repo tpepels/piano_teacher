@@ -359,9 +359,8 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     var cached: Array = _display_cache.get(key,[])
     if cached.size() == 2 and (cached[0] as WeakRef).get_ref() == texture:
         return cached[1]
-    var image: Image = texture.get_meta("verovio_cpu_image",null)
-    if image == null:
-        image = texture.get_image()
+    var image: Image = texture.get_meta("verovio_cpu_image") if \
+        texture.has_meta("verovio_cpu_image") else texture.get_image()
     if image == null or image.is_empty():
         return texture
     image = image.duplicate()
