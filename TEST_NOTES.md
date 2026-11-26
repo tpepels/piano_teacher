@@ -67,3 +67,6 @@ These notes are filled by Tom after he plays on the piano. These serve as input 
 
 ## Local CI triage (2026-11-26)
 Uploaded Python run: 215 passed, 140 failed, 3 warnings. No commit SHA in log; it predates at least some latest notification/late-cutoff changes. Godot was not reached. First batch: replace exact result-caption assertions in failure-grading/repertoire tests with typed outcome assertions, update changed warm-up and note-cutoff expectations, and restore the half-tempo recovery entry after Free. Remaining test failures and any newly exposed assertions must be rerun and investigated; no acceptance claimed.
+
+- Avoid tedious recovery from near-passes.
+  - **Implemented; verification pending:** `recovery_accuracy_percent` defaults to 70. Failed takes at or above it repeat the same stage and BPM, clearing consecutive recovery failures without awarding mastery. Only consecutive below-threshold failures trigger the existing slower/Free policy. The 85% pass threshold and independent note checks are unchanged.
