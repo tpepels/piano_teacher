@@ -73,12 +73,26 @@ func run() -> void:
             "Published glyphs have completed their texture upload")
         var original = view.engraving
         var selected: Dictionary = state(2)
-        var source: String = str(fixture["source_note_ids"][0])
-        selected["fingering"] = {"annotation_version":1,"annotations":{
-            source:{"source_id":source,"finger":1,"hand":fixture["hand"],"origin":"manual"}}}
-        session.update_context(selected,Time.get_ticks_msec())
-        check(session.is_ready() and view.engraving == original,
-            "Changing fingering retains the admitted engraving")
+        var target: Dictionary = {}
+        for event in view.layout.ordered_events:
+            if event.get("kind") == "note" and event.get("is_attack",false):
+                target = event
+                break
+        check(not target.is_empty(),"Authentic fixture contains an editable attack")
+        if not target.is_empty():
+            var source: String = str(target["source_id"])
+            var hand: String = view.layout.performing_hand(target)
+            for finger in [1,3]:
+                selected["fingering"] = {"annotation_version":finger,"annotations":{
+                    source:{"source_id":source,"finger":finger,"hand":hand,"origin":"manual"}}}
+                session.update_context(selected,Time.get_ticks_msec())
+                check(int(target.get("fingering",{}).get("finger",-1)) == finger and
+                    session.is_ready() and view.engraving == original,
+                    "Repeated correction changes the actual attack annotation without reloading notation")
+            selected["fingering"] = {"annotation_version":4,"annotations":{}}
+            session.update_context(selected,Time.get_ticks_msec())
+            check(not target.has("fingering") and session.is_ready(),
+                "Removing a correction clears the existing annotation without reloading")
     actions.clear()
     session.update_context(state(3),Time.get_ticks_msec())
     var old: int = session.pending_id("bundle")
