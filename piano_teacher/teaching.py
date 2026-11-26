@@ -255,19 +255,22 @@ class TeachingController:
 
     def snapshot(self, *, now: float) -> dict:
         active_hint = self._phase == "guided_wait" and (self._persistent_hints or bool(self._hint_reason))
-        # The last target only counts once its movement has ended.
+        # A found target only counts once its movement has ended: until then
+        # it is still the current target (nothing moves on yet), so a key in
+        # the same movement can take it back without the staff having left.
         settled = self._found is None or now - self._found["at"] > self.config.gesture_seconds
         complete = self._phase == "guided_complete" and settled
+        index = self._target_index if settled else self._target_index-1
         return {
             "phase": self._phase if complete or self._phase != "guided_complete" else "guided_wait",
             "revision": self._revision,
             "completed": complete, "mastery_eligible": False,
             "assisted_count": self._assisted_count,
             "completion": ("assisted" if self._assisted_count else "unassisted")
-                if self._phase == "guided_complete" else None,
-            "target_index": self._target_index, "target_count": len(self._targets),
-            "expected_notes": [dict(note) for note in self._targets[self._target_index]]
-                if self._target_index < len(self._targets) else [],
+                if complete else None,
+            "target_index": index, "target_count": len(self._targets),
+            "expected_notes": [dict(note) for note in self._targets[index]]
+                if 0 <= index < len(self._targets) else [],
             "heard_pitches": sorted({pitch for _, pitch in self._keys}),
             "hint_visible": active_hint,
             "hint_reason": (self._hint_reason or "persistent") if active_hint else "",

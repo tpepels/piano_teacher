@@ -138,6 +138,7 @@ def test_fake_keyboard_free_wrong_pause_resume_and_no_unearned_target(practice_s
     session.command("resume")
     state_at(session, step="free", paused=False)
     session.strike(expected)
+    session.tick(.1)   # the found note counts once its movement ends
     corrected = state_at(session, step="free")["teaching"]
     assert corrected["target_index"] == 1 and not corrected["hint_visible"]
     session.finish_free()

@@ -223,8 +223,7 @@ class ScoreLibrary:
                             continue
                         items.append({'id': relative, 'title': path.stem.replace('_', ' '),
                                       'folder': path.relative_to(root).parent.as_posix() if path.parent != root else '',
-                                      'format': 'MIDI',
-                                      'fingerprint': self._fingerprint(path)})
+                                      'format': 'MIDI'})
                     except OSError:
                         continue
                     if len(items) >= MAX_FILES:
@@ -237,6 +236,16 @@ class ScoreLibrary:
         items.sort(key=lambda x: (x['title'].casefold(), x['id'].casefold()))
         return {'folder': str(root), 'pieces': items, 'count': len(items),
                 'truncated': len(items) == MAX_FILES, 'last_piece': self.settings['last_piece']}
+
+    def add_fingerprints(self, listing: dict) -> None:
+        """Add each piece's source fingerprint. Reads the files (cached by
+        size and mtime), so callers do this outside the engine lock."""
+        root = Path(listing.get("folder", self._folder))
+        for piece in listing.get("pieces", []):
+            try:
+                piece["fingerprint"] = self._fingerprint(root/piece["id"])
+            except OSError:
+                piece["fingerprint"] = ""
 
     def _fingerprint(self, path: Path) -> str:
         """The same sha256 the opened piece's progress is saved under."""

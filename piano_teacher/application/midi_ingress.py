@@ -238,7 +238,7 @@ class MidiIngress:
         if live_event is not None:
             self.feedback_events.publish({**live_event,**feedback_take})
         if facts.mode == "learn":
-            if (is_on and facts.guided_open_at is not None
+            if (is_on and not facts.paused and facts.guided_open_at is not None
                     and corrected_at < facts.guided_open_at):
                 # The target is still travelling in: the key earns nothing,
                 # and the learner is told to wait for it.

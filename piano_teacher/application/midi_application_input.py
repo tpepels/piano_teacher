@@ -96,7 +96,7 @@ class MidiDelivery:
             self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
             self.take.cancellation_generation,
             self.midi_input.device,
-            self.score.free_target_arrival(self.lesson, self.transport))
+            self.score.free_keys_open_at(self.lesson, self.transport))
         early = self.midi_input.dispatch_midi(
             message,facts=facts,received_at=received_at,
             corrected_at=corrected_at,deferred=deferred,

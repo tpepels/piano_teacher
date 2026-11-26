@@ -44,6 +44,12 @@ def load_musicxml(path: Path) -> Piece:
         score = converter.parse(str(path), format="musicxml")
     except Exception as exc:  # music21 raises many unrelated types
         raise ValueError(f"Cannot read MusicXML: {exc}") from exc
+    # Grace notes have no duration of their own: the practice timeline
+    # drops them (and their fingers, below). Remove them before the MIDI
+    # conversion, which writes them as release-first zero-length notes
+    # that cannot be paired with certainty when a neighbour shares a pitch.
+    for grace in [n for n in score.recurse().notes if n.duration.isGrace]:
+        grace.activeSite.remove(grace)
     from music21.repeat import ExpanderException
     try:
         midi = streamToMidiFile(score)

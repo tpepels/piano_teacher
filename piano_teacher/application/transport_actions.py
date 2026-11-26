@@ -114,7 +114,9 @@ class PlaybackAuthorization:
             if travel is None or seconds <= 1e-6:
                 travel = seconds*bpm/60.0
             travel_bpm = max(bpm, travel*60.0/seconds) if seconds > 1e-6 else bpm
-            timeline.start_free(now=now, bpm=travel_bpm, travel_beats=travel)
+            # The passage opens at the arrival; its first target may come
+            # later in the window (a hand starting on beat 2): stop there.
+            timeline.start_free(now=now, bpm=travel_bpm, travel_beats=travel+max(0.0, beat))
             self._free = (key, beat)
         elif beat > self._free[1] + 1e-9:
             timeline.move_hold(now=now, beats=beat-self._free[1], bpm=bpm)

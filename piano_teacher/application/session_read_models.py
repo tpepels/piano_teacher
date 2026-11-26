@@ -45,7 +45,7 @@ class SessionCapture:
             feedback_unmapped=self.take.feedback_unmapped,
             fingerprint=self.lesson.fingerprint,
             guided_range=self.lesson.guided_beat_range,
-            guided_open_at=self.score.free_target_arrival(
+            guided_open_at=self.score.free_keys_open_at(
                 self.lesson, self.transport),
             metronome=self.library.settings["metronome"],
             midi_input_count=self.midi_input.input_count,

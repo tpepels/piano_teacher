@@ -265,7 +265,7 @@ def test_free_a_wrong_key_waits_and_the_right_one_continues(practice_session, so
         session.key(t["pitch"])
     for t in target:
         session.key(t["pitch"], False)
-    assert session.tick()["teaching"]["target_index"] >= 1
+    assert session.tick(.1)["teaching"]["target_index"] >= 1
 
 
 # --- Pausing a real take never breaks it -----------------------------------

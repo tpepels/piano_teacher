@@ -231,9 +231,16 @@ class PracticeSession:
         """Wait, as a player does, until the Free target reaches the playhead."""
         state = self.snapshot()
         guided = (state.get("playback_timeline") or {}).get("guided")
-        if guided and guided["deadline_at_ms"]/1000.0 > self.clock.at:
-            self.clock.at = guided["deadline_at_ms"]/1000.0
-            state = self.tick()
+        if state.get("mode") == "learn":
+            # The staff comes to rest at each target (the first after its
+            # travel, later ones after a short move): keys count from then.
+            held = self.engine.transport.musical_timeline.hold_open_at()
+            arrival = guided["deadline_at_ms"]/1000.0 if guided else None
+            ready = max(t for t in (held, arrival) if t is not None) \
+                if held is not None or arrival is not None else None
+            if ready is not None and ready > self.clock.at and ready != float("inf"):
+                self.clock.at = ready
+                state = self.tick()
         return state
 
     def finish_free(self):

@@ -102,6 +102,14 @@ class Score:
             lesson.fingerprint, lesson.plan.identity if lesson.plan else "",
             lesson.revision, transport.transport_id))
 
+    def free_keys_open_at(self, lesson, transport) -> float | None:
+        """When keys start to count in Free: once the staff is at rest at
+        the current target (keys earn nothing while it travels or moves)."""
+        if transport.mode != "learn":
+            return None
+        held = transport.musical_timeline.hold_open_at()
+        return held if held is not None else self.free_target_arrival(lesson, transport)
+
     def free_target_travel(self, lesson, transport) -> float | None:
         """Beats the first Free target travels to the playhead."""
         if transport.mode != "learn":

@@ -54,6 +54,10 @@ class PracticeEngine:
             listing = self.library.scan()
             if self.startup_notice:
                 listing["notice"] = self.startup_notice
+        # Hashing every file can take a while on a large first scan: never
+        # while holding the lock that state polls and MIDI delivery need.
+        self.library.add_fingerprints(listing)
+        with self.lock:
             saved = self.progress.summaries()
         for piece in listing["pieces"]:
             summary = saved.get(piece.get("fingerprint", ""))

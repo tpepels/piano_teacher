@@ -32,6 +32,9 @@ RUN_LEAD_SECONDS = 0.35
 # A Free move starts this much after the played target, so the state that
 # carries it reaches Godot first and the staff glides instead of jumping.
 MOVE_LEAD_SECONDS = 0.12
+# Free moves from one found target to the next within this time, however
+# slow the piece, so the next target is soon at the line.
+MAX_MOVE_SECONDS = 1.5
 # Past segments kept in the published snapshot (their ink is still leaving).
 KEPT_PAST_SEGMENTS = 6
 
@@ -403,10 +406,19 @@ class MusicalTimeline:
         last = self.segments[-1]
         m = max(last.start_at, self.musical(now)) + MOVE_LEAD_SECONDS
         self.segments[-1] = replace(last, hold_seconds=m - last.start_at)
+        beats = max(0.0, beats)
+        bpm = max(bpm, beats*60.0/MAX_MOVE_SECONDS)
         rest = self.append(TimelineSegment(
-            "rest", last.world_start, m, (TempoSpan(max(0.0, beats), bpm, bpm),)))
+            "rest", last.world_start, m, (TempoSpan(beats, bpm, bpm),)))
         self.append(TimelineSegment("hold", rest.world_end, rest.end_at,
                                     (TempoSpan(0.0, bpm, bpm),)))
+
+    def hold_open_at(self) -> float | None:
+        """Wall instant the staff comes to rest at Free's current target
+        (later after a Pause); None unless the timeline ends in a hold."""
+        if not self.segments or self.segments[-1].kind != "hold":
+            return None
+        return self.wall(self.segments[-1].start_at)
 
     def predict_repeat(self, *, bar_beats: float, source_from_beat: float) -> None:
         """Publish where a repeat of the last take would start by bar

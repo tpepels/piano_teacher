@@ -36,8 +36,10 @@ def test_listen_then_free_waits_for_every_note_of_the_four_bar_window(practice_s
     assert waiting["teaching"]["target_index"] == 0
     assert waiting["teaching"]["hint_reason"] != "wrong_note"
     for pitch in (72,79,73,80):
+        # Keys count once the target is at the line (docs/practice-flow.md).
+        session.reach_free_target()
         session.strike(pitch)
-        session.tick(.2)   # a hand's moment between targets
+        session.tick(.1)   # the found note counts once its movement ends
     halfway = session.snapshot()
     assert halfway["flow"]["step"] == "free"
     assert halfway["teaching"]["target_index"] == 4
@@ -62,7 +64,7 @@ def test_wrong_free_key_waits_and_correction_does_not_credit_future_notes(practi
     assert {mark["id"] for mark in wrong["note_feedback"]} == {first["id"]}
     session.tick(.2)   # a separate movement, not a smudge into the right key
     session.strike(first["pitch"])
-    corrected = session.snapshot()["teaching"]
+    corrected = session.tick(.1)["teaching"]
     assert corrected["target_index"] == 1
     assert not corrected["hint_visible"]
     assert corrected["expected_notes"][0]["id"] != first["id"]

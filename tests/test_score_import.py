@@ -181,3 +181,27 @@ def test_authored_meter_change_survives_source_selection_and_native_engraving(pr
     assert state["count_in_meter"] == [4,4] and state["count_in_beats"] == 4
 
 
+
+
+def test_a_duplicate_release_does_not_swallow_a_repeated_note(tmp_path):
+    """Some exports release a note twice; the repeat that follows on the same
+    tick is a real note (code review 2026-11-25)."""
+    import mido
+    from piano_teacher.music import load_midi
+    midi = mido.MidiFile(ticks_per_beat=480)
+    track = mido.MidiTrack()
+    midi.tracks.append(track)
+    for delta, kind in ((0, "note_on"), (480, "note_off"), (0, "note_off"),
+                        (0, "note_on"), (480, "note_off")):
+        track.append(mido.Message(kind, note=69, velocity=80 if kind == "note_on" else 0, time=delta))
+    midi.save(tmp_path/"repeat.mid")
+    assert [(n.start, n.end) for n in load_midi(tmp_path/"repeat.mid").notes] == [(0.0, 1.0), (1.0, 2.0)]
+
+
+def test_musicxml_with_grace_notes_opens_without_them():
+    """Für Elise has grace notes; they have no duration of their own and are
+    not practice targets, and must not stop the piece opening."""
+    from pathlib import Path
+    from piano_teacher.importing.pieces import import_piece
+    piece = import_piece(Path(__file__).parent/"fixtures"/"pieces"/"fur-elise.mxl")
+    assert piece.notes and all(n.end > n.start for n in piece.notes)

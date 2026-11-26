@@ -291,8 +291,8 @@ def test_a_configured_end_key_in_the_exercise_remains_a_musical_note(practice_se
     assert state["teaching"]["target_index"] == 0
     session.reach_free_target()
     session.strike(72)
-    assert session.snapshot()["teaching"]["target_index"] == 1
-    session.tick(.2)
+    assert session.tick(.1)["teaching"]["target_index"] == 1
+    session.reach_free_target()   # the next target comes to the line
     session.strike(79)
     session.tick(.1)
     state = session.ready_score()

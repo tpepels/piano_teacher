@@ -61,7 +61,10 @@ class DeviceWorkflows:
             with self.midi_input.selecting_device(name, callback=callback) as selected:
                 self.midi_input.cancel_key_range_capture()
                 self.midi_input.clear_live_device()
-                self.lifecycle.stop(reason="device_changed")
+                # As on a lost piano: Free keeps the notes found and
+                # continues with the newly chosen one.
+                if self.transport.mode != "learn" or self.lesson.guided_controller is None:
+                    self.lifecycle.stop(reason="device_changed")
         except RuntimeError as exc:
             self.notices.feedback = str(exc)
             raise

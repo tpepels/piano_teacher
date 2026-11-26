@@ -62,7 +62,9 @@ class ScoreStatePublisher:
                 or facts.awaiting_score or state.get("phase") not in
                     ("guided_wait", "introducing", "disconnected")):
             return
-        if state.get("phase") != "guided_wait" or self.guided_deadline is None:
+        # Once Free has its arrival, a piano lost meanwhile keeps it: the
+        # staff must not travel in again from the window's opening.
+        if self.guided_deadline is None or state.get("phase") == "introducing":
             self.guided_travel_beats = max(1.0, facts.next_count_in_beats, facts.free_travel_beats)
             self.guided_deadline = SCHEDULER.guided(
                 max_lead_seconds=self.MAX_FREE_TRAVEL_SECONDS,

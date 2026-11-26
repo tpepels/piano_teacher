@@ -138,7 +138,7 @@ def test_wrong_key_in_free_shows_the_hint_and_waits_for_the_right_key(practice_s
     assert wrong["teaching"]["target_index"] == 0
     assert session.tick(30)["teaching"]["target_index"] == 0
     session.strike(targets[0]["pitch"])
-    assert session.tick()["teaching"]["target_index"] == 1
+    assert session.tick(.1)["teaching"]["target_index"] == 1
 
 
 def test_a_take_godot_could_not_draw_is_placed_again_once(practice_session):

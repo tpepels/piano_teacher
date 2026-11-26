@@ -64,7 +64,8 @@ def tempo_percent(bpm: float, target_bpm: float) -> int:
     rounding it to a whole BPM moved it a little (16 of 31 BPM)."""
     if not target_bpm:
         return 100
-    if int(bpm) == floor_bpm(int(target_bpm)):
+    floor = floor_bpm(int(target_bpm))
+    if floor < target_bpm and round(bpm) == floor:
         return 50
     return round(100 * bpm / target_bpm)
 
