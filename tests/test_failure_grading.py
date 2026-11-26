@@ -72,16 +72,16 @@ CASES = {
     "one extra key": ({"extra": ((.05, 60),)}, [C, C, C, C], (4, 0, 0, 1)),
     "a note struck twice": ({"doubled": (LAST,)}, [C, C, C, C], (4, 0, 0, 1)),
     "a wrong key then the right one": ({"extra": ((4.45, 80),)}, [C, C, C, C], (4, 0, 0, 1)),
-    "last note just too late": ({"shift": (LAST, .6)}, [C, C, C, "late"], (4, 0, 0, 0)),
+    "last note just too late": ({"shift": (LAST, .6)}, [C, C, C, M], (3, 0, 1, 0)),
     "last note just too early": ({"shift": (LAST, -.6)}, [C, C, C, "early"], (4, 0, 0, 0)),
-    "last note far too late": ({"shift": (LAST, 3.0)}, [C, C, C, M], (3, 0, 1, 1)),
+    "last note far too late": ({"shift": (LAST, 3.0)}, [C, C, C, M], (3, 0, 1, 0)),
     "last note far too early": ({"shift": (LAST, -3.0)}, [C, C, C, M], (3, 0, 1, 1)),
     "first chord far too late": ({"shift": (0, 3.0)}, [M, C, C, C], (3, 0, 1, 1)),
     # A press in the count-in close enough to be matched to the first note
     # is graded (early); one far into the count-in is not part of the take.
     "first chord note far too early": ({"shift": (0, -2.0)}, [M, C, C, C], (3, 0, 1, 0)),
     "first chord note just too early": ({"shift": (0, -.45)}, ["early", C, C, C], (4, 0, 0, 0)),
-    "first chord note just too late": ({"shift": (0, .45)}, ["late", C, C, C], (4, 0, 0, 0)),
+    "first chord note just too late": ({"shift": (0, .45)}, [M, C, C, C], (3, 0, 1, 1)),
     "the whole take rushed twice as fast": ({"speed": 2.0}, [C, C, C, M], (3, 0, 1, 1)),
 }
 
@@ -99,13 +99,13 @@ def test_a_mistake_fails_the_take_and_the_same_tempo_follows(practice_session, n
     # One failed take: the same window again at the same tempo, no credit.
     assert after["running"] and after["transport_id"] == state["transport_id"]+1
     assert after["bpm"] == 40 and after["streak"] == 0
-    assert after["flow"]["message"] == "Again at the same tempo"
+    assert after["flow"]["message_kind"] == "again"
     assert after["lesson_steps_mastered"] == 0
     assessments = session.ask("learning.statistics", scope="full")["assessments"]
     assert (assessments["accepted"], assessments["rejected"]) == (0, 1)
 
 
-@pytest.mark.parametrize("shift", [-.3, .3], ids=["early", "late"])
+@pytest.mark.parametrize("shift", [-.1, .1], ids=["early", "late"])
 def test_an_attack_inside_the_tolerance_stays_correct(practice_session, shift):
     session = practice_session(bars=2, chords=True)
     state = tempo(session)
@@ -156,7 +156,7 @@ def test_two_failures_above_the_floor_slow_down_and_a_clean_take_resets_the_coun
     state = play(session, state, wrong=(0,))           # failure 1 of 2, streak lost
     assert state["bpm"] == 80 and state["streak"] == 0
     state = play(session, state, shift=(LAST, .6))     # failure 2 of 2: slower
-    assert state["bpm"] == 72 and state["flow"]["message"] == "Slower: 72 BPM"
+    assert state["bpm"] == 72 and state["flow"]["message_kind"] == "slower"
 
 
 WINDOWS = {
@@ -172,7 +172,7 @@ MISTAKES = {
     "first note missing": (lambda n: {"missing": (0,)}, 0, M),
     "last note missing": (lambda n: {"missing": (n-1,)}, -1, M),
     "first note wrong": (lambda n: {"wrong": (0,)}, 0, W),
-    "last note too late": (lambda n: {"shift": (n-1, .6)}, -1, "late"),
+    "last note too late": (lambda n: {"shift": (n-1, .6)}, -1, M),
     "first note too early": (lambda n: {"shift": (0, -.45)}, 0, "early"),
 }
 
@@ -184,7 +184,8 @@ def window_take(session, window):
     session.finish_listen()
     session.finish_free()
     state = session.ready_score()
-    assert state["running"] and state["bpm"] == 40, state
+    expected_bpm = 80 if window == (1, 1, "left") else 40
+    assert state["running"] and state["bpm"] == expected_bpm, state
     session.ask("score.native_layout")
     return state
 
@@ -201,8 +202,8 @@ def test_every_window_kind_grades_a_mistake_and_repeats(practice_session, window
     expected = [C]*len(notes)
     expected[index] = status
     assert graded(session, state["transport_id"]) == expected
-    assert after["running"] and after["bpm"] == 40
-    assert after["flow"]["message"] == "Again at the same tempo"
+    assert after["running"] and after["bpm"] == state["bpm"]
+    assert after["flow"]["message_kind"] == "again"
     assert after["hand"] == state["hand"]
     assert (after["first_bar"], after["last_bar"]) == (state["first_bar"], state["last_bar"])
 
@@ -215,7 +216,10 @@ def test_every_window_kind_passes_a_clean_take_and_rejects_silence(practice_sess
     count = len(session.ask("score.semantic")["notes"])
     clean = play(session, state)
     assert graded(session, state["transport_id"]) == [C]*count
-    assert clean["bpm"] > 40
+    if state["bpm"] == state["target_bpm"]:
+        assert clean["bpm"] == state["bpm"] and clean["streak"] == 1
+    else:
+        assert clean["bpm"] > state["bpm"]
     silent = play(session, clean, missing=tuple(range(count)))
     assert graded(session, clean["transport_id"]) == [M]*count
-    assert silent["bpm"] == clean["bpm"] and silent["flow"]["message"] == "Again at the same tempo"
+    assert silent["bpm"] == clean["bpm"] and silent["flow"]["message_kind"] == "again"

@@ -89,7 +89,7 @@ def graded(session, transport):
 def assert_failed_and_repeated(before, after):
     assert after["running"] and after["transport_id"] == before["transport_id"]+1, after["feedback"]
     assert after["bpm"] == before["bpm"] and after["streak"] == 0
-    assert after["flow"]["message"] == "Again at the same tempo"
+    assert after["flow"]["message_kind"] == "again"
     assert after["lesson_steps_mastered"] == before["lesson_steps_mastered"]
 
 
@@ -126,7 +126,7 @@ def test_a_real_piece_opens_and_practises_without_a_break(practice_session, sour
     clean = perform(session, state, score_events(session, state))
     assert clean["running"] and clean["transport_id"] == state["transport_id"]+1
     assert graded(session, state["transport_id"]) == ["correct"]*len(notes(session))
-    assert clean["bpm"] > state["bpm"] and clean["flow"]["message"].startswith("Faster")
+    assert clean["bpm"] > state["bpm"] and clean["flow"]["message_kind"] == "faster"
     assert_follows_directly(session, state, clean)
     wrong = perform(session, clean, score_events(session, clean,
         pitch=lambda n: [n["midi_pitch"]+1]))

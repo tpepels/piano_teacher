@@ -80,6 +80,11 @@ def _at_tempo(decision, bpm: int, *, reset: bool = False):
 
 
 def _initial_tempo(course):
+    # Adaptive entry is for a new stage. After repeated failure at the
+    # floor, returning from Free must not jump straight back to a tempo
+    # the learner already failed.
+    if dict(course.progress.free_returns).get(course.key, 0):
+        return floor_bpm(int(course.progress.target_bpm))
     return initial_bpm(int(course.progress.target_bpm),
         notes=course.stage.variant.notes, hand=course.hand,
         final=course.exercise.kind == "perform")

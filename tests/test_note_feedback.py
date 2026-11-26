@@ -105,8 +105,9 @@ def test_first_attack_can_arrive_early_and_count_in_keys_earn_no_credit(bpm, tol
     count_in.receive(60, -match_window(60/bpm)-.001)
     assert not count_in.recorder.presses
     assert not count_in.finish().flow_passed
-    event = count_in.events.after(0)["events"][0]
-    assert (event["status"], event["source_id"]) == ("count_in", "")
+    # Direct delivery of an unadmitted attack creates no graded event.
+    # The full dispatch path separately emits neutral warm-up ink.
+    assert not count_in.events.after(0)["events"]
 
 
 @pytest.mark.parametrize("release,status", [(.1, "short"), (2, "long"), (None, "long")])
@@ -140,7 +141,8 @@ def test_omitted_repeated_note_cannot_steal_the_next_attack_live_or_at_finish():
     take.receive(60, .25)
     assert take.events.after(0)["events"][0]["source_id"] == "second"
     live = take.preview(.25)
-    assert [(n.note.source_id, n.observation.actual_onset) for n in live.notes] == [("second", .25)]
+    assert [(n.note.source_id, n.observation.actual_onset) for n in live.notes] == [
+        ("first", None), ("second", .25)]
     take.receive(60, .5, down=False)
     result = take.finish()
     assert [(n.note.source_id, n.status) for n in result.notes] == [
