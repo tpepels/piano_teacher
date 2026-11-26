@@ -6,7 +6,7 @@ from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, field, replace
 from typing import Callable, Literal
 from .music import Note, Phrase
-from .grading_tolerance import onset_tolerance, duration_tolerance, match_window
+from .grading_tolerance import onset_tolerance, duration_tolerance, match_window, late_match_deadline
 from .application.musical_scheduler import SCHEDULER
 
 
@@ -190,8 +190,8 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
 
     Matching uses the nearest unused same-pitch onset in a generous window;
     onset tolerance determines correctness; release tolerance counts only when enabled.
-    Once the next distinct authored onset arrives, no new attack can match
-    the previous note, even if its original matching window is still open.
+    A note cannot receive a new attack at or after its absolute late deadline
+    or the next distinct authored onset, whichever comes first.
     """
     if bpm <= 0:
         raise ValueError("Practice BPM must be positive")
@@ -217,9 +217,9 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
     onsets = sorted(set(item[0] for item in timing))
     next_attack = {start: onsets[i+1] if i+1 < len(onsets) else None
                    for i, start in enumerate(onsets)}
-    def before_next(note_index: int, onset: float) -> bool:
-        following = next_attack[timing[note_index][0]]
-        return following is None or onset < following
+    def before_deadline(note_index: int, onset: float) -> bool:
+        start, _, _, spb = timing[note_index]
+        return onset < late_match_deadline(start, spb, next_attack[start])
 
     def observation_for(note_index: int, played_index: int | None = None) -> NoteObservation:
         note = expected[note_index]
@@ -272,7 +272,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
         last = bisect_right(attacks, (start+window, len(played)))
         pairs.extend((abs(onset - start), note_index, event_index)
                      for onset, event_index in attacks[first:last]
-                     if before_next(note_index, onset))
+                     if before_deadline(note_index, onset))
     matched = {}
     for _, note_index, event_index in sorted(pairs):
         if note_index not in matched and event_index in unused:
@@ -290,7 +290,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
         start, _, _, spb = timing[note_index]
         candidates = [(abs(played[j].onset-start),j) for j in unused
                       if abs(played[j].onset-start) <= onset_tolerance(spb)
-                      and before_next(note_index, played[j].onset)]
+                      and before_deadline(note_index, played[j].onset)]
         if candidates:
             _, index = min(candidates)
             unused.remove(index)

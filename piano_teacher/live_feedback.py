@@ -3,8 +3,7 @@ from __future__ import annotations
 
 from .assessment_clock import expected_note_seconds
 from .exercise_contracts import TempoMap
-from .lesson_settings import SETTINGS
-from .grading_tolerance import onset_tolerance
+from .grading_tolerance import onset_tolerance, late_match_deadline
 from .music import Phrase
 from .practice import Assessment, PlayedNote, evaluate
 from .application.musical_scheduler import SCHEDULER
@@ -60,11 +59,8 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
             continue
         onset = observation.expected_onset
         if observation.actual_onset is None:
-            window = max(SETTINGS.grading_match_window_min_seconds,
-                         SETTINGS.grading_match_window_beats * observation.local_seconds_per_beat)
-            deadline = onset + window
-            if observation.next_attack_onset is not None:
-                deadline = min(deadline, observation.next_attack_onset)
+            deadline = late_match_deadline(
+                onset, observation.local_seconds_per_beat, observation.next_attack_onset)
             if deadline > elapsed_seconds:
                 continue
         elif onset > elapsed_seconds + 1e-7:

@@ -7,7 +7,7 @@ Releases and Free are handled independently by MIDI ingress.
 """
 from bisect import bisect_right
 
-from ..grading_tolerance import match_window
+from ..grading_tolerance import match_window, late_match_deadline
 from ..measure_grid import phrase_grid
 from .musical_scheduler import SCHEDULER
 
@@ -22,9 +22,15 @@ def accepts_attack(phrase, *, hand, boundaries, bpm, tempo, from_beat,
     def at(beat):
         return SCHEDULER.source_seconds(tempo, beat, bpm) - origin
 
-    def window(beat):
+    def spb(beat):
         local_bpm = tempo.bpm_at(beat) if tempo is not None else bpm
-        return match_window(SCHEDULER.seconds_per_beat(local_bpm))
+        return SCHEDULER.seconds_per_beat(local_bpm)
+
+    def window(beat):
+        return match_window(spb(beat))
+
+    def late_deadline(beat):
+        return late_match_deadline(at(beat), spb(beat))
 
     attacks = [[] for _ in range(len(grid)-1)]
     for note in phrase.notes:
@@ -45,13 +51,13 @@ def accepts_attack(phrase, *, hand, boundaries, bpm, tempo, from_beat,
         bar = attacks[index]
         if bar:
             last = max(bar)
-            if elapsed <= at(last)+window(last):
+            if elapsed < late_deadline(last):
                 return True
     # A final attack immediately before the barline may still be late
     # within its original match window, including in an empty next bar.
     if 0 <= index-1 < len(attacks) and attacks[index-1]:
         last = max(attacks[index-1])
-        if elapsed <= at(last)+window(last):
+        if elapsed < late_deadline(last):
             return True
     # A first attack of the next measure can legitimately be played early
     # while the current measure is already in its ungraded tail.

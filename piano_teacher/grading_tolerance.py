@@ -23,3 +23,11 @@ def match_window(seconds_per_beat: float) -> float:
     """How far from a note an attack can be and still be matched to it."""
     return max(SETTINGS.grading_match_window_min_seconds,
                SETTINGS.grading_match_window_beats * seconds_per_beat)
+
+
+def late_match_deadline(onset: float, seconds_per_beat: float,
+                        next_attack: float | None = None) -> float:
+    """Exclusive latest attack instant; independent of slow practice tempo."""
+    deadline = onset + min(match_window(seconds_per_beat),
+                           SETTINGS.grading_max_late_attack_seconds)
+    return min(deadline, next_attack) if next_attack is not None else deadline

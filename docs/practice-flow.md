@@ -82,7 +82,7 @@ bar; do not make the learner sit through it.
 | Two failures in a row at 50% | Return to Free |
 | Two consecutive clean attempts at target | Complete this hand; automatically enter the next hand, or offer the section choice after the final hand |
 
-The header shows live accuracy for the entire current graded take. Each correctly pitched note earns `max(0, 1 − |onset error| / onset tolerance)` credit; wrong and missed notes earn zero, and extra presses add zero-credit entries to the denominator. Future notes are excluded until played near their onset or their matching window expires. Before any evidence the display is blank (—); the final percentage uses the same metric. The separate timing-quality metric still controls tempo increases. The developer-tunable `minimum_accuracy_percent` in `lesson_settings.json` defaults to 0; a higher value rejects otherwise passing takes below that threshold without weakening existing note or hold checks.
+The header shows live accuracy for the entire current graded take. Each correctly pitched note earns `max(0, 1 − |onset error| / onset tolerance)` credit; wrong and missed notes earn zero, and extra presses add zero-credit entries to the denominator. Future notes are excluded until played near their onset or their matching window expires. Before any evidence the display is blank (—); the final percentage uses the same metric. The separate timing-quality metric still controls tempo increases. The developer-tunable `minimum_accuracy_percent` in `lesson_settings.json` is set to 85; otherwise passing takes below 85% retry without weakening existing note or hold checks. Both target-tempo passes must satisfy the threshold.
 
 Timing quality is 1 when every attack is centred and 0 when attacks sit at
 the edge of their window (1 − mean |onset error| / tolerance). The length
@@ -245,8 +245,10 @@ input. The trace is presentation only and cannot affect assessment.
 Listen lighting is ungraded and cannot award performance credit.
 
 A slightly early/late attack remains green. A note's matching window closes
-at the next distinct authored attack onset if that comes sooner than its
-ordinary matching deadline; simultaneous chord notes share a deadline.
+at the earliest of the next distinct authored attack onset, the ordinary
+matching deadline, or 200 ms after the scheduled attack (configurable
+`grading_max_late_attack_seconds`). The cutoff is exclusive and independent
+of practice tempo; simultaneous chord notes share a deadline.
 No attack at or after that next onset may correct a previous note. Live
 missing-note feedback and final grading use the same cutoff.
 An onset error counts only outside
