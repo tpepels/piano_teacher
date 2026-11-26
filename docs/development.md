@@ -313,3 +313,7 @@ Godot cache [`.godot/`](../godot/) data are ignored. Existing tracked `.gd.uid`
 files remain versioned; newly generated IDs are ignored unless a stable
 cross-checkout resource reference requires them. Do not delete user data or
 shut down an existing editor to clear a diagnostic without authorization.
+
+### Investigating scrolling frame pacing
+
+Run `./run.sh --frame-diagnostics 2>&1 | tee frame-results.log` and play a dense passage for at least 30 seconds. The `PHASE8D_FRAME_INTERVALS` records report process FPS, mean, p95 and worst delivered frame intervals; these are not physical display latency measurements. Compare to the display's refresh interval. V-sync stays enabled and practice uses native-refresh pacing. The visual timeline caches the exact-time projection per publication and indexes take starts; fully visible retained notation strips update translation without repeatedly resizing the clip.

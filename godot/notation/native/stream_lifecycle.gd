@@ -344,11 +344,23 @@ static func project(item: Dictionary, world: float, playhead_x: float,
     if right <= visible_left:
         clip.visible = false
         return true
-    clip.position = Vector2(visible_left,0.0)
-    clip.size = Vector2(maxf(1.0,right-visible_left),viewport.y)
-    segment.position = Vector2(-bounds.x-(visible_left-left),0.0)
-    segment.visible = true
-    clip.visible = true
+    # For a fully visible retained strip only its translation changes.
+    # Avoid repeated layout invalidation from subtracting two moving Xs
+    # to derive a width that is mathematically constant.
+    var cropped: float = maxf(0.0,LEFT_GUTTER_PX-left)
+    var desired_position := Vector2(visible_left,0.0)
+    var desired_size := Vector2(maxf(1.0,bounds.y-bounds.x-cropped),viewport.y)
+    var source_position := Vector2(-bounds.x-cropped,0.0)
+    if clip.position != desired_position:
+        clip.position = desired_position
+    if clip.size != desired_size:
+        clip.size = desired_size
+    if segment.position != source_position:
+        segment.position = source_position
+    if not segment.visible:
+        segment.visible = true
+    if not clip.visible:
+        clip.visible = true
     return true
 
 static func retire(owner: Control, item: Dictionary) -> void:

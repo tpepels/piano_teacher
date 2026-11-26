@@ -14,11 +14,13 @@ var _state: Dictionary = {}
 var _sampled_local_ms := 0.0
 
 func _measure_offset() -> void:
-    if not backend_clock.is_valid():
+    if has_backend_offset or not backend_clock.is_valid():
         return
+    var before_us := Time.get_ticks_usec()
     var backend_now: float = float(backend_clock.call())
+    var after_us := Time.get_ticks_usec()
     if is_finite(backend_now):
-        backend_offset_ms = float(Time.get_ticks_msec())-backend_now
+        backend_offset_ms = float(before_us+after_us)*.0005-backend_now
         has_backend_offset = true
 
 func accept(state: Dictionary, _measured_ms: int, received_ms: int) -> void:

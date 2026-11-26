@@ -10,9 +10,21 @@ var run := -1
 var segments: Array = []
 var holds: Array = []
 var end_world := INF
+var _take_starts: Dictionary = {}
+var _sample_ms := NAN
+var _sample_musical_ms := NAN
+var _sample_segment: Dictionary = {}
+var _sample_world := NAN
+var _world_ready := false
 
 func load_state(published: Variant) -> bool:
     ## Adopt a published timeline; false when there is none.
+    # Published segments/holds may change even at the same timestamp.
+    # Invalidate the exact-time sample on every publication.
+    _sample_ms = NAN
+    _world_ready = false
+    _sample_segment = {}
+    _take_starts.clear()
     if not published is Dictionary or (published.get("segments",[]) as Array).is_empty():
         run = -1
         segments = []
@@ -22,6 +34,9 @@ func load_state(published: Variant) -> bool:
     run = int(published.get("run",-1))
     segments = published.get("segments",[])
     holds = published.get("holds_ms",[])
+    for segment in segments:
+        if str(segment.get("kind","")) == "take":
+            _take_starts[str(segment.get("take_id",""))] = float(segment["world_start"])
     var closed: Variant = published.get("end_world")
     end_world = float(closed) if closed != null else INF
     return true
@@ -32,7 +47,19 @@ func active() -> bool:
 func paused() -> bool:
     return not holds.is_empty() and holds[-1][1] == null
 
+func _sample_time(t_ms: float) -> void:
+    if t_ms == _sample_ms:
+        return
+    _sample_ms = t_ms
+    _sample_musical_ms = _musical_ms(t_ms)
+    _sample_segment = _segment_at_musical(_sample_musical_ms) if not segments.is_empty() else {}
+    _world_ready = false
+
 func musical_ms(t_ms: float) -> float:
+    _sample_time(t_ms)
+    return _sample_musical_ms
+
+func _musical_ms(t_ms: float) -> float:
     var m := t_ms
     for hold in holds:
         var at: float = float(hold[0])
@@ -90,11 +117,21 @@ func world_at(t_ms: float) -> float:
     ## World beat (relative to the run) at Python monotonic ms `t_ms`.
     if segments.is_empty():
         return NAN
-    var m: float = musical_ms(t_ms)
+    _sample_time(t_ms)
+    if not _world_ready:
+        _sample_world = _world_at_sample()
+        _world_ready = true
+    return _sample_world
+
+func take_world_start(segment_id: String) -> float:
+    return float(_take_starts.get(segment_id,NAN))
+
+func _world_at_sample() -> float:
+    var m: float = _sample_musical_ms
     var first: Dictionary = segments[0]
     if m <= float(first["start_ms"]):
         return minf(float(first["world_start"]),end_world)
-    var chosen: Dictionary = _segment_at_musical(m)
+    var chosen: Dictionary = _sample_segment
     var world: float
     var finish: float = end_ms(chosen)
     if m >= finish and chosen == segments[-1]:
@@ -116,7 +153,8 @@ func hold_world_at(t_ms: float) -> float:
 func segment_at(t_ms: float) -> Dictionary:
     if segments.is_empty():
         return {}
-    return _segment_at_musical(musical_ms(t_ms))
+    _sample_time(t_ms)
+    return _sample_segment
 
 func _segment_at_musical(m: float) -> Dictionary:
     # Segments are chronological and contiguous. Long practice runs should

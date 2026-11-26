@@ -33,11 +33,19 @@ func follow(published: Variant, at_ms: int) -> void:
         following = false
         hold_world = beat
         return
-    var before_us := Time.get_ticks_usec()
-    var backend_now: float = float(backend_clock.call())
-    var after_us := Time.get_ticks_usec()
-    if not is_finite(backend_now):
-        return
+    # A native clock call is only required at the beginning of a run.
+    # Sample before replacing the old timeline, so a failed measurement
+    # cannot partially install the new run.
+    var next_run: int = int(published.get("run",-1)) if published is Dictionary else -1
+    var new_run: bool = not following or next_run != previous_run
+    var offset: float = _clock_offset_ms
+    if new_run and published is Dictionary and not (published.get("segments",[]) as Array).is_empty():
+        var before_us := Time.get_ticks_usec()
+        var backend_now: float = float(backend_clock.call())
+        var after_us := Time.get_ticks_usec()
+        if not is_finite(backend_now):
+            return
+        offset = float(before_us+after_us)*.0005-backend_now
     if not musical.load_state(published):
         beat = here
         following = false
@@ -46,7 +54,7 @@ func follow(published: Variant, at_ms: int) -> void:
     # Both clocks are monotonic in the same process. Fix their offset
     # for this run instead of injecting poll-to-poll rounding jitter.
     if not following or musical.run != previous_run:
-        _clock_offset_ms = float(before_us+after_us)*.0005-backend_now
+        _clock_offset_ms = offset
         beat = here
         run_offset = here-musical.world_at(_backend_ms(at_ms))
         following = true
@@ -61,11 +69,8 @@ func run_world(world: float) -> float:
 func take_beat(segment_id: String, at_ms: int) -> float:
     if not following:
         return NAN
-    for segment in musical.segments:
-        if str(segment.get("kind","")) == "take" and \
-                str(segment.get("take_id","")) == segment_id:
-            return musical.world_at(_backend_ms(at_ms))-float(segment["world_start"])
-    return NAN
+    var start: float = musical.take_world_start(segment_id)
+    return musical.world_at(_backend_ms(at_ms))-start if is_finite(start) else NAN
 
 func _follow_rate(at_ms: int) -> float:
     var segment: Dictionary = musical.segment_at(_backend_ms(at_ms))

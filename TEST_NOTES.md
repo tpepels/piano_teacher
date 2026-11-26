@@ -70,3 +70,6 @@ Uploaded Python run: 215 passed, 140 failed, 3 warnings. No commit SHA in log; i
 
 - Avoid tedious recovery from near-passes.
   - **Implemented; verification pending:** `recovery_accuracy_percent` defaults to 70. Failed takes at or above it repeat the same stage and BPM, clearing consecutive recovery failures without awarding mastery. Only consecutive below-threshold failures trigger the existing slower/Free policy. The 85% pass threshold and independent note checks are unchanged.
+
+- Reduce further scrolling frame overhead.
+  - **Implemented; verification pending:** Share cached exact-time timeline calculations across source beat, world position, rate and holds; index take IDs when a timeline is published; measure monotonic offsets once per run/process instead of every state poll. Fully visible retained clips preserve their exact width and local source position during translation. No smoothing filter, delayed MIDI or secondary clock. Frame diagnostics remain available; target-display measurement required.

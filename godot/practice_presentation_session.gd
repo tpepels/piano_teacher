@@ -93,8 +93,7 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
     # otherwise trap the source world behind its old limit indefinitely.
     guided.update_hold(state)
     var beat: float = transport_beat(state,now_ms)
-    score_flow.sample(now_ms)
-    var world: float = score_flow.project(now_ms)
+    var world: float = score_flow.sample(now_ms)
     feedback.poll(now_ms,score_session.layout_revision
         if score_session.layout_revision == score_session.revision else -1)
     metronome.update(state,state_tick_ms,beat,now_ms)
