@@ -134,7 +134,7 @@ func _draw() -> void:
     # Keyboard shortcuts stay functional and in tooltips. The reference
     # gives the primary key just one centered Play/Pause label, no keycap.
     var padding: float = 12.0 if size.x < 190.0 else 18.0
-    var key_width: float = 26.0 if primary and not piano_key_hint.is_empty() else 0.0
+    var key_width: float = 45.0 if primary and not piano_key_hint.is_empty() else 0.0
     var group_space: float = size.x - 2.0 * padding - key_width
     var label_offset: float = 27.0 if size.x < 190.0 else 30.0
     var available: float = maxf(1.0, group_space - label_offset)
@@ -188,14 +188,16 @@ func _draw() -> void:
     draw_string(font, Vector2(group_x + label_offset, baseline), label,
         HORIZONTAL_ALIGNMENT_LEFT, available, font_size, ink)
     if key_width > 0.0:
-        # Small piano keycap, with the two black keys identifying C.
+        # Three white keys and the group of two black keys; C is the
+        # highlighted white key to their left, as on a real piano.
         var key_x: float = size.x-padding-key_width+3.0
-        var key_y: float = size.y*.5-17.0+lift
-        var key_rect := Rect2(key_x,key_y,23.0,34.0)
-        draw_rect(key_rect,Color(Design.FOCUS,.95 if not disabled else .45))
-        draw_rect(key_rect,ink,false,1.0)
-        draw_rect(Rect2(key_x+7.0,key_y,5.0,12.0),Design.NIGHT)
-        draw_rect(Rect2(key_x+17.0,key_y,5.0,12.0),Design.NIGHT)
-        draw_string(font,Vector2(key_x+3.0,key_y+29.0),piano_key_hint,
-            HORIZONTAL_ALIGNMENT_CENTER,17.0,13,Design.NIGHT)
+        var key_y: float = size.y*.5-16.0+lift
+        for index in range(3):
+            var rect := Rect2(key_x+index*13.0,key_y,13.0,32.0)
+            draw_rect(rect,Design.FOCUS if index == 0 else Color(Design.FOCUS,.55))
+            draw_rect(rect,Design.NIGHT,false,1.0)
+        for index in range(2):
+            draw_rect(Rect2(key_x+9.5+index*13.0,key_y,7.0,16.0),Design.NIGHT)
+        draw_string(font,Vector2(key_x,key_y+28.0),piano_key_hint,
+            HORIZONTAL_ALIGNMENT_CENTER,13.0,12,Design.NIGHT)
 

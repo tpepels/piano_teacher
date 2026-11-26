@@ -53,6 +53,7 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
                               SCHEDULER.seconds_per_beat(slowest)))),
                       grade_note_holds=grade_note_holds)
     visible = []
+    provisional_extra = []
     for entry in result.notes:
         observation = entry.observation
         if observation is None:
@@ -66,6 +67,10 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
         elif onset > elapsed_seconds + 1e-7:
             if (onset - elapsed_seconds > observation.onset_tolerance + 1e-7
                     or observation.timing_error is not None or observation.pitch_error):
+                # An already played attack cannot disappear from the live
+                # score merely because its provisional assignment is future.
+                if whole_take and observation.played_index is not None:
+                    provisional_extra.append(eligible[observation.played_index])
                 continue
         visible.append(entry)
     # Unmatched physical presses already travel through FeedbackEventLog as
@@ -73,5 +78,6 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
     if whole_take:
         # Unmatched presses count against accuracy immediately. Future notes
         # do not count until matched near their onset or their window expires.
-        return Assessment(tuple(visible), result.extra_notes, result.unmatched_played)
+        extras = result.unmatched_played + tuple(provisional_extra)
+        return Assessment(tuple(visible), len(extras), extras)
     return Assessment(tuple(visible), 0)
