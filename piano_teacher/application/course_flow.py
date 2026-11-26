@@ -79,6 +79,16 @@ class CourseFlow:
             self.notices.feedback = effect.feedback
             self.notices.next_action = effect.next_action
 
+    def open_sight_reading(self) -> None:
+        plan = self.lesson.plan
+        self.lesson.set_course_guided(False)
+        self.transport.stop_automatic()
+        self.flow_execute(practice_flow.Transition(
+            practice_flow.FlowState(plan.identity,True,practice_flow.Step.TEMPO,
+                                    plan.bpm,plan.target_bpm),
+            "Sight reading · Ready"),reason="sight_reading")
+        self.notices.publish("","Read the notes as they arrive.")
+
     def flow_open(self, *, resumed: bool = False) -> None:
         """Open: a fresh piece starts with Listen, a resumed one in Free."""
         self.lesson.set_course_guided(True)

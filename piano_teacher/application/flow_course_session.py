@@ -237,7 +237,9 @@ class PracticeFlowCourseSession:
 
     def status(self, plan, mode: str) -> dict:
         exercise = plan.exercise
-        if exercise.kind == "perform":
+        if plan.profile == "sight-reading":
+            where = "Sight reading"
+        elif exercise.kind == "perform":
             where = "Whole piece"
         else:
             first = exercise.phrase.first_bar
@@ -263,4 +265,5 @@ class PracticeFlowCourseSession:
         return {"step":step,"where":where,"hand":plan.hand,
                 "tempo_percent":percent,
                 "status":f"{where} · {hand_text} · {label}",
-                "message_id":sequence,"message":message,"message_kind":self._message_kind}
+                "message_id":sequence,"message":message,"message_kind":self._message_kind,
+                "sight_reading":plan.profile == "sight-reading"}

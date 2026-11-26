@@ -108,6 +108,15 @@ class PracticeEngine:
             path = self.library.resolve(identifier)
         self.load(str(path), opened_identifier=identifier)
 
+    def start_sight_reading(self, level: int, tempo: str) -> None:
+        from .sight_reading import new_round
+        from .application.source_preparation_session import PreparedSource
+        with self.source_preparation.source_mutation():
+            plan, fingerprint = new_round(level, tempo)
+            self.practice_session.apply(SourceCommitted(
+                PreparedSource(Path("Sight reading " + fingerprint + ".mid"),
+                               fingerprint,plan,False)))
+
     def performance_diagnostics(self) -> dict:
         return self.runtime_timings.snapshot()
 

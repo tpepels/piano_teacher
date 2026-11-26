@@ -100,7 +100,11 @@ def project_controls(s: Mapping) -> dict:
         "perform_current": {"enabled":loaded},
         "perform_whole": {"enabled":loaded},
     }
-    listen = "listen" if s.get("loaded") and s.get("mode") != "listen" else None
+    reading = bool((s.get("flow") or {}).get("sight_reading"))
+    if reading:
+        activity_modes = {key: {"enabled":False} for key in activity_modes}
+        tempo_allowed = False
+    listen = "listen" if s.get("loaded") and s.get("mode") != "listen" and not reading else None
     # A physical MIDI key is a gesture. The application determines
     # whether the current phase allows an initial start, manual retry
     # or course continuation. The input adapter only reports freshness.

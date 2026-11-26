@@ -93,7 +93,10 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
     def source(event):
         resumed = source_installation.install(event.prepared)
         lesson.forget_source_decisions()
-        if resumed is not None:
+        if lesson.plan.profile == "sight-reading":
+            course.open_sight_reading()
+            commands.apply("start")
+        elif resumed is not None:
             course.flow_open(resumed=resumed)
         if event.opened_identifier is not None:
             library.mark_opened(event.opened_identifier)

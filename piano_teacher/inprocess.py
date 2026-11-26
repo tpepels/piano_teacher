@@ -109,6 +109,8 @@ class EngineCommands:
                                          fingerprint=values.get("fingerprint"))
             elif operation == "library.open":
                 engine.load_library(values["id"])
+            elif operation == "sight_reading.start":
+                engine.start_sight_reading(values["level"], values["tempo"])
             elif operation == "library.health.start":
                 return self._reply(OK, engine.start_library_health())
             elif operation == "settings.update":
