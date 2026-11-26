@@ -46,6 +46,8 @@ var _last_native_failure := ""
 var _retry_attempted := false
 var _identical_failure_repeats := 0
 var _retained_started_ms := -1
+var _timing_diagnostics: bool = OS.get_cmdline_user_args().has("--frame-diagnostics") or \
+    OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
 var _published_retained_generation := -1
 var _preparing_since_ms := -1
 var _next_request_id := 0
@@ -287,11 +289,13 @@ func _request_is_current(request: Dictionary) -> bool:
 func _drain_stale(_kind: String, _now_ms: int) -> void:
     request_layout()
 
-func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
+func _complete_bundle(code: int, body: PackedByteArray, _now_ms: int) -> void:
     if code != 0:
         _fail(_command_failure(code,body))
         return
+    var started: int = Time.get_ticks_usec()
     var bundle: Variant = _decode_json(body)
+    var decoded: int = Time.get_ticks_usec()
     if not bundle is Dictionary:
         _fail("Practice engine returned no source-bound score bundle")
         return
@@ -306,13 +310,16 @@ func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
     var model: Dictionary = bundle["model"]
     if not is_instance_valid(_renderer):
         return
+    var validated: int = Time.get_ticks_usec()
     var installed: Dictionary = NativeScoreAssets.install(_renderer, layout)
+    var installed_at: int = Time.get_ticks_usec()
     if not bool(installed.get("ok",false)):
         _fail(str(installed.get("error","Authentic engraving unavailable")))
         return
     if not _renderer.load_score(model):
         _fail(str(_renderer.failure_reason))
         return
+    var model_loaded: int = Time.get_ticks_usec()
     _layout = installed["layout"]
     layout_revision = revision
     _rendered_stage_key = _stage_key
@@ -320,13 +327,23 @@ func _complete_bundle(code: int, body: PackedByteArray, now_ms: int) -> void:
     native_score_piece_fingerprint = _fingerprint
     _annotation_version = -1
     _apply_fingering_annotations()
-    _retained_started_ms = now_ms
+    _retained_started_ms = Time.get_ticks_msec()
     _renderer.visible = true
     if is_instance_valid(_feedback):
         _feedback.bind_score(_renderer,revision)
         _feedback.present(_state.duplicate(true))
     layout_published.emit(revision,layout_snapshot())
     _publish_status()
+    if _timing_diagnostics:
+        var published: int = Time.get_ticks_usec()
+        print("SCORE_BUNDLE_MAIN_THREAD:",JSON.stringify({
+            "revision":revision,"bytes":body.size(),
+            "decode_ms":float(decoded-started)*.001,
+            "validate_ms":float(validated-decoded)*.001,
+            "atlas_ms":float(installed_at-validated)*.001,
+            "model_ms":float(model_loaded-installed_at)*.001,
+            "layout_publish_ms":float(published-model_loaded)*.001,
+            "total_ms":float(published-started)*.001}))
     _finish_native_score()
 
 func _finish_native_score() -> void:
@@ -347,6 +364,8 @@ func _finish_native_score() -> void:
         # published while they compiled said "Compiling"; clear it.
         _publish_status()
         return
+    var retained_ms: int = Time.get_ticks_msec()-_retained_started_ms if _retained_started_ms >= 0 else -1
+    var ready_started: int = Time.get_ticks_usec()
     rendered_revision = revision
     _preparing_since_ms = -1
     _retained_started_ms = -1
@@ -356,6 +375,10 @@ func _finish_native_score() -> void:
     _identical_failure_repeats = 0
     _publish_status()
     score_published.emit(revision)
+    if _timing_diagnostics:
+        print("SCORE_RETAINED_READY:",JSON.stringify({
+            "revision":revision,"retained_wait_ms":retained_ms,
+            "ready_callbacks_ms":float(Time.get_ticks_usec()-ready_started)*.001}))
     if str(_state.get("phase","")) == "loading" and \
             int(_state.get("awaiting_score_revision",-1)) == revision and is_ready():
         action_requested.emit({"action":"score_ready","revision":revision})
