@@ -62,6 +62,12 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
                    lifecycle):
     """Event type -> handler(event)."""
     def physical(event):
+        # Hardware state is independent of take admission, shortcuts and
+        # deferred grading. Replaying a note must not replay a physical key.
+        if not event.deferred and (event.arrival is None or
+                event.arrival.device == midi_input.device):
+            midi_input.observe_physical_keys(event.message,
+                received_at=event.received_at)
         if (event.arrival is not None and not epoch.admits(
                 event.arrival, event.received_at, event.corrected_at)):
             # Stale keys may update hardware observation/release hygiene,

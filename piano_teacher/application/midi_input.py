@@ -133,6 +133,9 @@ class MidiInput:
 
     # --- live_input
 
+    def observe_physical_keys(self, message, *, received_at):
+        self._live.observe_physical(message, received_at=received_at)
+
     def clear_live_device(self, *args, **kwargs):
         return self._live.clear_device(*args, **kwargs)
 

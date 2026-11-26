@@ -15,7 +15,10 @@ from .application.musical_scheduler import SCHEDULER
 
 class LiveInputView:
     def __init__(self) -> None:
-        self.held: dict[int, int] = {}
+        # Physical state is channel-specific and independent of grading.
+        # Repeated Note On messages for one key do not require extra releases.
+        self.held: set[tuple[int, int]] = set()
+        self._physical_at: dict[tuple[int, int], float] = {}
         self.recent: deque[dict] = deque(maxlen=32)
 
     def reset_attempt(self) -> None:
@@ -23,7 +26,26 @@ class LiveInputView:
 
     def clear_device(self) -> None:
         self.held.clear()
+        self._physical_at.clear()
         self.reset_attempt()
+
+    def observe_physical(self, message, *, received_at: float | None) -> None:
+        """Observe a hardware event once, before exercise-specific filtering."""
+        if message.type not in ("note_on", "note_off"):
+            return
+        pitch = message.note
+        if not 0 <= pitch <= 127:
+            return
+        key = (getattr(message, "channel", 0), pitch)
+        previous = self._physical_at.get(key)
+        if received_at is not None:
+            if previous is not None and received_at < previous:
+                return
+            self._physical_at[key] = received_at
+        if message.type == "note_on" and message.velocity > 0:
+            self.held.add(key)
+        else:
+            self.held.discard(key)
 
     def receive(
         self, *, pitch: int, is_on: bool, now: float, phrase: Phrase | None,
@@ -35,14 +57,6 @@ class LiveInputView:
         if not 0 <= pitch <= 127:
             return None
         at = now - run_at if at is None else at
-        if is_on:
-            self.held[pitch] = self.held.get(pitch, 0) + 1
-        else:
-            remaining = self.held.get(pitch, 0) - 1
-            if remaining > 0:
-                self.held[pitch] = remaining
-            else:
-                self.held.pop(pitch, None)
         graded = running and not paused and mode in ("practice", "perform")
         observation = judgement.observation if judgement is not None and graded else None
         if not is_on:
@@ -92,5 +106,5 @@ class LiveInputView:
             if active:
                 first = min(note.start for note in active)
                 expected = sorted({note.pitch for note in active if abs(note.start-first) <= .015})
-        return {"midi_held_pitches": sorted(self.held),
+        return {"midi_held_pitches": sorted({pitch for _, pitch in self.held}),
                 "midi_recent_keys": events, "midi_next_pitches": expected}
