@@ -82,3 +82,5 @@ Uploaded Python run: 215 passed, 140 failed, 3 warnings. No commit SHA in log; i
 
 - Improve residual scrolling jitter despite nominal 60 FPS.
   - **Implemented; verification pending:** Microsecond-resolution frame sampling, same-publication source beat/world calculation, explicitly disabled 2D pixel snapping. Opt-in wall-time and projected pixel displacement/speed diagnostics distinguish actual callback pacing from Godot delta and within-passage movement. No display timing or physical MIDI verification yet.
+
+- Move sight reading out of Settings and into the gear drawer as its own page, alongside Play, Music and Settings. **Implemented; visual verification pending.** Level and named tempo choices are preserved in the page for subsequent rounds; command busy/error handling uses the existing command coordinator. No changes to generated music or assessment.

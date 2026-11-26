@@ -36,7 +36,7 @@ def next_action(pending, *, target_bpm: float, start_beat: float,
     if decision.verdict and decision.verdict.ignored:
         return "Repeat at the same tempo."
     if pending.state.course.profile == "sight-reading":
-        return "Open Settings to start a new random round, or Play to repeat this one."
+        return "Open Sight reading to start a new random round, or Play to repeat this one."
     if decision.flow_outcome is practice_flow.Outcome.SECTION_READY:
         return "Section complete · C to repeat · F for next section."
     if decision.verdict is not None and decision.verdict.accepted:

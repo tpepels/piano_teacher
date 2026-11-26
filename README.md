@@ -42,7 +42,7 @@ include release duration in grading. Keyboard and configured
 piano shortcuts remain available. The keyboard hint appears after a wrong note
 in Free.
 
-For timed sight-reading drills, open **Settings → Sight reading** and choose one of
+For timed sight-reading drills, open **gear menu → Sight reading** and choose one of
 five levels and a named tempo. Every start creates a fresh 16-bar round,
 from single notes to inverted triads, seventh chords and tonal progressions.
 The regular moving score and live accuracy apply at the chosen fixed tempo.

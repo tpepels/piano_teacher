@@ -19,15 +19,17 @@ var last_published_control_started_ms := -1
 var last_state: Dictionary = {}
 var practice_view
 var settings_view
+var sight_reading_view
 var metronome_frame
 var action_request
 var command_failure_presenter
 var score_session
 
 func configure(practice, settings, metronome, request,
-        failure_presenter, assets) -> void:
+        failure_presenter, assets, reading = null) -> void:
     practice_view = practice
     settings_view = settings
+    sight_reading_view = reading
     metronome_frame = metronome
     action_request = request
     command_failure_presenter = failure_presenter
@@ -124,11 +126,15 @@ func request_command(operation: String, payload: Dictionary) -> void:
     request_token += 1
     practice_view.present_busy(true)
     settings_view.present_busy(true)
+    if sight_reading_view != null:
+        sight_reading_view.present_busy(true)
     var err: int = state.dispatch(action_request,operation,payload)
     if err == OK:
         return
     practice_view.present_busy(false)
     settings_view.present_busy(false)
+    if sight_reading_view != null:
+        sight_reading_view.present_busy(false)
     if operation == "practice.command":
         practice_view.finish_action()
     var message := "Cannot reach practice engine (status %d)" % err
@@ -143,6 +149,8 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
     var completed: Dictionary = state.finish()
     practice_view.present_busy(false)
     settings_view.present_busy(false)
+    if sight_reading_view != null:
+        sight_reading_view.present_busy(false)
     var operation: String = str(completed["operation"])
     if operation == "practice.command":
         practice_view.finish_action()

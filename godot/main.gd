@@ -11,6 +11,7 @@ const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const ContinuousScoreFlow := preload("res://continuous_score_flow.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SettingsScreen := preload("res://settings_screen.gd")
+const SightReadingScreen := preload("res://sight_reading_screen.gd")
 const CalibrationScreen := preload("res://calibration_screen.gd")
 const HomeScreen := preload("res://home_screen.gd")
 const PracticeScreen := preload("res://practice_screen.gd")
@@ -47,6 +48,7 @@ var input_session = ApplicationInputSession.new()
 var settings_interactions = SettingsInteractionSession.new()
 var navigation_drawer = NavigationDrawer.new()
 var settings_view: SettingsScreen
+var sight_reading_view: SightReadingScreen
 var calibration_view: CalibrationScreen
 var home_view: HomeScreen
 var practice_view: PracticeScreen
@@ -194,7 +196,7 @@ func _ready() -> void:
     state_presenter = PracticeStatePresenter.new(
         practice_view,settings_view,calibration_view)
     command_failure_presenter = CommandFailurePresenter.new(
-        library_view,practice_view,settings_view,home_view)
+        library_view,practice_view,settings_view,home_view,sight_reading_view)
     command_success_presenter = CommandSuccessPresenter.new(
         library_view,practice_view,settings_view)
     command_success_effects = CommandSuccessEffects.new(command_success_presenter)
@@ -209,7 +211,7 @@ func _ready() -> void:
             return presentation_session.transport_beat(state_inbox.current,at_ms),
         countin_audio.practice_click,countin_audio.click)
     command_coordinator.configure(practice_view,settings_view,metronome_frame,
-        action_request,command_failure_presenter,score_session)
+        action_request,command_failure_presenter,score_session,sight_reading_view)
     metronome_frame.score_flow = score_flow
     visual_transport_clock.score_flow = score_flow
     score_admission = ScoreAdmissionGateway.new()
@@ -337,6 +339,7 @@ func _build_interface() -> void:
     _build_home_screen()
     _build_library_screen()
     _build_settings_screen()
+    _build_sight_reading_screen()
     _build_practice_screen()
     library_catalog.configure(library_view,home_view,command_coordinator.request_command)
     library_catalog.open_requested.connect(command_coordinator.open_library_piece,CONNECT_DEFERRED)
@@ -405,6 +408,14 @@ func _update_responsive_layout() -> void:
     _resize_overlay_drawer()
     practice_view.apply_viewport(size, ui_scale)
 
+func _build_sight_reading_screen() -> void:
+    var page := _screen("SightReading")
+    screens["sight_reading"] = page
+    sight_reading_view = SightReadingScreen.new()
+    page.add_child(sight_reading_view)
+    sight_reading_view.start_requested.connect(func(level: int, tempo: String):
+        command_coordinator.request_command("sight_reading.start",{"level":level,"tempo":tempo}))
+
 func _build_settings_screen() -> void:
     statistics_coordinator = preload("res://learning_statistics_coordinator.gd").new()
     add_child(statistics_coordinator)
@@ -420,8 +431,6 @@ func _build_settings_screen() -> void:
     settings_interactions.command_requested.connect(command_coordinator.request_command)
     settings_interactions.action_requested.connect(send_action)
     settings_view.device_selected.connect(midi_devices.choose)
-    settings_view.sight_reading_requested.connect(func(level: int, tempo: String):
-        command_coordinator.request_command("sight_reading.start",{"level":level,"tempo":tempo}))
     settings_interactions.exit_requested.connect(_exit_app)
     # Timing calibration is its own page, opened from Settings.
     var calibration_page := _screen("Calibration")

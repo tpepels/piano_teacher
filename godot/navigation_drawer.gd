@@ -42,12 +42,13 @@ func mount(host: Control, screens: Dictionary, make_button: Callable,
     brand.custom_minimum_size.y = 100
     rail.add_child(brand)
     # A game menu: large words, the current page lit by the mint key.
-    for item in [["practice", "Play"], ["library", "Music"], ["settings", "Settings"]]:
+    for item in [["practice", "Play"], ["library", "Music"], ["sight_reading", "Sight reading"], ["settings", "Settings"]]:
         var destination: String = item[0]
         var button: Button = make_button.call(item[1],
             func(): navigate.call(destination), false, "menu")
-        button.set_meta("ui_font_base", 30)
-        button.add_theme_font_size_override("font_size", 30)
+        var font_size: int = 22 if destination == "sight_reading" else 30
+        button.set_meta("ui_font_base", font_size)
+        button.add_theme_font_size_override("font_size", font_size)
         button.custom_minimum_size = Vector2(0, 54)
         rail.add_child(button)
         if destination != "practice":
@@ -65,7 +66,7 @@ func mount(host: Control, screens: Dictionary, make_button: Callable,
     pages.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     pages.size_flags_vertical = Control.SIZE_EXPAND_FILL
     shell.add_child(pages)
-    for page in ["library", "settings", "calibration"]:
+    for page in ["library", "sight_reading", "settings", "calibration"]:
         var content: Control = screens[page]
         content.reparent(pages, false)
         content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

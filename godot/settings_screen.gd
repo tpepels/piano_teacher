@@ -7,7 +7,6 @@ const INK := Design.STONE
 const MUTED := Design.SECONDARY_INK
 const ACCENT := Design.TEAL
 
-signal sight_reading_requested(level: int, tempo: String)
 signal choose_devices_requested
 signal refresh_devices_requested
 signal save_folder_requested(path: String)
@@ -29,9 +28,6 @@ signal exit_requested
 var ui_scale := 1.0
 var default_font: Font
 var settings_grid: GridContainer
-var reading_start: Button
-var reading_level: OptionButton
-var reading_tempo: OptionButton
 var history_actions_body: VBoxContainer
 var history_toggle: Button
 var device_button: Button
@@ -159,31 +155,6 @@ func _ready() -> void:
     settings_grid.add_theme_constant_override("h_separation", 18)
     settings_grid.add_theme_constant_override("v_separation", 18)
     content.add_child(settings_grid)
-    var reading_panel := _card()
-    reading_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    settings_grid.add_child(reading_panel)
-    var reading := _section("Sight reading")
-    _card_body(reading_panel,18).add_child(reading)
-    reading.add_child(_label("Fresh notes and chords at a fixed tempo. Read as you play.",14,MUTED))
-    reading_level = OptionButton.new()
-    reading_level.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    for level in ["1 · Quarter and eighth notes","2 · Sixteenth notes",
-                  "3 · Triads and inversions","4 · Seventh chords",
-                  "5 · Chord progressions"]:
-        reading_level.add_item(level)
-    reading.add_child(reading_level)
-    reading_tempo = OptionButton.new()
-    reading_tempo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    for tempo in ["Largo · 40 BPM","Lento · 50 BPM","Adagio · 60 BPM",
-                  "Andante · 80 BPM","Moderato · 100 BPM","Allegretto · 112 BPM",
-                  "Allegro · 132 BPM","Vivace · 160 BPM","Presto · 184 BPM"]:
-        reading_tempo.add_item(tempo)
-    reading_tempo.select(3)
-    reading.add_child(reading_tempo)
-    reading_start = _button("Start sight reading",func():
-        sight_reading_requested.emit(reading_level.selected+1,
-            reading_tempo.get_item_text(reading_tempo.selected).split(" · ")[0].to_lower()),true)
-    reading.add_child(reading_start)
     var midi_panel := _card()
     midi_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     settings_grid.add_child(midi_panel)
@@ -546,9 +517,6 @@ func present_practice(state: Dictionary, editing: bool = false) -> void:
 
 func present_busy(pending: bool) -> void:
     _history_busy = pending
-    reading_start.disabled = pending
-    reading_level.disabled = pending
-    reading_tempo.disabled = pending
     apply_tempo_button.disabled = pending
     retention_save_button.disabled = pending
     evidence_days_setting.editable = not pending

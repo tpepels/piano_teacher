@@ -304,7 +304,7 @@ The playhead-aligned notification lane uses semantic outcome cues: bold mint suc
 
 ## Sight reading
 
-Settings → Sight reading offers five levels and a fixed named tempo. Each Start creates a fresh 16-bar score, with a normal count-in, scrolling notation, physical MIDI grading and live accuracy. It skips Listen, Free and the lesson tempo ladder. The completed round stops and reports its accuracy; return to Settings to generate another. Rounds do not enter the music library.
+The gear menu's Sight reading page offers five levels and a fixed named tempo. Each Start creates a fresh 16-bar score, with a normal count-in, scrolling notation, physical MIDI grading and live accuracy. It skips Listen, Free and the lesson tempo ladder. The completed round stops and reports its accuracy; return to Sight reading in the gear menu to generate another. Rounds do not enter the music library.
 
 Levels: single diatonic quarter/eighth notes; add sixteenths; half-note major/minor/diminished/augmented triads in all inversions; add seventh chords in all inversions; half-note tonal major/minor chord progressions mixing triads and sevenths with randomized nearby inversions. Single-note pitch distances follow a discrete truncated Gaussian (5-semitone standard deviation); chord voicings favor small motion without prohibiting leaps. Range A1–E6 (six diatonic steps beyond the outer staff lines). Tempo presets range from Largo 40 to Presto 184 BPM. No adaptive tempo or lesson mastery is awarded for this mode.
 
