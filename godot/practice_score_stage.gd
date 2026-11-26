@@ -9,7 +9,6 @@ const GameStage := preload("res://game_stage.gd")
 const ScoreViewBase := preload("res://notation/shared/view_base.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
 const GlowField := preload("res://mint_glow_field.gd")
-const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameCountIn := preload("res://game_countin.gd")
 const PLAYHEAD_FRACTION := preload("res://notation/shared/spacing_policy.gd").PLAYHEAD_FRACTION
 const HintKeyboard := preload("res://hint_keyboard.gd")
@@ -24,12 +23,6 @@ var renderer: Control
 var playhead_glow: ColorRect
 var feedback: Node # note-status ledger; strips paint its ink
 var effects: Control
-var phase_cue: Control
-var hand_cue_panel: PanelContainer
-var hand_cue_label: Label
-var _hand_cue_tween: Tween
-var _hand_cue_identity := ""
-var _hand_cue_previous_phase := ""
 var count_in: Control
 var keyboard: Control
 var held_staff: Control
@@ -38,9 +31,7 @@ var score_status_label: Label
 var score_browse_button: Button
 var score_retry_button: Button
 var practice_playback_banner: Label
-var practice_note_feedback_panel: PanelContainer
-var practice_note_feedback_label: Label
-var _state: Dictionary = {}
+var notification_row: Control
 var _view_size := Vector2(800,600)
 
 func _clear_progress_rail(child: Node) -> void:
@@ -79,6 +70,18 @@ func _ready() -> void:
     var score_region := VBoxContainer.new()
     score_region.add_theme_constant_override("separation", 8)
     score_margin.add_child(score_region)
+    # Keep the notification surface separate from score ink and count-in.
+    # Reserve its height even when empty so messages never resize the staff.
+    notification_row = Control.new()
+    notification_row.custom_minimum_size.y = 48.0
+    notification_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    notification_row.clip_contents = true
+    score_region.add_child(notification_row)
+    notification_row.add_child(practice_playback_banner)
+    practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    practice_playback_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    practice_playback_banner.clip_text = true
+    practice_playback_banner.max_lines_visible = 2
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 210)
@@ -135,70 +138,12 @@ func _ready() -> void:
     score_retry_button = _button("Retry score", func(): score_retry_requested.emit(), false, "review")
     score_retry_button.visible = false
     status_content.add_child(score_retry_button)
-    # A compact, unobtrusive cue. A huge centred numeral hid the movement.
-    phase_cue = GamePhaseCue.new()
-    phase_cue.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-    phase_cue.offset_left = 178.0
-    phase_cue.offset_right = -18.0
-    phase_cue.offset_top = 46.0
-    phase_cue.offset_bottom = 88.0
-    score_frame.add_child(phase_cue)
-    # One unobtrusive, transient hand cue on passage/hand change and retries.
-    # Do not allocate a persistent header row or overlay any notation ink.
-    hand_cue_panel = PanelContainer.new()
-    hand_cue_panel.name = "HandCue"
-    hand_cue_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hand_cue_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-    hand_cue_panel.position = Vector2(24, 46)
-    hand_cue_panel.custom_minimum_size = Vector2(124, 32)
-    var hand_style := Design.bordered_surface(Color("#174239", .91), 16, .34)
-    hand_style.border_color = Color(Design.HIGHLIGHT, .36)
-    hand_style.set_content_margin_all(9)
-    hand_cue_panel.add_theme_stylebox_override("panel",hand_style)
-    hand_cue_label = UI.label("", 14, Design.HIGHLIGHT)
-    hand_cue_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    hand_cue_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    hand_cue_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    hand_cue_panel.add_child(hand_cue_label)
-    hand_cue_panel.visible = false
-    score_frame.add_child(hand_cue_panel)
     count_in = GameCountIn.new()
     count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
     # Four large beat pulses sit above the staff, without a modal overlay.
     score_frame.resized.connect(_place_count_in)
     count_in.visible = false
     score_frame.add_child(count_in)
-    # A visible retry notice must not consume vertical space or force the
-    # bottom transport buttons off smaller laptop screens.
-    practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-    practice_playback_banner.offset_left = 20.0
-    practice_playback_banner.offset_right = -20.0
-    practice_playback_banner.offset_top = 54.0
-    practice_playback_banner.offset_bottom = 54.0
-    practice_playback_banner.grow_vertical = Control.GROW_DIRECTION_END
-    score_frame.add_child(practice_playback_banner)
-    # A stationary feedback badge stays visible even after a missed note
-    # scrolls left out of view. It never covers the playing cursor.
-    practice_note_feedback_panel = PanelContainer.new()
-    var feedback_style := Design.surface(Color("#27362F"), 9)
-    feedback_style.set_border_width_all(2)
-    feedback_style.border_color = Color("#ED665F")
-    feedback_style.set_content_margin_all(9)
-    practice_note_feedback_panel.add_theme_stylebox_override("panel", feedback_style)
-    practice_note_feedback_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    practice_note_feedback_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-    practice_note_feedback_panel.offset_left = -330.0
-    practice_note_feedback_panel.offset_right = -12.0
-    practice_note_feedback_panel.offset_top = 10.0
-    practice_note_feedback_panel.offset_bottom = 60.0
-    practice_note_feedback_panel.visible = false
-    score_frame.add_child(practice_note_feedback_panel)
-    practice_note_feedback_label = UI.label("", 20, Color("#FF827A"), true)
-    practice_note_feedback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    practice_note_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    practice_note_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    practice_note_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    practice_note_feedback_panel.add_child(practice_note_feedback_label)
     # The hint keyboard and the held-notes staff sit at either end of the
     # transport row (practice_chrome places them), not under the score.
     keyboard = HintKeyboard.new()
@@ -223,13 +168,8 @@ func present_playhead_glow(score_ready: bool) -> void:
 
 
 func present(state: Dictionary, busy: bool) -> void:
-    _state = state.duplicate(true)
-    _present_hand_cue(state)
     effects.present(state)
     feedback.present(state)
-    phase_cue.present(state)
-    # Mapped feedback belongs on actual native noteheads; never overlay it.
-    practice_note_feedback_panel.visible = false
     keyboard.set_key_fifths(int(state.get("key_fifths", 0)))
     # Python decides whether the keyboard shows (screen.keyboard: the
     # wrong-note hint in Free, otherwise hidden).
@@ -241,8 +181,6 @@ func present(state: Dictionary, busy: bool) -> void:
     held_staff.visible = bool(state.get("loaded", false))
     held_staff.present(state.get("midi_held_pitches", []) if state.get("midi_held_pitches") is Array else [],
         int(state.get("key_fifths", 0)), _loaded_glyphs())
-
-var _flow_message_id := -1
 
 # The keyboard and held-notes staff are placed by the practice chrome; free
 # them here when no row adopted them (a stage built on its own).
@@ -265,63 +203,6 @@ func _loaded_glyphs():
             return atlas
     return null
 
-func _present_flow_message(flow: Dictionary) -> void:
-    # One short message per step/tempo change (practice flow), shown once.
-    var id := int(flow.get("message_id", 0))
-    var text := str(flow.get("message", ""))
-    if id == _flow_message_id:
-        return
-    _flow_message_id = id
-    if text.is_empty():
-        return
-    hand_cue_label.text = text
-    if _hand_cue_tween != null and _hand_cue_tween.is_running():
-        _hand_cue_tween.kill()
-    hand_cue_panel.visible = true
-    hand_cue_panel.modulate.a = 0.0
-    _hand_cue_tween = create_tween()
-    _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",1.0,.18)
-    _hand_cue_tween.tween_interval(1.4)
-    _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",0.0,.42)
-    _hand_cue_tween.tween_callback(func(): hand_cue_panel.visible = false)
-
-func _present_hand_cue(state: Dictionary) -> void:
-    if state.get("flow") is Dictionary and bool(state.get("loaded",false)):
-        _present_flow_message(state["flow"])
-        return
-    if not bool(state.get("loaded",false)):
-        _hand_cue_identity = ""
-        _hand_cue_previous_phase = ""
-        if _hand_cue_tween != null and _hand_cue_tween.is_running():
-            _hand_cue_tween.kill()
-        hand_cue_panel.visible = false
-        return
-    var hand: String = str(state.get("hand","both"))
-    if hand not in ["right","left","both"]:
-        return
-    var identity: String = "%s|%s|%s|%s|%s" % [
-        str(state.get("piece_fingerprint","")),
-        str(state.get("lesson_step",-1)),hand,
-        str(state.get("first_bar",-1)),str(state.get("stage_label",""))]
-    var phase: String = str(state.get("phase",""))
-    var fresh_count_in: bool = phase == "count_in" and _hand_cue_previous_phase != "count_in"
-    _hand_cue_previous_phase = phase
-    if identity == _hand_cue_identity and not fresh_count_in:
-        return
-    _hand_cue_identity = identity
-    hand_cue_label.text = ("Right hand" if hand == "right"
-        else "Left hand" if hand == "left" else "Both hands")
-    if _hand_cue_tween != null and _hand_cue_tween.is_running():
-        _hand_cue_tween.kill()
-    hand_cue_panel.visible = true
-    hand_cue_panel.modulate.a = 0.0
-    _hand_cue_tween = create_tween()
-    _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",1.0,.18)
-    _hand_cue_tween.tween_interval(1.35)
-    _hand_cue_tween.tween_property(hand_cue_panel,"modulate:a",0.0,.42)
-    _hand_cue_tween.tween_callback(func(): hand_cue_panel.visible = false)
-
-
 func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     _view_size = view_size
     keyboard.set_ui_scale(scale)
@@ -330,8 +211,7 @@ func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     for side in ["left","right","top","bottom"]:
         score_margin_box.add_theme_constant_override("margin_" + side,1 if compact else 6)
     practice_playback_banner.add_theme_font_size_override("font_size",UI.font_size(17,scale))
-    practice_note_feedback_label.add_theme_font_size_override("font_size",UI.font_size(18,scale))
-    practice_note_feedback_panel.offset_left = -minf(330.0,maxf(180.0,score_frame.size.x - 24.0))
+    notification_row.custom_minimum_size.y = maxf(40.0,48.0*scale)
     _place_count_in()
 
 func _place_count_in() -> void:
@@ -351,7 +231,6 @@ func present_score_status(status: Dictionary) -> void:
         return
     score_status_panel.visible = bool(status.get("visible",true))
     # One session owns loading phase, readiness and recovery controls.
-    phase_cue.visible = score_status_panel.visible
     score_retry_button.visible = score_status_panel.visible and \
         bool(status.get("retry_visible",false))
     score_browse_button.visible = score_status_panel.visible and \

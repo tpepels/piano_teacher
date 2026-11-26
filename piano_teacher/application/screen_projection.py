@@ -15,7 +15,7 @@ def notice(s: Mapping, moving: bool) -> str:
     """One problem line, only while the flow cannot continue by itself."""
     timeline = s.get("playback_timeline")
     if isinstance(timeline, Mapping) and timeline.get("state") == "failed":
-        return str(timeline.get("failure") or "The score could not be presented")
+        return "The music could not start. Press Play to try again."
     teaching = s.get("teaching") if isinstance(s.get("teaching"), Mapping) else {}
     if s.get("mode") == "learn" and teaching.get("phase") == "disconnected" and not s.get("paused"):
         # Free waits for a piano: say so, or it looks as if it just stopped.
@@ -45,4 +45,6 @@ def project_screen(s: Mapping, *, moving: bool, flash: tuple[int, str] = (0, "")
     return {"status": status,
             "notice": notice(s, moving) if s.get("loaded") else "",
             "keyboard": keyboard(s),
-            "flash": {"id": int(flash[0]), "text": str(flash[1])}}
+            "flash": {"id": int(flash[0]), "text": str(flash[1])},
+            "transition": {"id": int(flow.get("message_id", 0)),
+                           "text": str(flow.get("message", "")) if s.get("loaded") else ""}}

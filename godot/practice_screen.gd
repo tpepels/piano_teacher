@@ -64,6 +64,7 @@ var _score_status: Dictionary = {"ready":false,"visible":true,
     "browse_visible":true}
 var _busy := false
 var _flash_id := -1
+var _transition_id := -1
 var _audio_error := false
 var _active := true
 
@@ -113,12 +114,16 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     _present_pause()
     var screen: Dictionary = parsed.get("screen",{}) if parsed.get("screen") is Dictionary else {}
     var status := str(screen.get("status",""))
+    var transition: Dictionary = screen.get("transition",{}) if screen.get("transition") is Dictionary else {}
+    if int(transition.get("id",0)) != _transition_id:
+        _transition_id = int(transition.get("id",0))
+        _transition_message = str(transition.get("text",""))
+        _transition_until_ms = Time.get_ticks_msec() + TRANSITION_MS
     var flash: Dictionary = screen.get("flash",{}) if screen.get("flash") is Dictionary else {}
     if int(flash.get("id",0)) != _flash_id:
-        # A short message about the key just played, shown once.
         _flash_id = int(flash.get("id",0))
-        if not str(flash.get("text","")).is_empty():
-            present_message(str(flash["text"]))
+        _flash_message = str(flash.get("text",""))
+        _flash_until_ms = Time.get_ticks_msec() + TRANSITION_MS
     flow_status_label.visible = not status.is_empty()
     if flow_status_label.text != status:
         flow_status_label.text = status
@@ -146,9 +151,14 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     listen_button.call("configure", "listen", str(parsed.get("mode", "")) == "listen")
 
 const MESSAGE_MS := 4000
+const TRANSITION_MS := 2400
 var _notice := ""
 var _message := ""
 var _message_until_ms := 0
+var _transition_message := ""
+var _transition_until_ms := 0
+var _flash_message := ""
+var _flash_until_ms := 0
 
 func _present_notice(text: String) -> void:
     # The one problem line, shown on the score's banner.
@@ -156,7 +166,14 @@ func _present_notice(text: String) -> void:
     _show_banner()
 
 func _show_banner() -> void:
-    var text := _message if Time.get_ticks_msec() < _message_until_ms else _notice
+    var now := Time.get_ticks_msec()
+    var text := _notice
+    if not _transition_message.is_empty() and now < _transition_until_ms:
+        text = _transition_message
+    if not _flash_message.is_empty() and now < _flash_until_ms:
+        text = _flash_message
+    if not _message.is_empty() and now < _message_until_ms:
+        text = _message
     if stage.practice_playback_banner.text != text:
         stage.practice_playback_banner.text = text
     stage.practice_playback_banner.visible = not text.is_empty()
@@ -180,11 +197,11 @@ func present_message(message: String, _reveal := false) -> void:
 
 func begin_action(requested: String, pending := "") -> void:
     if not pending.is_empty():
-        present_message("Please wait · finishing " + pending,true)
+        present_message("One moment — finishing the previous action.",true)
         return
     var verb: String = {"listen":"Preparing piano audio","practice":"Returning to practice",
         "start":"Starting count-in","pause":"Pausing","resume":"Resuming","restart":"Restarting the passage",
-"select_step":"Opening lesson","stop":"Stopping"}.get(requested,"Applying " + requested.replace("_"," "))
+"select_step":"Opening lesson","stop":"Stopping"}.get(requested,"One moment")
     present_message(verb + "…")
 
 func finish_action() -> void:

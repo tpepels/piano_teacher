@@ -233,7 +233,7 @@ release errors affect both feedback and progression.
 
 ### Transitions
 
-Show a short message for **1–2 seconds** during the automatic transition:
+Show a short message for about **2 seconds** during the automatic transition, in one fixed notification row above the score and separate from the count-in. Course changes, graded results with timing accuracy, command notices and input messages use this same row. The reserved row never changes the score geometry when a message appears or disappears:
 “Now in tempo — 50%”, “Faster: 72 BPM”, “Slower: 58 BPM”, or a short compliment
 after a hand/window completes. Announce a simplified aid before it starts.
 Messages overlay the single count-in/handoff; they do not add another pause.

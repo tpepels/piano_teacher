@@ -69,10 +69,15 @@ class PracticeFlowCourseSession:
     @staticmethod
     def stage_entry(plan, *, resumed: bool = False) -> practice_flow.Transition:
         """A fresh window starts in Listen; a saved one warms up in Free."""
-        return practice_flow.enter_stage(plan.identity,
+        hand = {"right":"Right hand","left":"Left hand"}.get(plan.hand,"Both hands")
+        transition = practice_flow.enter_stage(plan.identity,
             final=plan.exercise.kind == "perform",target_bpm=int(plan.target_bpm),
-            resumed=resumed,hand_text={"right":"Right hand","left":"Left hand"}.get(
-                plan.hand,"Both hands"))
+            resumed=resumed,hand_text=hand)
+        if plan.exercise.kind == "perform":
+            return transition
+        first, last = plan.exercise.phrase.first_bar, plan.exercise.phrase.last_bar
+        where = f"Measure {first}" if first == last else f"Measures {first}–{last}"
+        return replace(transition, message=f"{where} · {transition.message}")
 
     def guided_entry(self, plan, *, recovery: bool,
                      simplified: bool) -> practice_flow.Transition | None:

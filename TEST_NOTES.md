@@ -15,6 +15,7 @@ These notes are filled by Tom after he plays on the piano. These serve as input 
   - Well done: xx% accuracy!
   - Try again: xx% accuracy!
   - Etc.
+  - **Implemented; verification pending (2026-11-26):** Practice transitions, result accuracy, short input notices and command notices use one fixed notification row above the score, separate from the count-in. Removed the duplicate hand cue, phase cue and unused feedback badge from the practice stage. Score loading/recovery controls and per-note markings remain distinct. Backend course messages include measure/hand and graded result accuracy; no extra musical delay.
 - Once we have a good measure for accuracy I will ask you to also force retry on low accuracy, you can add that functionality now, but I have to find a good value for it, so please let it always pass now (i.e. even 0% accuracy passes) and later we can increase it. But this is seperate from missed notes, missed notes or wrong notes always trigger a retry.
   - **Implemented; verification pending (2026-11-26):** The single Practice Flow verdict checks `minimum_timing_accuracy_percent` in `piano_teacher/lesson_settings.json` (validated 0–100, default 0). Existing failure conditions are unchanged; a positive threshold rejects otherwise passing takes below the minimum.
 - For the non-tempo play, please be more tollerant regarding when the note can be pressed, now the bar really needs to be stopped, that's not necessary, though we should check if we are somewhat in range of the note, but not too strict.
