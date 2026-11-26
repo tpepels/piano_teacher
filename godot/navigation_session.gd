@@ -30,11 +30,15 @@ func configure(backdrop, drawer, practice, library, settings,
 func update_frame_rate(state: Dictionary) -> void:
     # Display cadence follows the visible context, independently of the
     # backend MIDI/audio timeline and the canonical score projection.
-    var active: bool = current_screen == "practice" and bool(state.get("loaded",false))
-    active = active or (current_screen == "calibration" and bool(
-        state.get("midi_calibration",{}).get("active",false)))
-    var target_fps: int = 60 if active else 30
-    OS.low_processor_usage_mode = not active
+    # The display's V-sync, not an independent 60 FPS limiter, paces
+    # practice and active calibration. This policy is applied on every
+    # accepted state as well as navigation, including score preparation.
+    var active: bool = current_screen == "practice" or (
+        current_screen == "calibration" and bool(
+            state.get("midi_calibration",{}).get("active",false)))
+    var target_fps: int = 0 if active else 30
+    if OS.low_processor_usage_mode == active:
+        OS.low_processor_usage_mode = not active
     if Engine.max_fps != target_fps:
         Engine.max_fps = target_fps
 

@@ -467,12 +467,7 @@ func _process(delta: float) -> void:
             midi_devices.discover()
             settings_interactions.request_settings()
             library_catalog.request_catalog()
-    # Keep continuous frame pacing for all practice states (including
-    # count-in, rests, paused feedback fades and Free holds). Other screens
-    # may save power without sleeping the moving score.
-    var idle_mode: bool = current_screen != "practice"
-    if OS.low_processor_usage_mode != idle_mode:
-        OS.low_processor_usage_mode = idle_mode
+    # NavigationSession owns the display cadence for the visible page.
     var frame_ms: float = float(Time.get_ticks_usec()) * .001
     presentation_session.advance(state_inbox.current,state_inbox.tick_ms,
         int(frame_ms),delta,command_coordinator.state.pending,current_screen,frame_ms)

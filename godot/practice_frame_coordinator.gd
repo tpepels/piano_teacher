@@ -51,6 +51,12 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
             frame_result["native_scanned_events"] = practice_view.stage.renderer.frame_scanned_events
             frame_result["phase"] = str(state.get("phase",""))
             frame_result.merge(frame_meter.motion_report(),true)
+            frame_result["engine_max_fps"] = Engine.max_fps
+            frame_result["low_processor_usage"] = OS.low_processor_usage_mode
+            frame_result["display_backend"] = DisplayServer.get_name()
+            frame_result["display_refresh_hz"] = DisplayServer.screen_get_refresh_rate(
+                DisplayServer.window_get_current_screen())
+            frame_result["vsync_mode"] = int(DisplayServer.window_get_vsync_mode())
             print("PHASE8D_FRAME_INTERVALS:",JSON.stringify(frame_result))
     elif frame_diagnostics:
         frame_meter.clear()

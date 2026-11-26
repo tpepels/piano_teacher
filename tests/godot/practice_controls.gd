@@ -2,6 +2,7 @@ extends SceneTree
 ## Snapshot presentation only; MIDI/audio/physical layout need piano acceptance.
 const Screen := preload("res://practice_screen.gd")
 const StateInbox := preload("res://application_state_inbox.gd")
+const Navigation := preload("res://navigation_session.gd")
 var failures := 0
 
 func check(ok: bool, message: String) -> void:
@@ -39,6 +40,32 @@ func _initialize() -> void:
 
 func run() -> void:
     root.size = Vector2i(1024,768)
+    # Regression: repeated backend publications must not reintroduce a
+    # software 60 FPS cap over the display's native refresh cadence.
+    var previous_cap: int = Engine.max_fps
+    var previous_sleep: bool = OS.low_processor_usage_mode
+    var navigation := Navigation.new()
+    navigation.update_frame_rate({})
+    check(Engine.max_fps == 0 and not OS.low_processor_usage_mode,
+        "Practice preparation uses display cadence")
+    for phase in ["playing","count_in","guided_wait","paused"]:
+        navigation.update_frame_rate(state("practice",phase))
+        check(Engine.max_fps == 0 and not OS.low_processor_usage_mode,
+            "Practice snapshot does not restore a software FPS cap: "+phase)
+    navigation.current_screen = "settings"
+    navigation.update_frame_rate({})
+    check(Engine.max_fps == 30 and OS.low_processor_usage_mode,
+        "Idle drawer may save power")
+    navigation.current_screen = "calibration"
+    navigation.update_frame_rate({"midi_calibration":{"active":true}})
+    check(Engine.max_fps == 0 and not OS.low_processor_usage_mode,
+        "Active timing calibration uses display cadence")
+    navigation.current_screen = "practice"
+    navigation.update_frame_rate({"loaded":true})
+    check(Engine.max_fps == 0 and not OS.low_processor_usage_mode,
+        "Returning to practice releases the drawer FPS cap")
+    Engine.max_fps = previous_cap
+    OS.low_processor_usage_mode = previous_sleep
     var view := Screen.new()
     root.add_child(view)
     await process_frame
