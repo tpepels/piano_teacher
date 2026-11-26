@@ -28,18 +28,22 @@ class MidiEpoch:
             plan.hand if plan is not None else "both",
             self.transport.transport_id,
             self.take.cancellation_generation,
-            bool(self.transport.auto))
+            bool(self.transport.auto), self.midi_input.device_generation)
 
     def commit(self) -> None:
         """Publish the epoch a lock-free callback will sample next."""
         self.committed = self.current()
+
+    def same_device(self, arrival: MidiArrival) -> bool:
+        return (arrival.device == self.midi_input.device and
+                arrival.device_generation == self.midi_input.device_generation)
 
     def admits(self, arrival: MidiArrival, received_at: float | None,
                corrected_at: float | None = None) -> bool:
         current = self.current()
         # Stop, source replacement, new engraved revision, a new lesson
         # stage/hand, or explicit take cancellation invalidate queued keys.
-        if (arrival.device != current.device or
+        if (not self.same_device(arrival) or
                 arrival.fingerprint != current.fingerprint or
                 arrival.revision != current.revision or
                 arrival.stage_key != current.stage_key or

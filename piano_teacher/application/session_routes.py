@@ -65,7 +65,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
         # Hardware state is independent of take admission, shortcuts and
         # deferred grading. Replaying a note must not replay a physical key.
         if not event.deferred and (event.arrival is None or
-                event.arrival.device == midi_input.device):
+                epoch.same_device(event.arrival)):
             midi_input.observe_physical_keys(event.message,
                 received_at=event.received_at)
         if (event.arrival is not None and not epoch.admits(
@@ -74,7 +74,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
             # but never current-take grading, calibration or shortcuts.
             # A late release must not leave a shortcut permanently
             # suppressed after Stop/source replacement.
-            if event.arrival.device == midi_input.device:
+            if epoch.same_device(event.arrival):
                 midi_input.discard_stale_release(event.message)
                 midi_input.observe_midi(event.message, now=event.received_at)
             return None

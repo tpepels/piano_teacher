@@ -2,7 +2,7 @@
 
 The application serializes operations and cancels its take inside the release
 phase. No lesson, transport, recorder or application object is retained here.
-The original hardware callback is passed directly to the backend.
+Each opened port owns its callback generation; stale ports cannot publish keys.
 """
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ class MidiConnection:
         self._backend = backend
         self.port = None
         self.device = ""
+        self.generation = 0
         self.next_scan_at = 0.0
         self.retry_after = 0.0
         self.input_count = 0
@@ -79,6 +80,7 @@ class MidiConnection:
                 pass  # ALSA may already have released an unplugged port.
 
     def _release(self, reason: str):
+        self.generation += 1
         port = self.port
         self.port = None
         self.device = ""
@@ -99,8 +101,17 @@ class MidiConnection:
             self._close(port)
             self.retry_after = self._clock()+self.RETRY_SECONDS
 
+    def _open_input(self, name, callback, callback_factory=None):
+        self.generation += 1
+        generation = self.generation
+        deliver = callback_factory(generation) if callback_factory is not None else callback
+        def from_port(message):
+            if generation == self.generation and self.connected:
+                deliver(message)
+        return self._driver().open_input(name, callback=from_port)
+
     @contextmanager
-    def selecting(self, name: str, *, callback):
+    def selecting(self, name: str, *, callback, callback_factory=None):
         if not isinstance(name, str):
             raise ValueError("MIDI input name must be text")
         result = DeviceSelection()
@@ -115,7 +126,7 @@ class MidiConnection:
             if not self.enabled:
                 raise ValueError("MIDI input is disabled")
             try:
-                self.port = self._driver().open_input(name, callback=callback)
+                self.port = self._open_input(name, callback, callback_factory)
             except Exception as exc:
                 raise RuntimeError(
                     f"Cannot connect to MIDI input {name}: {exc}. Check the device and try again.") from exc
@@ -144,13 +155,13 @@ class MidiConnection:
             return True
         return False
 
-    def restore_preferred(self, names: tuple[str, ...], preferred: str, *, callback) -> MidiNotice | None:
+    def restore_preferred(self, names: tuple[str, ...], preferred: str, *, callback, callback_factory=None) -> MidiNotice | None:
         now = self._clock()
         if not (self.enabled and preferred and not self.connected
                 and preferred in names and now >= self.retry_after):
             return None
         try:
-            port = self._driver().open_input(preferred, callback=callback)
+            port = self._open_input(preferred, callback, callback_factory)
         except Exception as exc:
             self.retry_after = now+self.RETRY_SECONDS
             return MidiNotice(

@@ -36,6 +36,7 @@ class MidiArrival:
     transport_id: int
     cancellation_generation: int
     automatic: bool
+    device_generation: int = 0
 
 
 @dataclass(frozen=True, slots=True)

@@ -23,7 +23,10 @@ class MidiCallback:
             raise RuntimeError("MIDI adapter already bound")
         self._session = session
 
-    def receive(self, message):
+    def for_connection(self, generation: int):
+        return lambda message: self.receive(message, device_generation=generation)
+
+    def receive(self, message, *, device_generation: int | None = None):
         began = time.perf_counter()
         try:
             if self._session is None:
@@ -34,6 +37,8 @@ class MidiCallback:
             # beat or an adjacent take.
             arrival = self._session.midi_arrival()
             received_at = self.clock()
+            if device_generation is not None and arrival.device_generation != device_generation:
+                return  # Opening/retired port; its epoch was never committed.
             # The callback cannot hold onto a mutable driver-owned message
             # while it waits for the session's lock.
             self._session.on_midi(
@@ -106,7 +111,8 @@ class MidiDelivery:
             self.score.free_keys_open_at(self.lesson, self.transport),
             timed_attack_allowed=timed_attack_allowed,
             section_choice=self.lesson.section_choice_active and not self.transport.running
-                and self.transport.intent is None)
+                and self.transport.intent is None,
+            device_generation=self.midi_input.device_generation)
         early = self.midi_input.dispatch_midi(
             message,facts=facts,received_at=received_at,
             corrected_at=corrected_at,deferred=deferred,
@@ -125,13 +131,14 @@ class MidiDeviceConnection:
     """Scan, select, restore and lose the physical MIDI device."""
 
     def __init__(self, *, lesson, midi_input, device_workflows,
-                 settings_workflows, pause_resume, receive, lock):
+                 settings_workflows, pause_resume, receive, lock, callback_factory=None):
         self.lesson = lesson
         self.midi_input = midi_input
         self.device_workflows = device_workflows
         self.settings_workflows = settings_workflows
         self.pause_resume = pause_resume
         self.receive = receive
+        self.callback_factory = callback_factory
         self.lock = lock
 
     def midi_lost(self, reason: str = "device_disconnected") -> None:
@@ -148,12 +155,12 @@ class MidiDeviceConnection:
                 self.midi_lost()
             self.device_workflows.handle_scan_error(scan)
             self.device_workflows.restore_preferred(
-                scan.names, callback=self.receive)
+                scan.names, callback=self.receive, callback_factory=self.callback_factory)
             return list(scan.names)
 
     def connect(self, name: str):
         with self.lock:
-            self.device_workflows.select(name, callback=self.receive)
+            self.device_workflows.select(name, callback=self.receive, callback_factory=self.callback_factory)
             self.settings_workflows.update(
                 {"midi_device": name},pause_current=self.pause_resume.pause)
 

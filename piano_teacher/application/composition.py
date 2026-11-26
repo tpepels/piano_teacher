@@ -425,7 +425,8 @@ def _event_boundary(r) -> None:
         device_workflows=r.device_workflows,
         settings_workflows=r.settings_workflows,
         pause_resume=r.pause_resume,
-        receive=r.midi_callback.receive, lock=r.lock)
+        receive=r.midi_callback.receive, lock=r.lock,
+        callback_factory=r.midi_callback.for_connection)
 
     r.practice_timeline = PracticeTimeline(
         observations=TickObservations(

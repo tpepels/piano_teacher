@@ -42,17 +42,11 @@ func show_picker() -> void:
     discover()
 
 func choose(name: String) -> void:
+    # Backend owns restoring preferences and publishes the actual selection.
     _send_command.call("midi.device.select", {"name":name})
-    if not name.is_empty():
-        _settings.present_device_selection(name)
-
-func maybe_restore(saved: String, connected: String) -> void:
-    if connected.is_empty() and names.has(saved) and not saved.is_empty() \
-            and not saved.to_lower().contains("midi through"):
-        choose(saved)
 
 func receive(code: int, body: PackedByteArray, screen: String,
-        connected: String, saved: String) -> void:
+        connected: String, _saved: String) -> void:
     pending = false
     if code != 0:
         picker_requested = false
@@ -68,4 +62,3 @@ func receive(code: int, body: PackedByteArray, screen: String,
     var show: bool = picker_requested
     picker_requested = false
     _settings.present_devices(names, connected, show)
-    maybe_restore(saved, connected)

@@ -37,6 +37,10 @@ class MidiInput:
         return self._midi.device
 
     @property
+    def device_generation(self):
+        return self._midi.generation
+
+    @property
     def device_closed(self):
         return self._midi.closed
 

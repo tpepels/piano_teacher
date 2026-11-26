@@ -51,19 +51,25 @@ class DeviceWorkflows:
             self.notices.feedback = scan.feedback
             raise RuntimeError(self.notices.feedback) from scan.error
 
-    def restore_preferred(self, names, *, callback) -> None:
+    def restore_preferred(self, names, *, callback, callback_factory=None) -> None:
         self.present(self.midi_input.restore_preferred_device(
             names, self.library.settings.get("midi_device", ""),
-            callback=callback))
+            callback=callback, callback_factory=callback_factory))
 
-    def select(self, name: str, *, callback) -> None:
+    def select(self, name: str, *, callback, callback_factory=None) -> None:
+        if name == self.midi_input.device and self.midi_input.connected:
+            return  # A repeated preference selection must not restart a take.
         try:
-            with self.midi_input.selecting_device(name, callback=callback) as selected:
+            with self.midi_input.selecting_device(name, callback=callback,
+                    callback_factory=callback_factory) as selected:
                 self.midi_input.cancel_key_range_capture()
                 self.midi_input.clear_live_device()
-                # As on a lost piano: Free keeps the notes found and
-                # continues with the newly chosen one.
-                if self.transport.mode != "learn" or self.lesson.guided_controller is None:
+                # Free keeps its target index, but no held keys or gesture
+                # from the retired port survive the connection change.
+                teaching = self.lesson.guided_controller
+                if teaching is not None:
+                    teaching.set_connected(False, now=self.clock())
+                if self.transport.mode != "learn" or teaching is None:
                     self.lifecycle.stop(reason="device_changed")
         except RuntimeError as exc:
             self.notices.feedback = str(exc)

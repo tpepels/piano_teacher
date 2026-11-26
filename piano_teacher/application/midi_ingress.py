@@ -36,6 +36,7 @@ class MidiInputFacts:
     # Hardware attack timestamp lies within an actual graded timeline take.
     timed_attack_allowed: bool | None = None
     section_choice: bool = False
+    device_generation: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,7 +208,7 @@ class MidiIngress:
                 MidiArrival(facts.device, facts.fingerprint,
                             facts.score_revision, facts.stage_key, facts.hand,
                             facts.transport_id, facts.cancellation_generation,
-                            transport.automatic)))
+                            transport.automatic, facts.device_generation)))
             return True
         return False
 
