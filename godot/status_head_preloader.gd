@@ -3,6 +3,7 @@ extends RefCounted
 ## The Main scene never reads this cache or creates temporary draw layers.
 const NoteStatusInk := preload("res://note_status_ink.gd")
 const StatusInkWarmup := preload("res://status_ink_warmup.gd")
+const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 
 var _head_interiors: Dictionary = {}
 
@@ -18,6 +19,7 @@ func warm(renderer) -> void:
     if not glyphs.has_method("head_interior"):
         return
     var started: int = Time.get_ticks_usec()
+    VerovioGlyphs.prune_display_cache()
     # Every stage engraves the same head glyphs: an interior built for one
     # renderer is reused (same image bytes) by the next, so a stage handoff
     # promoted inside a count-in does not rebuild them there.

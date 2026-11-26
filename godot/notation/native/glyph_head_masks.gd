@@ -80,15 +80,17 @@ func cutout(source: String, key: String, index: int, head: String,
     return cutout
 
 func install_interior(head: String, texture: Texture2D) -> bool:
-    if texture == null:
-        return false
+    # Null is the valid computed result for a solid head.
     _head_interiors[head] = texture
     return true
 
 func interior(head: String, glyph: Image) -> Texture2D:
-    if _head_interiors.has(head):
-        return _head_interiors[head]
-    var result: Texture2D = null
+    if not _head_interiors.has(head):
+        var image: Image = interior_image(glyph)
+        _head_interiors[head] = ImageTexture.create_from_image(image) if image != null else null
+    return _head_interiors[head]
+
+static func interior_image(glyph: Image) -> Image:
     if glyph != null and not glyph.is_empty():
         var image: Image = glyph.duplicate()
         image.convert(Image.FORMAT_RGBA8)
@@ -122,6 +124,5 @@ func interior(head: String, glyph: Image) -> Texture2D:
                     interior.set_pixel(x,y,Color(1,1,1,1.0-a))
                     enclosed += 1
         if enclosed > 0:
-            result = ImageTexture.create_from_image(interior)
-    _head_interiors[head] = result
-    return result
+            return interior
+    return null

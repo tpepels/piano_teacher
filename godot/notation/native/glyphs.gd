@@ -60,6 +60,9 @@ var template_images: Dictionary:
 func begin_cpu_preparation() -> void:
     _assets.begin_cpu_preparation()
 
+func prepare_head_interiors() -> void:
+    _assets.prepare_head_interiors()
+
 func begin_upload() -> void:
     _assets.begin_upload()
 
@@ -338,6 +341,12 @@ func paint_head(canvas: CanvasItem, instance: Dictionary, color: Color,
 
 static var _display_cache: Dictionary = {}
 
+static func prune_display_cache() -> void:
+    for key in _display_cache.keys():
+        var entry: Array = _display_cache[key]
+        if entry.size() != 2 or (entry[0] as WeakRef).get_ref() == null:
+            _display_cache.erase(key)
+
 static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     var source := Vector2i(texture.get_width(),texture.get_height())
     var width: int = clampi(roundi(wanted.x),1,source.x)
@@ -350,7 +359,9 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     var cached: Array = _display_cache.get(key,[])
     if cached.size() == 2 and (cached[0] as WeakRef).get_ref() == texture:
         return cached[1]
-    var image: Image = texture.get_image()
+    var image: Image = texture.get_meta("verovio_cpu_image",null)
+    if image == null:
+        image = texture.get_image()
     if image == null or image.is_empty():
         return texture
     image = image.duplicate()

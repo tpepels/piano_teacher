@@ -88,6 +88,29 @@ var _upload_queue: Array = []
 var _upload_index := 0
 var _uploaded_images: Dictionary = {}
 var _source_images: Dictionary = {}
+var _prepared_interiors: Dictionary = {}
+# Identical font images are shared across jobs and immutable.
+static var _interior_images: Dictionary = {}
+static var _interior_image_lock := Mutex.new()
+
+func prepare_head_interiors() -> void:
+    _prepared_interiors.clear()
+    for head in head_images:
+        var image: Image = head_images[head]
+        var key: String = _font_keys[head]
+        _interior_image_lock.lock()
+        var known: bool = _interior_images.has(key)
+        var interior: Image = _interior_images.get(key)
+        _interior_image_lock.unlock()
+        if not known:
+            interior = HeadMasks.interior_image(image)
+            _interior_image_lock.lock()
+            if _interior_images.has(key):
+                interior = _interior_images[key]
+            else:
+                _interior_images[key] = interior
+            _interior_image_lock.unlock()
+        _prepared_interiors[head] = interior
 
 func begin_cpu_preparation() -> void:
     _cpu_only = true
@@ -96,8 +119,13 @@ func _make_texture(image: Image):
     if _cpu_only:
         return image
     var texture := ImageTexture.create_from_image(image)
-    _source_images[texture.get_instance_id()] = image
+    _remember_source(texture,image)
     return texture
+
+func _remember_source(texture: Texture2D, image: Image) -> void:
+    # No GPU readback is needed to resize or inspect authentic pixels.
+    texture.set_meta("verovio_cpu_image",image)
+    _source_images[texture.get_instance_id()] = image
 
 func source_image(art) -> Image:
     if art is Image:
@@ -112,6 +140,9 @@ func begin_upload() -> void:
     _uploaded_images.clear()
     for name in textures:
         _upload_queue.append([textures,name,_font_keys.get(name,"")])
+    for head in _prepared_interiors:
+        if _prepared_interiors[head] != null:
+            _upload_queue.append([_prepared_interiors,head,"interior|"+str(_font_keys[head])])
     for catalog in [note_textures,note_stem_textures,tie_textures,
             chord_textures,chord_heads_textures,chord_stem_textures,
             beam_textures,slur_textures]:
@@ -141,7 +172,7 @@ func upload_step(budget_usec: int = 2000) -> bool:
         if not font_key.is_empty():
             _font_raster_cache[font_key] = [image,texture]
         _uploaded_images[id] = texture
-        _source_images[texture.get_instance_id()] = image
+        _remember_source(texture,image)
         catalog[key] = texture
         _upload_index += 1
         if Time.get_ticks_usec() >= deadline:
@@ -150,6 +181,9 @@ func upload_step(budget_usec: int = 2000) -> bool:
         return false
     _upload_queue.clear()
     _uploaded_images.clear()
+    for head in _prepared_interiors:
+        _head_masks.install_interior(str(head),_prepared_interiors[head])
+    _prepared_interiors.clear()
     _cpu_only = false
     return true
 const BRACE_SIZE := Vector2i(96,1024)
@@ -199,7 +233,7 @@ func load_font(items: Dictionary) -> bool:
         if cached.size() == 2:
             image = cached[0]
             loaded_textures[name] = cached[1]
-            _source_images[loaded_textures[name].get_instance_id()] = image
+            _remember_source(loaded_textures[name],image)
         else:
             _font_image_lock.lock()
             image = _font_images.get(cache_key)

@@ -49,6 +49,7 @@ func run() -> void:
     if not NativeScoreAssets.prepare_engraving(engraving,bundle["layout"]):
         result = {"error":engraving.failure_reason}
         return
+    engraving.glyphs.prepare_head_interiors()
     var atlas_at: int = Time.get_ticks_usec()
     if not engraving.prepare(density,viewport,Spacing.PLAYHEAD_FRACTION):
         result = {"error":engraving.failure_reason}
