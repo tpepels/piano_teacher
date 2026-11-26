@@ -32,6 +32,8 @@ var score_browse_button: Button
 var score_retry_button: Button
 var practice_playback_banner: Label
 var notification_row: Control
+var _notice_tween: Tween
+var _notice_text := ""
 var _view_size := Vector2(800,600)
 
 func _clear_progress_rail(child: Node) -> void:
@@ -41,22 +43,14 @@ func _clear_progress_rail(child: Node) -> void:
 
 func _ready() -> void:
     name = "PracticeScoreStage"
-    practice_playback_banner = UI.label("", 18, Design.AMBER, true)
+    practice_playback_banner = UI.label("", 15, Design.HIGHLIGHT)
     practice_playback_banner.visible = false
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    practice_playback_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    # A message must stay readable where it crosses the score's ink.
-    var banner_style := StyleBoxFlat.new()
-    banner_style.bg_color = Color(Design.NIGHT, .92)
-    banner_style.border_color = Color(Design.AMBER, .45)
-    banner_style.set_border_width_all(1)
-    banner_style.set_corner_radius_all(10)
-    banner_style.content_margin_left = 18.0
-    banner_style.content_margin_right = 18.0
-    banner_style.content_margin_top = 8.0
-    banner_style.content_margin_bottom = 8.0
-    practice_playback_banner.add_theme_stylebox_override("normal", banner_style)
+    practice_playback_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+    # Text belongs to the score, not a bordered notification card.
+    practice_playback_banner.add_theme_color_override("font_shadow_color",Color(Design.NIGHT,.65))
+    practice_playback_banner.add_theme_constant_override("shadow_offset_y",1)
     var score_panel: PanelContainer = self
     # One continuous performance stage, not another grey website card.
     # Practice is one continuous score canvas, without a framed card.
@@ -70,16 +64,19 @@ func _ready() -> void:
     var score_region := VBoxContainer.new()
     score_region.add_theme_constant_override("separation", 8)
     score_margin.add_child(score_region)
-    # Keep the notification surface separate from score ink and count-in.
-    # Reserve its height even when empty so messages never resize the staff.
+    # Keep a slim, invariant text lane immediately above the playhead.
+    # It is not part of the notation viewport or the count-in's drawing area.
+    score_region.add_theme_constant_override("separation",2)
     notification_row = Control.new()
-    notification_row.custom_minimum_size.y = 48.0
+    notification_row.custom_minimum_size.y = 34.0
     notification_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
     notification_row.clip_contents = true
     score_region.add_child(notification_row)
     notification_row.add_child(practice_playback_banner)
     practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    practice_playback_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    practice_playback_banner.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+    notification_row.resized.connect(_place_notice)
+    _place_notice()
     practice_playback_banner.clip_text = true
     practice_playback_banner.max_lines_visible = 2
     var score_area := Control.new()
@@ -210,9 +207,33 @@ func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     score_frame.custom_minimum_size.y = 135.0
     for side in ["left","right","top","bottom"]:
         score_margin_box.add_theme_constant_override("margin_" + side,1 if compact else 6)
-    practice_playback_banner.add_theme_font_size_override("font_size",UI.font_size(17,scale))
-    notification_row.custom_minimum_size.y = maxf(40.0,48.0*scale)
+    practice_playback_banner.add_theme_font_size_override("font_size",UI.font_size(15,scale))
+    notification_row.custom_minimum_size.y = maxf(32.0,36.0*scale)
+    _place_notice()
     _place_count_in()
+
+func _place_notice() -> void:
+    # Start the text close to the fixed reading axis, without moving ink.
+    practice_playback_banner.offset_left = notification_row.size.x*PLAYHEAD_FRACTION
+    practice_playback_banner.offset_right = -6.0
+
+func present_notice(text: String) -> void:
+    if text == _notice_text:
+        return
+    _notice_text = text
+    if _notice_tween != null and _notice_tween.is_valid():
+        _notice_tween.kill()
+    _notice_tween = create_tween()
+    if text.is_empty():
+        _notice_tween.tween_property(practice_playback_banner,"modulate:a",0.0,.18)
+        _notice_tween.tween_callback(func():
+            practice_playback_banner.visible = false
+            practice_playback_banner.text = "")
+    else:
+        practice_playback_banner.text = text
+        practice_playback_banner.visible = true
+        practice_playback_banner.modulate.a = 0.0
+        _notice_tween.tween_property(practice_playback_banner,"modulate:a",1.0,.12)
 
 func _place_count_in() -> void:
     # The count-in sits in the empty run-up left of the playhead, above the

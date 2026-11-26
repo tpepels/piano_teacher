@@ -54,6 +54,10 @@ func sync(take: String, source, visible_ink: bool,
         int(segment.compile_generation),
         source.get_instance_id() if source != null else 0]
     if signature == _signature:
+        # The short-lived actual-pitch layer fades per frame. Authored note
+        # status buffers still repaint only on ledger/compile changes.
+        if not _ghosts.is_empty():
+            _ghost_layer.queue_redraw()
         return
     _signature = signature
     take_key = take

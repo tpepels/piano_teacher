@@ -180,9 +180,7 @@ func _show_banner() -> void:
         text = _flash_message
     if not _message.is_empty() and now < _message_until_ms:
         text = _message
-    if stage.practice_playback_banner.text != text:
-        stage.practice_playback_banner.text = text
-    stage.practice_playback_banner.visible = not text.is_empty()
+    stage.present_notice(text)
 
 func present_busy(busy: bool) -> void:
     _busy = busy

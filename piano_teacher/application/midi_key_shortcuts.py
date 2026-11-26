@@ -100,7 +100,7 @@ class MidiKeyShortcuts:
                 self.suppressed_releases.add(pitch)
                 return KeyDecision(consumed=True,
                     action="section_repeat" if pitch % 12 == 0 else "section_next")
-            return KeyDecision(consumed=True)
+            return KeyDecision() # Ordinary non-choice notes remain warm-up ink.
         # While paused, a fresh C in any octave is an explicit command,
         # including when C belongs to the current exercise. The release is
         # consumed even after Resume opens the next grading window.

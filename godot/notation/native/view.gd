@@ -38,6 +38,7 @@ const ScoreStreamController := preload("res://notation/native/score_stream_contr
 const RetainedNotationPool := preload("res://notation/native/retained_notation_pool.gd")
 var engraving = ScoreEngraving.new(timeline)
 const ScorePainter := preload("res://notation/native/score_painter.gd")
+const GhostNotePainter := preload("res://notation/native/ghost_note_painter.gd")
 var painter = ScorePainter.new(engraving)
 var glyphs:
     get: return engraving.glyphs
@@ -508,6 +509,15 @@ func playhead_region() -> Rect2:
 func _draw() -> void:
     _sync_painter()
     _stream_controller.paint(painter,self,_retained_pool)
+    # Warm-up ink is independent of the retained take clips: rests have
+    # no graded source strip. Display it near the reading axis, never
+    # assign a grade or move the source to make room for it.
+    if native_ready and not runway_overlay and is_instance_valid(note_status_source) and \
+            note_status_source.has_method("warmup_ghosts_for_revision"):
+        for ghost in note_status_source.warmup_ghosts_for_revision(int(timeline.revision)):
+            var age: float = maxf(0.0,float(Time.get_ticks_msec()-int(ghost["shown_ms"])))
+            var x: float = size.x*PLAYHEAD_FRACTION-age*.10
+            GhostNotePainter.paint(self,painter,ghost,x)
 
 func _sync_painter() -> void:
     painter.update(size,play_from_beat,active_hand,clock_beat,

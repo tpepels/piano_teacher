@@ -12,6 +12,8 @@ extends Node
 ## yet is buffered for that revision and replayed when it binds.
 const Statuses := preload("res://note_status_registry.gd")
 const MAX_BUFFERED := 4096
+const WRONG_GHOST_MS := 600
+const WARMUP_GHOST_MS := 380
 
 var score: Control
 var score_revision := -1
@@ -31,6 +33,7 @@ var _presented_beats: Dictionary = {}
 var _visual_revisions: Dictionary = {}
 var _sounding: Dictionary = {}
 var _ghosts: Dictionary = {}
+var _warmup_ghosts: Array = []
 var _renderers: Array = [] # [{renderer: WeakRef, revision: int}]
 var _buffered: Array = []
 var _overflow_logged := false
@@ -111,6 +114,24 @@ func bind_score(renderer: Control, revision: int) -> void:
 ## "ignored"; every outcome is final, so the caller may acknowledge it.
 func ingest(event: Dictionary) -> String:
     var revision: int = int(event.get("revision",-1))
+    # Ephemeral ink expires independently of source-note grades.
+    # Warm-up has no source strip to own it, even when no take is running.
+    if str(event.get("kind","")) == "attack" and str(event.get("status","")) == "warmup":
+        var pitch: int = int(event.get("pitch",-1))
+        var beat: float = float(event.get("played_source_beat",0.0))
+        if revision == score_revision and pitch >= 0 and pitch <= 127 and is_finite(beat):
+            _warmup_ghosts.append({"revision":revision,"beat":beat,"pitch":pitch,
+                "staff":str(event.get("staff","right")),"shown_ms":Time.get_ticks_msec(),
+                "lifetime_ms":WARMUP_GHOST_MS,"warmup":true})
+            _repaint()
+            applied_events += 1
+            return "applied"
+        ignored_events += 1
+        return "ignored"
+    if str(event.get("kind","")) == "attack" and str(event.get("status","")) == "unexpected":
+        if not event.has("ghost_shown_ms"):
+            event = event.duplicate()
+            event["ghost_shown_ms"] = Time.get_ticks_msec()
     if not _source_maps.has(revision):
         if revision > _highest_bound_revision():
             if _buffered.size() >= MAX_BUFFERED:
@@ -136,7 +157,12 @@ func ingest(event: Dictionary) -> String:
                 var pitch: int = int(event.get("pitch",-1))
                 if is_finite(played) and pitch >= 0 and pitch <= 127:
                     var ghosts: Array = _ghosts.get(take,[])
-                    ghosts.append({"beat":played,"pitch":pitch,"staff":str(event.get("staff","right"))})
+                    var shown: int = int(event.get("ghost_shown_ms",Time.get_ticks_msec()))
+                    if Time.get_ticks_msec()-shown >= WRONG_GHOST_MS:
+                        ignored_events += 1
+                        return "ignored"
+                    ghosts.append({"beat":played,"pitch":pitch,"staff":str(event.get("staff","right")),
+                        "shown_ms":shown,"lifetime_ms":WRONG_GHOST_MS})
                     _ghosts[take] = ghosts
                     _touch(take)
                     applied_events += 1
@@ -239,12 +265,32 @@ func statuses_for_take(take: String) -> Dictionary:
 func ghosts_for_take(take: String) -> Array:
     return _ghosts.get(take,[])
 
+func warmup_ghosts_for_revision(revision: int) -> Array:
+    return _warmup_ghosts.filter(func(ghost: Dictionary) -> bool:
+        return int(ghost["revision"]) == revision)
+
+func _expire_ghosts() -> void:
+    var now := Time.get_ticks_msec()
+    _warmup_ghosts = _warmup_ghosts.filter(func(ghost: Dictionary) -> bool:
+        return now-int(ghost["shown_ms"]) < int(ghost["lifetime_ms"]))
+    for take in _ghosts.keys():
+        var previous: Array = _ghosts[take]
+        var remaining: Array = previous.filter(func(ghost: Dictionary) -> bool:
+            return now-int(ghost["shown_ms"]) < int(ghost["lifetime_ms"]))
+        if remaining.size() != previous.size():
+            if remaining.is_empty():
+                _ghosts.erase(take)
+            else:
+                _ghosts[take] = remaining
+            _touch(str(take))
+
 func _touch(take: String) -> void:
     _visual_revisions[take] = int(_visual_revisions.get(take,0))+1
     _repaint()
 
 ## Uses the shared transport sample; this projects sound/ink and never grades.
 func present_source_beat(state: Dictionary, clock_beat: float) -> void:
+    _expire_ghosts()
     var take: String = Statuses.take_key(state)
     var revision: int = int(state.get("revision",-1))
     var beat: float = clock_beat+float(state.get("play_from_beat",0.0))

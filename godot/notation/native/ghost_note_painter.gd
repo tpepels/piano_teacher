@@ -3,8 +3,15 @@ extends RefCounted
 ## Spelling and clef choose ink placement only; no target or grade is inferred.
 const Geometry := preload("res://notation/native/geometry.gd")
 const RED := Color("#F17978")
+const WARMUP := preload("res://practice_theme.gd").SECONDARY_INK
 
-static func paint(canvas: CanvasItem, painter, ghost: Dictionary) -> void:
+static func paint(canvas: CanvasItem, painter, ghost: Dictionary, screen_x: float = NAN) -> void:
+    var age: float = maxf(0.0,float(Time.get_ticks_msec()-int(ghost.get("shown_ms",Time.get_ticks_msec()))))
+    var life: float = maxf(1.0,float(ghost.get("lifetime_ms",600)))
+    if age >= life:
+        return
+    var alpha: float = 1.0-smoothstep(0.0,life,age)
+    var color := Color(WARMUP if bool(ghost.get("warmup",false)) else RED,alpha)
     var layout = painter.layout
     var gap: float = painter.staff_gap()
     var beat: float = float(ghost["beat"])
@@ -27,11 +34,11 @@ static func paint(canvas: CanvasItem, painter, ghost: Dictionary) -> void:
     var step: int = Geometry.staff_step(spelling,layout.clef_for(staff,measure))
     var bottom: float = layout.staff_center(staff)+gap*2.0
     var y: float = Geometry.note_y(step,bottom,gap)
-    var x: float = painter.timeline.x_at_beat(beat)
-    painter.engraving.symbols.paint_ledger(canvas,null,x,y,step,bottom,gap,RED)
-    painter.glyphs.paint_note(canvas,"quarter",step < 4,x,y,gap,RED)
+    var x: float = screen_x if is_finite(screen_x) else painter.timeline.x_at_beat(beat)
+    painter.engraving.symbols.paint_ledger(canvas,null,x,y,step,bottom,gap,color)
+    painter.glyphs.paint_note(canvas,"quarter",step < 4,x,y,gap,color)
     # A wrong key must show its actual chromatic pitch unambiguously even
     # when it differs from the current signature's ordinary spelling.
     var alteration: int = int(alters[pitch%12])
     var accidental: String = "acc_flat" if alteration < 0 else "acc_sharp" if alteration > 0 else "acc_natural"
-    painter.glyphs.paint(canvas,accidental,x-gap*1.65,y,gap,RED,true)
+    painter.glyphs.paint(canvas,accidental,x-gap*1.65,y,gap,color,true)
