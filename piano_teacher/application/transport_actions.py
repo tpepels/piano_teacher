@@ -298,7 +298,15 @@ class TransportCommands:
         self.authorization = authorization
 
     def control_transport(self, action: str, kwargs: dict, *, effect=None) -> None:
-        if action == "practice":
+        if action == "section_next":
+            selected = self.lesson.install_command(effect)
+            self.routes.course.enter_selected_exposure(selected,reason=action)
+        elif action == "section_repeat":
+            self.transport_timing.update_placement_facts(kwargs)
+            transition = PlaybackTransition.from_effect(effect, action="start", source_changed=False)
+            self.transport_timing.request_playback(action="start", mode="practice",
+                from_beat=transition.exposure.from_beat, transition=transition)
+        elif action == "practice":
             self.routes.practice(kwargs, effect=effect)
         elif action == "stop":
             self.routes.stop()

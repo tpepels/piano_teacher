@@ -23,6 +23,7 @@ class Step(str, Enum):
     AID = "aid"
     TEMPO = "tempo"
     DONE = "done"
+    SECTION_CHOICE = "section_choice"
 
 
 class Outcome(str, Enum):
@@ -33,6 +34,7 @@ class Outcome(str, Enum):
     SLOWER = "slower"
     BACK_TO_FREE = "back_to_free"
     STAGE_DONE = "stage_done"
+    SECTION_READY = "section_ready"
     PIECE_DONE = "piece_done"
 
 
@@ -187,7 +189,8 @@ def settle(state: FlowState | None, outcome: Outcome, *, stage_key: str,
     """The engine's lesson state after a settled take decision. The counters
     come from the persisted course progress (one source); the step follows
     from the outcome."""
-    step = (Step.FREE if outcome is Outcome.BACK_TO_FREE else
+    step = (Step.SECTION_CHOICE if outcome is Outcome.SECTION_READY else
+            Step.FREE if outcome is Outcome.BACK_TO_FREE else
             Step.DONE if outcome in (Outcome.STAGE_DONE, Outcome.PIECE_DONE) else
             Step.TEMPO)
     returns = (state.free_returns if state is not None

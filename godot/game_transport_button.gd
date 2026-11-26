@@ -134,7 +134,7 @@ func _draw() -> void:
     # Keyboard shortcuts stay functional and in tooltips. The reference
     # gives the primary key just one centered Play/Pause label, no keycap.
     var padding: float = 12.0 if size.x < 190.0 else 18.0
-    var key_width: float = 45.0 if primary and not piano_key_hint.is_empty() else 0.0
+    var key_width: float = (58.0 if piano_key_hint == "F" else 45.0) if primary and not piano_key_hint.is_empty() else 0.0
     var group_space: float = size.x - 2.0 * padding - key_width
     var label_offset: float = 27.0 if size.x < 190.0 else 30.0
     var available: float = maxf(1.0, group_space - label_offset)
@@ -182,6 +182,12 @@ func _draw() -> void:
     # Secondary transport keys are single, centered symbols. Their full
     # action and keyboard shortcut remain in Button.text and the tooltip.
     if not primary:
+        if not piano_key_hint.is_empty():
+            var key_rect := Rect2(size.x-20.0,size.y-24.0,16.0,20.0)
+            draw_rect(key_rect,Design.FOCUS)
+            draw_rect(key_rect,Design.NIGHT,false,1.0)
+            draw_string(font,Vector2(key_rect.position.x,key_rect.position.y+15.0),piano_key_hint,
+                HORIZONTAL_ALIGNMENT_CENTER,16.0,12,Design.NIGHT)
         return
     var baseline: float = (size.y + font.get_ascent(font_size)
         - font.get_descent(font_size)) * .5 + lift
@@ -192,11 +198,12 @@ func _draw() -> void:
         # highlighted white key to their left, as on a real piano.
         var key_x: float = size.x-padding-key_width+3.0
         var key_y: float = size.y*.5-16.0+lift
-        for index in range(3):
+        var white_keys := 4 if piano_key_hint == "F" else 3
+        for index in range(white_keys):
             var rect := Rect2(key_x+index*13.0,key_y,13.0,32.0)
             draw_rect(rect,Design.FOCUS if index == 0 else Color(Design.FOCUS,.55))
             draw_rect(rect,Design.NIGHT,false,1.0)
-        for index in range(2):
+        for index in range(white_keys-1):
             draw_rect(Rect2(key_x+9.5+index*13.0,key_y,7.0,16.0),Design.NIGHT)
         draw_string(font,Vector2(key_x,key_y+28.0),piano_key_hint,
             HORIZONTAL_ALIGNMENT_CENTER,13.0,12,Design.NIGHT)

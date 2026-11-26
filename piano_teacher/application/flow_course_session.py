@@ -92,8 +92,24 @@ class PracticeFlowCourseSession:
             return self.stage_entry(plan,resumed=plan.exercise.kind == "perform")
         return None
 
+    @property
+    def section_choice_active(self) -> bool:
+        plan = self._source_identity.plan
+        return bool(plan is not None and self._phase is not None
+            and self._phase.plan is plan and self._phase.stage_key == plan.identity
+            and self._phase.step is practice_flow.Step.SECTION_CHOICE)
+
+    def clear_section_choice(self) -> None:
+        if self._phase is not None and self._phase.step is practice_flow.Step.SECTION_CHOICE:
+            self._phase = replace(self._phase, step=practice_flow.Step.TEMPO)
+
     def tempo_entry(self, plan, *, bpm: int) -> FlowTempoEntry:
         active = plan is not None
+        if active and self._phase is not None and self._phase.step is practice_flow.Step.SECTION_CHOICE:
+            self._phase = FlowPhase(plan,plan.identity,plan.exercise.kind == "perform",
+                                    practice_flow.Step.TEMPO)
+            self.say(f"Now in tempo · {practice_flow.tempo_percent(bpm, plan.target_bpm)}%")
+            return FlowTempoEntry(True,True)
         if (active and self._phase is not None
                 and self._phase.plan is plan
                 and self._phase.stage_key == plan.identity
@@ -231,7 +247,7 @@ class PracticeFlowCourseSession:
         from .practice_flow import tempo_percent
         percent = tempo_percent(plan.bpm, plan.target_bpm)
         label = {"listen":"Listen","free":"Without tempo",
-                 "tempo":f"Tempo {percent}%"}[step]
+                 "tempo":f"Tempo {percent}%", "section_choice":"Section complete"}[step]
         hand_text = {"right":"Right hand","left":"Left hand"}.get(
             plan.hand,"Both hands")
         sequence, message, _ = self._message

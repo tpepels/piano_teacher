@@ -194,6 +194,13 @@ class Lesson:
     def flow_status(self, *args, **kwargs):
         return self._flow.status(*args, **kwargs)
 
+    @property
+    def section_choice_active(self):
+        return self._flow.section_choice_active
+
+    def clear_section_choice(self):
+        self._flow.clear_section_choice()
+
     def flow_tempo_entry(self, *args, **kwargs):
         return self._flow.tempo_entry(*args, **kwargs)
 

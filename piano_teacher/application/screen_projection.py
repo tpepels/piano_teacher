@@ -5,6 +5,7 @@ Godot displays this projection; it composes no lesson text of its own.
 """
 from __future__ import annotations
 from collections.abc import Mapping
+from .control_projection import section_choice
 
 
 FREE_WITHOUT_PIANO = ("No piano connected. Switch on or plug in your MIDI piano; practice "
@@ -43,8 +44,13 @@ def project_screen(s: Mapping, *, moving: bool, flash: tuple[int, str] = (0, "")
         value = "—" if accuracy is None else f"{accuracy:.1f}%"
         label = f"Accuracy: {value}" if accuracy_live else f"Last accuracy: {value}"
         status = f"{status} · {label}" if status else label
+    prompt = notice(s, moving) if s.get("loaded") else ""
+    if section_choice(s):
+        value = "" if accuracy is None else f" · {accuracy:.1f}% accuracy"
+        keys = "C to repeat at 100% · F for next section" if s.get("device") else "Repeat or choose Next section"
+        prompt = f"Section complete{value} · {keys}"
     return {"status": status,
-            "notice": notice(s, moving) if s.get("loaded") else "",
+            "notice": prompt,
             "keyboard": keyboard(s),
             "flash": {"id": int(flash[0]), "text": str(flash[1])},
             "transition": {"id": int(flow.get("message_id", 0)),

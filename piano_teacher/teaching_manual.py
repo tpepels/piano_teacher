@@ -5,7 +5,7 @@ database, clock or renderer. Free always covers the whole selected window
 (practice_flow_course.decide widens any learn exposure to it).
 """
 from dataclasses import dataclass
-from .teaching_course import manual_progress
+from .teaching_course import manual_progress, at_position, next_unmastered
 from .course_navigation import choose_source_opening
 
 
@@ -27,6 +27,17 @@ def choose_manual(event, state):
         c = manual_progress(c, m.action, number=m.number, hand=m.hand, bpm=m.bpm)
         if route.mode == "learn":
             continuation, start = "guided", 0.
+    elif action in ("section_repeat", "section_next"):
+        following = next_unmastered(c)
+        if (c.key not in dict(c.progress.mastered) or following is None
+                or c.steps[following].exercise_index == c.step.exercise_index):
+            raise ValueError("No completed section awaiting a choice")
+        if action == "section_next":
+            c = at_position(c, following)
+        c = c.with_progress(bpm=c.progress.target_bpm, streak=0, failures=0)
+        mode = "practice" if action == "section_repeat" or c.exercise.kind == "perform" else "learn"
+        continuation = "guided" if mode == "learn" else "continue"
+        start, end = (0.0 if mode == "learn" else c.stage.variant.phrase.first_attack_beat), None
     elif action in ("stop", "pause"):
         continuation = action
     elif action == "open_at":

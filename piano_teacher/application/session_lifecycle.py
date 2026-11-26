@@ -54,6 +54,7 @@ class SessionLifecycle:
         # Precompiled successors remain valid only for their source identity.
         self.score.stop_successor()
         self.lesson.stop_guided()
+        self.lesson.clear_section_choice()
         self.transport.reset_for_stop()
         self.take.reset_for_stop()
         self.midi_input.reset_live_input()

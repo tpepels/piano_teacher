@@ -104,7 +104,8 @@ def _entry_tempo(event, state, decision):
 # --- Decisions ---------------------------------------------------------
 
 
-def graded_progress(course, *, accepted, quality=0.0, attacks=8):
+def graded_progress(course, *, accepted, quality=0.0, attacks=8,
+                    offer_section_choice=True):
     """One graded Tempo take, decided by the practice flow state machine
     (application/practice_py); this only maps it onto course progress."""
     p = course.progress
@@ -134,6 +135,10 @@ def graded_progress(course, *, accepted, quality=0.0, attacks=8):
     following = next_unmastered(course)
     if following is None:
         return selected(course, "Piece mastered")
+    # Keep the mastered final hand installed until explicit section advance.
+    if (offer_section_choice and
+            course.steps[following].exercise_index != course.step.exercise_index):
+        return course, "Section complete · C: repeat · F: next section", Outcome.SECTION_READY
     course = at_position(course, following)
     return selected(course.with_progress(bpm=floor_bpm(int(p.target_bpm))), t.message)
 
@@ -158,11 +163,11 @@ def _base_decision(event, state):
         if eligible:
             chosen, message, flow_outcome = graded_progress(
                 c, accepted=passed, quality=result.timing_quality,
-                attacks=result.attacks)
+                attacks=result.attacks, offer_section_choice=route.automatic)
             result_message = "Well played!" if passed else "Try again"
             accuracy = f"{result_message} · {result.accuracy_percent:.1f}% accuracy"
             message = f"{accuracy} · {message}" if message else accuracy
-        if (not route.automatic or flow_outcome is Outcome.PIECE_DONE
+        if (not route.automatic or flow_outcome in (Outcome.PIECE_DONE, Outcome.SECTION_READY)
                 or route.scope == "perform"):
             continuation = "stop"
         elif chosen.key != c.key:
@@ -186,7 +191,7 @@ def _base_decision(event, state):
             mode = "practice"
             if route.guided_return is not None:
                 start, end = route.guided_return[1], None
-        automatic = mode == "practice" if event.kind == "manual" and event.action in ("start","restart","practice","course_stage","open_at") else route.automatic
+        automatic = mode == "practice" if event.kind == "manual" and event.action in ("start","restart","practice","course_stage","open_at","section_repeat","section_next") else route.automatic
         restart = (event.kind == "manual" and event.action == "restart"
                    and route.mode == "practice" and c.exercise.kind != "perform")
         exposure = TeachingExposure(chosen.key, chosen.hand, start, end, chosen.progress.bpm, mode,
@@ -229,6 +234,12 @@ def decide(event, state, *, aid) -> TeachingDecision:
         return _at_tempo(replace(decision,next_exposure=exposure,
                                  continuation="continue"),bpm,reset=True)
     exposure = decision.next_exposure
+    if event.kind == "manual" and event.action in ("section_repeat", "section_next"):
+        after = replace(course, progress=decision.progress_after)
+        if event.action == "section_repeat":
+            return _at_tempo(decision, int(after.progress.target_bpm), reset=True)
+        if after.exercise.kind == "perform":
+            return _at_tempo(decision, _initial_tempo(after), reset=True)
     if exposure is not None and exposure.mode == "perform":
         # 4: the final test follows the same Tempo rules (50% -> target,
         # 2 clean), so it runs as timed practice, not as a review.

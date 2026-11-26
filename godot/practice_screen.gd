@@ -141,11 +141,15 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     start_button.visible = true
     start_button.text = str(primary_control.get("label","Play"))
     var piano_key := str(primary_control.get("piano_key",""))
-    start_button.tooltip_text = "Resume · Space or play C on your piano" if not piano_key.is_empty() else "Pause or resume · Space"
+    start_button.tooltip_text = "Next section · F on your piano" if piano_key == "F" else "Resume · Space or play C on your piano" if piano_key == "C" else "Next section" if str(primary_control.get("action","")) == "section_next" else "Pause or resume · Space"
     start_button.call("set_piano_key_hint",piano_key)
     start_button.disabled = _primary_blocked()
     start_button.call("configure", "pause" if str(primary_control.get("action","")) == "pause" else "play",
         _active_transport(parsed) and not bool(parsed.get("paused", false)))
+    var retry_control: Dictionary = _control("retry")
+    practice_retry_button.visible = str(retry_control.get("action","")) == "section_repeat"
+    practice_retry_button.tooltip_text = "Repeat at 100% · C on your piano" if not str(retry_control.get("piano_key","")).is_empty() else "Repeat at 100%"
+    practice_retry_button.call("set_piano_key_hint",str(retry_control.get("piano_key","")))
     practice_retry_button.disabled = _retry_blocked()
     listen_button.text = str(listen_control.get("label","Listen again"))
     listen_button.tooltip_text = "Hear this passage again at the target tempo · L"

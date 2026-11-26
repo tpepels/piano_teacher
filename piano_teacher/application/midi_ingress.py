@@ -35,6 +35,7 @@ class MidiInputFacts:
     guided_open_at: float | None = None
     # Hardware attack timestamp lies within an actual graded timeline take.
     timed_attack_allowed: bool | None = None
+    section_choice: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,7 +146,8 @@ class MidiIngress:
                 self.pitches = frozenset(note.pitch for note in facts.phrase.notes
                     if facts.hand == "both" or note.hand == facts.hand) if facts.phrase is not None else frozenset()
             selected = self.shortcuts.accept(message,device=self.midi.device,
-                exercise_pitches=self.pitches,can_pause=facts.can_pause,paused=facts.paused)
+                exercise_pitches=self.pitches,can_pause=facts.can_pause,paused=facts.paused,
+                section_choice=facts.section_choice)
             if selected.consumed or selected.action or selected.completed_range is not None:
                 action = "learn_retry" if selected.action == "restart" and facts.mode == "learn" else selected.action
                 return MidiIngressEffect(selected.consumed,action,selected.completed_range)

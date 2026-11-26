@@ -32,6 +32,13 @@ def active(s: Mapping) -> bool:
     return phase in (PAUSABLE_PHASES | {"paused"})
 
 
+def section_choice(s: Mapping) -> bool:
+    flow = s.get("flow")
+    return bool(s.get("loaded") and isinstance(flow, Mapping)
+        and flow.get("step") == "section_choice" and not s.get("running")
+        and not s.get("paused") and not isinstance(s.get("playback_intent"), Mapping))
+
+
 def primary(s: Mapping, moving: bool) -> str | None:
     """Practice Flow advances by itself: the main control pauses/resumes,
     and only offers Play/Listen when the flow is waiting for the player."""
@@ -39,6 +46,8 @@ def primary(s: Mapping, moving: bool) -> str | None:
         return None
     if s.get("paused"):
         return "resume"
+    if section_choice(s):
+        return "section_next"
     if moving:
         return "pause"
     return {"listen": "listen", "practice": "start"}.get(s.get("mode"))
@@ -47,6 +56,8 @@ def primary(s: Mapping, moving: bool) -> str | None:
 def caption(s: Mapping, moving: bool) -> str:
     if s.get("paused"):
         return "Resume"
+    if section_choice(s):
+        return "Next section"
     if moving:
         return "Pause"
     return "Listen" if s.get("mode") == "listen" else "Play"
@@ -54,12 +65,15 @@ def caption(s: Mapping, moving: bool) -> str:
 
 def project_controls(s: Mapping) -> dict:
     """Read-only control labels and available actions from authoritative state."""
-    moving = active(s)
+    choosing = section_choice(s)
+    moving = active(s) and not choosing
     main = primary(s, moving)
     pause = (None if not s.get("loaded") else "resume" if s.get("paused")
              else "pause" if moving else None)
     retry = ("learn_retry" if s.get("mode") == "learn" else
              "listen" if s.get("mode") == "listen" else "restart") if s.get("loaded") else None
+    if choosing:
+        retry = "section_repeat"
     retry_allowed = retry is not None and s.get("phase") not in ("admitting", "loading")
     tempo_allowed = bool(s.get("loaded")) and s.get("phase") not in (
         "count_in", "playing", "loading", "admitting")
@@ -92,7 +106,7 @@ def project_controls(s: Mapping) -> dict:
     # or course continuation. The input adapter only reports freshness.
     midi_action = None
     if (s.get("loaded") and s.get("device") and
-            not s.get("paused")):
+            not s.get("paused") and not choosing):
         phase = s.get("phase")
         mode = s.get("mode")
         if phase in ("ready", "performance_complete", "guided_complete"):
@@ -105,16 +119,16 @@ def project_controls(s: Mapping) -> dict:
             midi_action = "restart"
     # Returning from standalone Listen is a mode action, not score
     # admission; the prior UI permitted it without ready notation.
-    needs_score = main not in (None, "pause", "resume")
+    needs_score = main not in (None, "pause", "resume", "section_next")
     return {
         "transport_active": moving,
         "primary": {"action": main or "", "label": caption(s, moving),
                     "enabled": main is not None,
                     "requires_score": needs_score,
-                    "piano_key": RESUME_NOTE if main == "resume" and s.get("device") else ""},
+                    "piano_key": (RESUME_NOTE if main == "resume" else "F" if choosing else "") if s.get("device") else ""},
         "pause": {"action": pause or "", "enabled": pause is not None},
         "retry": {"action": retry or "", "enabled": retry_allowed,
-                  "requires_score": True},
+                  "requires_score": True, "piano_key": "C" if choosing and s.get("device") else ""},
         "listen": {"action": listen or "", "enabled": listen is not None,
                    "label": "Listen again"},
         "review_previous": {

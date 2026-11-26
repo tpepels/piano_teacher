@@ -104,7 +104,9 @@ class MidiDelivery:
             self.take.cancellation_generation,
             self.midi_input.device,
             self.score.free_keys_open_at(self.lesson, self.transport),
-            timed_attack_allowed=timed_attack_allowed)
+            timed_attack_allowed=timed_attack_allowed,
+            section_choice=self.lesson.section_choice_active and not self.transport.running
+                and self.transport.intent is None)
         early = self.midi_input.dispatch_midi(
             message,facts=facts,received_at=received_at,
             corrected_at=corrected_at,deferred=deferred,

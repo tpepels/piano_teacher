@@ -41,6 +41,8 @@ class TimedStart:
                 if selected is None:
                     return
                 self.lesson.install_command(effect)
+                if effect.event.action == "section_repeat":
+                    self.lesson.flow_tempo_entry(self.lesson.plan, bpm=selected.bpm)
             if selected is not None and selected.stage_key == self.lesson.plan.identity:
                 from_beat,mode = selected.from_beat,selected.mode
             if self.transport.mode == "learn":

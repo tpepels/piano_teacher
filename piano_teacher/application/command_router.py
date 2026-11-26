@@ -20,7 +20,8 @@ COMMAND_ROUTES = {
     **dict.fromkeys(("listen", "perform"), "listening"),
     **dict.fromkeys(("learn", "learn_retry",
                      "open_at", "hints"), "learning"),
-    **dict.fromkeys(("practice", "stop", "start", "restart", "pause", "resume"), "transport"),
+    **dict.fromkeys(("practice", "stop", "start", "restart", "pause", "resume",
+                     "section_repeat", "section_next"), "transport"),
 }
 _TEACHING_ROUTES = ("listening", "learning", "transport", "stage")
 
@@ -90,6 +91,8 @@ class CommandRouter:
             action = self._resolve_ui(action, kwargs)
             if action is None:
                 return project_command_outcome(None)
+        if action in ("section_repeat", "section_next") and not self.lesson.section_choice_active:
+            raise ValueError("No section choice is available")
         before = self._lesson_facts()
         effect = None
         route = COMMAND_ROUTES.get(action, "stage")

@@ -33,6 +33,8 @@ def teaching_instruction(pending) -> str:
 def next_action(pending, *, target_bpm: float, start_beat: float,
                 assessed_bpm: float | None) -> str:
     decision = pending.decision
+    if decision.flow_outcome is practice_flow.Outcome.SECTION_READY:
+        return "Section complete · C to repeat · F for next section."
     if decision.verdict is not None and decision.verdict.accepted:
         label = "Clean" if decision.verdict.clean else "Accepted"
         if pending.state.progress.bpm < pending.state.progress.target_bpm:

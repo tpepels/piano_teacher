@@ -69,7 +69,7 @@ class MidiKeyShortcuts:
             self.suppressed_releases.discard(pitch)
 
     def accept(self, message, *, device: str, exercise_pitches: frozenset[int],
-               can_pause: bool, paused: bool) -> KeyDecision:
+               can_pause: bool, paused: bool, section_choice: bool = False) -> KeyDecision:
         kind = getattr(message, "type", "")
         if kind not in ("note_on", "note_off"):
             return KeyDecision()
@@ -95,6 +95,12 @@ class MidiKeyShortcuts:
             self.cancel_capture()
             self.suppressed_releases.add(pitch)
             return KeyDecision(consumed=True, completed_range=selected)
+        if device and section_choice and not paused:
+            if on and pitch % 12 in (0, 5):
+                self.suppressed_releases.add(pitch)
+                return KeyDecision(consumed=True,
+                    action="section_repeat" if pitch % 12 == 0 else "section_next")
+            return KeyDecision(consumed=True)
         # While paused, a fresh C in any octave is an explicit command,
         # including when C belongs to the current exercise. The release is
         # consumed even after Resume opens the next grading window.
