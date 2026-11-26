@@ -22,7 +22,7 @@ class LumikeyProvider:
     @property
     def identity(self) -> dict:
         return {'name': 'lumikey', 'version': '0.3.0', 'model_version': MODEL_HASHES,
-                'runtime': 'onnxruntime-node@1.30.0/cpu', 'adapter_version': 3}
+                'runtime': 'onnxruntime-node@1.30.0/cpu', 'adapter_version': 4}
 
     def predict(self, piece: Piece, fixed: dict[str, int]) -> dict[str, Prediction]:
         notes, unknown = [], {}

@@ -15,6 +15,57 @@ const expected = {
 };
 const EPS = 1e-5;
 
+function sharedThumb(a,b) {
+  // The thumb can depress two neighbouring keys at the same height.
+  // Mixed black/white keys and the wider gap between black-key groups
+  // are deliberately excluded. Sharing is a simultaneous attack, not
+  // a second attack while a previous thumb note is still held.
+  const distance=Math.abs(a.note-b.note);
+  const black=pitch=>[1,3,6,8,10].includes(pitch%12);
+  return a.left===b.left && a.time===b.time &&
+    distance>0 && distance<=2 && black(a.note)===black(b.note);
+}
+
+function chordCanFinish(chord, active, groupFixed, current, finger, left) {
+  const keys=[...new Set(chord.map(a=>a.note))].sort((a,b)=>a-b);
+  if(keys.length>6) return false;
+  const occupied=[...active,...groupFixed];
+  const choices=keys.map(pitch=>{
+    const members=chord.filter(a=>a.note===pitch);
+    const available=[];
+    for(let ordinal=1;ordinal<=5;ordinal++) {
+      const f=left?6-ordinal:ordinal;
+      if(pitch===current.note && f!==finger) continue;
+      if(members.some(a=>a.finger && a.finger!==f)) continue;
+      if(members.some(a=>occupied.some(b=>{
+        if(!overlaps(a,b)) return false;
+        if(a.note===b.note) return f!==b.finger;
+        return f===b.finger && !(f===1 && sharedThumb(a,b));
+      }))) continue;
+      available.push(ordinal);
+    }
+    return available;
+  });
+  // Walk all distinct pitches in order. Equality is possible only for
+  // a two-key thumb pair; all other fingers remain strictly ordered.
+  // The earlier pitches are checked too, including rejected/unknown
+  // notes, and held/fixed constraints are applied to each chord member.
+  const visit=(position,previous,thumbCount)=>{
+    if(position===keys.length) return true;
+    for(const ordinal of choices[position]) {
+      if(ordinal<previous) continue;
+      const f=left?6-ordinal:ordinal;
+      if(ordinal===previous && !(f===1 && thumbCount===1 &&
+          sharedThumb(chord.find(a=>a.note===keys[position-1]),
+                      chord.find(a=>a.note===keys[position])))) continue;
+      if(f===1 && thumbCount===2) continue;
+      if(visit(position+1,ordinal,thumbCount+(f===1?1:0))) return true;
+    }
+    return false;
+  };
+  return visit(0,0,0);
+}
+
 async function handInference(notes, left, session) {
   const sorted = notes.filter(n => n.left===left).sort((a,b)=>a.time-b.time || a.note-b.note);
   const reasons = new Map();
@@ -41,10 +92,6 @@ async function handInference(notes, left, session) {
     const active=held.filter(a=>a.time+a.duration>n.time+EPS);
     held.splice(0,held.length,...active);
     const chord=chords.get(n.time);
-    const keys=[...new Set(chord.map(a=>a.note))].sort((a,b)=>a-b);
-    const overlappingFixed = indexedFixed.overlapping(n);
-    const futureFixed = overlappingFixed.filter(a=>a!==n);
-    const shared=active.find(a=>a.note===n.note);
     let groupFixed = chordFixed.get(n.time);
     if (!groupFixed) {
       const all = new Set();
@@ -54,49 +101,13 @@ async function handInference(notes, left, session) {
       groupFixed = [...all];
       chordFixed.set(n.time, groupFixed);
     }
-    const allowed = finger => {
-      if(overlappingFixed.some(a=>a.note===n.note && a.finger!==finger)) return false;
-      if (active.some(a=>a.note!==n.note && a.finger===finger)) return false;
-      if (futureFixed.some(a=>a.note!==n.note && a.finger===finger)) return false;
-      if (shared && shared.finger!==finger) return false;
-      // Within a chord, fingers follow pitch order; reserve room for every
-      // higher key, and respect authored/manual hints on either side.
-      const rank=keys.indexOf(n.note), ordinal=left ? 6-finger : finger;
-      if (ordinal<rank+1 || ordinal>5-(keys.length-rank-1)) return false;
-      for (const a of [...active,...chord.filter(a=>a.finger)]) {
-        if (Math.abs(a.time-n.time)>EPS || a.note===n.note) continue;
-        const other=left ? 6-a.finger : a.finger;
-        if ((a.note<n.note && other>=ordinal) || (a.note>n.note && other<=ordinal)) return false;
-      }
-      return true;
-    };
-    const canFinishChord = finger => {
-      const rank=keys.indexOf(n.note);
-      const ordinal=f=>left?6-f:f;
-      const visit=(position,previous) => {
-        if(position===keys.length) return true;
-        const pitch=keys[position];
-        const members=chord.filter(a=>a.note===pitch);
-        const bound=members.find(a=>a.finger);
-        const existing=active.find(a=>a.note===pitch);
-        for(let next=previous+1; next<=5; next++) {
-          const f=left?6-next:next;
-          if(bound && bound.finger!==f || existing && existing.finger!==f) continue;
-          if(groupFixed.some(a=>a.note===pitch && a.finger!==f)) continue;
-          if(active.some(a=>a.note!==pitch && a.finger===f)) continue;
-          if(groupFixed.some(a=>a.note!==pitch && a.finger===f)) continue;
-          if(visit(position+1,next)) return true;
-        }
-        return false;
-      };
-      return visit(rank+1,ordinal(finger));
-    };
+    const allowed = finger => chordCanFinish(chord,active,groupFixed,n,finger,left);
     let chosen=n.finger;
     if (chosen) {
       if (!allowed(chosen)) reasons.set(n.source_id,'Conflicting fixed fingering or unplayable overlap');
     } else {
       const candidates=raw.map((score,i)=>({score,finger:i+1}))
-        .filter(a=>allowed(a.finger) && canFinishChord(a.finger));
+        .filter(a=>allowed(a.finger));
       if (!candidates.length) {
         reasons.set(n.source_id,'No physically available finger for these overlapping keys/constraints');
         // Upstream still advances its model history using its genuine best
