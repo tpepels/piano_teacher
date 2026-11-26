@@ -430,6 +430,8 @@ func _build_settings_screen() -> void:
     settings_interactions.command_requested.connect(command_coordinator.request_command)
     settings_interactions.action_requested.connect(send_action)
     settings_view.device_selected.connect(midi_devices.choose)
+    settings_view.sight_reading_requested.connect(func(level: int, tempo: String):
+        command_coordinator.request_command("sight_reading.start",{"level":level,"tempo":tempo}))
     settings_interactions.exit_requested.connect(_exit_app)
     # Timing calibration is its own page, opened from Settings.
     var calibration_page := _screen("Calibration")

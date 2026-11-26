@@ -11,6 +11,10 @@ static func decide(path: String, resume_saved: bool,
         kind = "control"
     elif path == "library.health.start":
         kind = "library_health"
+    elif path == "sight_reading.start":
+        kind = "library_open"
+        open_mode = "practice"
+        resume_saved = true
     elif path == "library.open":
         kind = "library_open"
         if opened is Dictionary:

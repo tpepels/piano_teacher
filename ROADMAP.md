@@ -4304,3 +4304,6 @@ bash scripts/test.sh
 bash scripts/verify-embedded-production-local.sh
 bash scripts/package-inprocess.sh
 ```
+
+## Sight-reading mode (2026-11-26)
+Implemented generated fixed-tempo 16-bar rounds from Settings, with five cumulative levels, truncated Gaussian melodic motion, inversion-aware chord voicing, major/minor functional progressions and normal native playback/grading. Pending local Python/Godot CI and physical acceptance; check all five levels, range, written accidentals, chord inversions, fixed tempo, Pause/Resume and round completion. No new renderer or clock.

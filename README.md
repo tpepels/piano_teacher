@@ -42,6 +42,11 @@ include release duration in grading. Keyboard and configured
 piano shortcuts remain available. The keyboard hint appears after a wrong note
 in Free.
 
+For timed sight-reading drills, open **Settings → Sight reading** and choose one of
+five levels and a named tempo. Every start creates a fresh 16-bar round,
+from single notes to inverted triads, seventh chords and tonal progressions.
+The regular moving score and live accuracy apply at the chosen fixed tempo.
+
 The current build targets Linux. Follow [development setup](docs/development.md#build-and-run)
 to run from source; [packaging instructions](docs/development.md#standalone-linux-package)
 describe the assembled standalone application. Release readiness and remaining

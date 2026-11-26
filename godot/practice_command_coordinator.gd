@@ -156,7 +156,7 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
             message,operation,queued_library_failed)
         _flush_transport_action()
         return
-    var opened: Variant = Reply.decode_reply(body) if operation == "library.open" else null
+    var opened: Variant = Reply.decode_reply(body) if operation in ["library.open","sight_reading.start"] else null
     if operation in ["learning.export","learning.delete_piece","learning.delete_learner"]:
         var result: Variant = Reply.decode_reply(body)
         learning_accepted.emit(operation,
