@@ -287,6 +287,10 @@ func _button(label: String, callback: Callable, primary := false,
     return button
 
 
+func _exit_tree() -> void:
+    if score_session != null:
+        score_session.shutdown_preparation()
+
 func _exit_app() -> void:
     get_tree().quit()
 

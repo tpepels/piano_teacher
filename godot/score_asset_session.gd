@@ -13,6 +13,7 @@ signal action_requested(command: Dictionary)
 const RETAINED_INK_TIMEOUT_MS := 45000
 const SLOW_PREPARATION_MS := 10000
 const NativeScoreAssets := preload("res://native_score_assets.gd")
+const ScorePreparationJob := preload("res://score_preparation_job.gd")
 const ASSET_KEYS := ["native_glyphs","native_note_templates","native_tie_templates",
     "native_chord_templates","native_beam_fragments","native_tuplet_fragments",
     "native_slur_fragments","native_required_slur_pairs","native_slurs_complete",
@@ -53,6 +54,13 @@ var _preparing_since_ms := -1
 var _next_request_id := 0
 # One source-bound request owns the layout and original MIDI-note model.
 var _requests: Dictionary = {}
+# One running job and one latest pending bundle. No worker calls the session.
+var _worker_id := -1
+var _worker
+var _queued: Dictionary = {}
+var _uploading
+var _upload_started := 0
+var _upload_cpu_usec := 0
 
 func _init(renderer, native_feedback = null) -> void:
     _renderer = renderer
@@ -264,7 +272,12 @@ func complete_response(kind: String, request_id: int, code: int,
     if kind != "bundle":
         _fail("Unknown score bundle operation")
         return
-    _complete_bundle(code,body,now_ms)
+    if code != 0:
+        _fail(_command_failure(code,body))
+        return
+    _requests[kind] = request
+    _queued = {"request":request,"body":body}
+    _start_worker_if_possible()
 
 func _begin_request(kind: String, path: String, timeout: float) -> void:
     _next_request_id += 1
@@ -289,38 +302,80 @@ func _request_is_current(request: Dictionary) -> bool:
 func _drain_stale(_kind: String, _now_ms: int) -> void:
     request_layout()
 
-func _complete_bundle(code: int, body: PackedByteArray, _now_ms: int) -> void:
-    if code != 0:
-        _fail(_command_failure(code,body))
+func _start_worker_if_possible() -> void:
+    if _worker_id >= 0 or _uploading != null or _queued.is_empty():
         return
+    if not _request_is_current(_queued["request"]):
+        _queued.clear()
+        return
+    if not is_instance_valid(_renderer) or _renderer.size.x < 100.0 or _renderer.size.y < 100.0:
+        return
+    _worker = ScorePreparationJob.new(_queued["body"],_queued["request"],
+        _renderer.size,float(_renderer.configured_density))
+    _queued.clear()
+    _worker_id = WorkerThreadPool.add_task(_worker.run,false,"Prepare authentic score")
+
+func _same_preparation_viewport(job) -> bool:
+    return is_instance_valid(_renderer) and _renderer.size == job.viewport and \
+        float(_renderer.configured_density) == job.density
+
+func _requeue(job) -> void:
+    # A resize may supersede the fit; redo on the worker, not on the view.
+    _queued = {"request":job.request,"body":job.body}
+
+func advance_preparation() -> void:
+    if _worker_id >= 0 and WorkerThreadPool.is_task_completed(_worker_id):
+        WorkerThreadPool.wait_for_task_completion(_worker_id)
+        _worker_id = -1
+        var completed = _worker
+        _worker = null
+        if _request_is_current(completed.request):
+            if completed.result.has("error") or not completed.result.has("engraving"):
+                _requests.erase("bundle")
+                _fail(str(completed.result.get("error","Score preparation did not produce an engraving")))
+            elif not _same_preparation_viewport(completed):
+                _requeue(completed)
+            else:
+                _uploading = completed
+                _upload_started = Time.get_ticks_usec()
+                _upload_cpu_usec = 0
+                _uploading.result["engraving"].glyphs.begin_upload()
+                if _timing_diagnostics:
+                    print("SCORE_BUNDLE_WORKER:",JSON.stringify(completed.result["timing"]))
+    if _uploading != null:
+        var job = _uploading
+        if not _request_is_current(job.request):
+            _uploading = null
+        elif not _same_preparation_viewport(job):
+            _uploading = null
+            _requeue(job)
+        else:
+            var started: int = Time.get_ticks_usec()
+            var finished: bool = job.result["engraving"].glyphs.upload_step(2000)
+            _upload_cpu_usec += Time.get_ticks_usec()-started
+            if finished:
+                _uploading = null
+                _requests.erase("bundle")
+                _install_prepared(job)
+    _start_worker_if_possible()
+
+func shutdown_preparation() -> void:
+    # Only shutdown may block on a worker; navigation/retry invalidates it.
+    _queued.clear()
+    _uploading = null
+    if _worker_id >= 0:
+        WorkerThreadPool.wait_for_task_completion(_worker_id)
+        _worker_id = -1
+    _worker = null
+
+func _install_prepared(job) -> void:
     var started: int = Time.get_ticks_usec()
-    var bundle: Variant = _decode_json(body)
-    var decoded: int = Time.get_ticks_usec()
-    if not bundle is Dictionary:
-        _fail("Practice engine returned no source-bound score bundle")
-        return
-    # Reject both halves and their original-note IDs before changing ink.
-    var problem: String = NativeScoreAssets.bundle_error(bundle,{
-        "fingerprint":_fingerprint,"revision":revision,
-        "hand":str(_state.get("hand","")),"stage_key":_stage_key})
-    if not problem.is_empty():
-        _fail(problem)
-        return
-    var layout: Dictionary = bundle["layout"]
-    var model: Dictionary = bundle["model"]
     if not is_instance_valid(_renderer):
         return
-    var validated: int = Time.get_ticks_usec()
-    var installed: Dictionary = NativeScoreAssets.install(_renderer, layout)
-    var installed_at: int = Time.get_ticks_usec()
-    if not bool(installed.get("ok",false)):
-        _fail(str(installed.get("error","Authentic engraving unavailable")))
-        return
-    if not _renderer.load_score(model):
+    if not _renderer.install_prepared_score(job.result["engraving"]):
         _fail(str(_renderer.failure_reason))
         return
-    var model_loaded: int = Time.get_ticks_usec()
-    _layout = installed["layout"]
+    _layout = job.result["layout"]
     layout_revision = revision
     _rendered_stage_key = _stage_key
     _rendered_hand = str(_state.get("hand",""))
@@ -335,15 +390,11 @@ func _complete_bundle(code: int, body: PackedByteArray, _now_ms: int) -> void:
     layout_published.emit(revision,layout_snapshot())
     _publish_status()
     if _timing_diagnostics:
-        var published: int = Time.get_ticks_usec()
         print("SCORE_BUNDLE_MAIN_THREAD:",JSON.stringify({
-            "revision":revision,"bytes":body.size(),
-            "decode_ms":float(decoded-started)*.001,
-            "validate_ms":float(validated-decoded)*.001,
-            "atlas_ms":float(installed_at-validated)*.001,
-            "model_ms":float(model_loaded-installed_at)*.001,
-            "layout_publish_ms":float(published-model_loaded)*.001,
-            "total_ms":float(published-started)*.001}))
+            "revision":revision,"bytes":job.body.size(),
+            "upload_cpu_ms":float(_upload_cpu_usec)*.001,
+            "upload_elapsed_ms":float(started-_upload_started)*.001,
+            "install_publish_ms":float(Time.get_ticks_usec()-started)*.001}))
     _finish_native_score()
 
 func _finish_native_score() -> void:
@@ -387,6 +438,8 @@ func _reset_assets() -> bool:
     # Supersede both in-flight operations immediately on score change or Retry.
     # The queue cancels the old adapter when its replacement is dispatched.
     _requests.clear()
+    _queued.clear()
+    _uploading = null
     _annotation_version = -1
     if not _hide_renderer():
         # Keep exposed native ink and its feedback binding alive. No new
@@ -417,6 +470,10 @@ func _hide_renderer() -> bool:
     return true
 
 func _fail(message: String, release_renderer: bool = true) -> void:
+    _generation += 1
+    _requests.clear()
+    _queued.clear()
+    _uploading = null
     push_error("SCORE_ASSET_FAILURE: " + message)
     var repeated: bool = _retry_attempted and \
         message == _last_native_failure and not message.is_empty()

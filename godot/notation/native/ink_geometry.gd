@@ -34,13 +34,13 @@ func minimum_density(preferred: float, gap: float = MAX_STAFF_GAP) -> Dictionary
         outgoing_boundary_strokes(gap))
     return result
 
-func texture_ink_bands(texture: Texture2D, box: Array, origin: Vector2, gap: float) -> Array:
+func texture_ink_bands(texture, box: Array, origin: Vector2, gap: float) -> Array:
     # Cache finite alpha-row envelopes once per authentic texture. Unlike
     # enclosing sprite rectangles these do not reserve empty flag margins
     # above a short/tick barline or outside the grand staff.
-    var key: int = texture.get_instance_id()
+    var picture: Image = score.glyphs.source_image(texture)
+    var key: int = picture.get_instance_id()
     if not texture_bands.has(key):
-        var picture: Image = texture.get_image()
         var rows: Array = []
         for y in range(picture.get_height()):
             var left := picture.get_width()
@@ -149,7 +149,7 @@ func outgoing_beam_stems(gap: float, heads: Dictionary) -> Dictionary:
             var box: Array = score.source_stem_bounds(event,up)
             var chord: String = score.chord_template_key(event)
             var note: String = str(event["note_type"])+("_up" if up else "_down")
-            var texture: Texture2D = score.glyphs.note_stem_textures[note] if chord.is_empty() else score.glyphs.chord_stem_textures[chord]
+            var texture = score.glyphs.note_stem_textures[note] if chord.is_empty() else score.glyphs.chord_stem_textures[chord]
             result[str(event["id"])] = texture_ink_bands(texture,
                 [box[0],minf(y,tip)/unit,box[2],absf(y-tip)/unit],
                 Vector2(score.voice_column_offset(event,gap,heads),0.0),gap)

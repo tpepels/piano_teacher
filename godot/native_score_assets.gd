@@ -65,7 +65,25 @@ static func install(renderer, source: Dictionary) -> Dictionary:
         return {"ok":false, "error":str(renderer.failure_reason)}
     # Strip large SVG/Sprite payloads before saving compact layout metadata.
     # Preserve caller's original reply in case another consumer inspects it.
+    return {"ok":true, "layout":compact_layout(source)}
+
+# Same authenticated loader, on a detached CPU engraving rather than a view.
+static func prepare_engraving(engraving, source: Dictionary) -> bool:
+    return engraving.load_assets(
+        source.get("native_glyphs", {}),
+        source.get("native_note_templates", {}),
+        source.get("native_tie_templates", {}),
+        source.get("native_chord_templates", {}),
+        source.get("native_beam_fragments", {}),
+        source.get("native_tuplet_fragments", {}),
+        source.get("native_slur_fragments", {}),
+        source.get("native_required_slur_pairs", []),
+        bool(source.get("native_slurs_complete", false)),
+        source.get("native_required_beam_groups", []),
+        bool(source.get("native_beams_complete", false)))
+
+static func compact_layout(source: Dictionary) -> Dictionary:
     var layout: Dictionary = source.duplicate(false)
     for key in ASSET_KEYS:
         layout.erase(key)
-    return {"ok":true, "layout":layout}
+    return layout

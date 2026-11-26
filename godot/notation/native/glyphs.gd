@@ -57,6 +57,18 @@ var head_images: Dictionary:
 var template_images: Dictionary:
     get: return _assets.template_images
 
+func begin_cpu_preparation() -> void:
+    _assets.begin_cpu_preparation()
+
+func begin_upload() -> void:
+    _assets.begin_upload()
+
+func upload_step(budget_usec: int = 2000) -> bool:
+    return _assets.upload_step(budget_usec)
+
+func source_image(art) -> Image:
+    return _assets.source_image(art)
+
 func ready() -> bool:
     return _assets.ready()
 

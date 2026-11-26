@@ -55,7 +55,11 @@ func score_ready() -> bool:
     return score_session.is_ready()
 
 func refresh_status(status: Dictionary = {}) -> void:
-    practice_view.present_score(status if not status.is_empty() else score_session.status())
+    var values: Dictionary = status.duplicate() if not status.is_empty() else score_session.status()
+    if runway != null and runway.staff_renderer() != null and \
+            not bool(values.get("retry_visible",false)) and str(values.get("error","")).is_empty():
+        values["visible"] = false
+    practice_view.present_score(values)
 
 func _source_invalidated(_revision: int) -> void:
     feedback.source_invalidated()
@@ -91,6 +95,7 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
     # Apply it on EVERY displayed frame. A Resume intent can be admitted
     # before the next state receipt; a one-time paused-state hold would
     # otherwise trap the source world behind its old limit indefinitely.
+    score_session.advance_preparation()
     guided.update_hold(state)
     var frame_ms: float = precise_ms if is_finite(precise_ms) else float(now_ms)
     var beat: float = transport_beat(state,frame_ms)
@@ -100,7 +105,8 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
     metronome.update(state,state_tick_ms,beat,now_ms)
     present_frame(state,beat,world)
     var arrivals: Array = frames.advance(state,beat,world,now_ms,delta,busy,
-        screen,score_ready(),source_groups,frame_diagnostics,listen_diagnostics,smoke,frame_ms)
+        screen,score_ready(),source_groups,frame_diagnostics,listen_diagnostics,smoke,frame_ms,
+        runway.staff_renderer() if runway != null else null)
     if not arrivals.is_empty():
         score_effects.record_preview(arrivals,practice_view.stage)
     if runway != null:

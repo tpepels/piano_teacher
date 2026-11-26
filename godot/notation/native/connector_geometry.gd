@@ -238,7 +238,7 @@ func tie_clear_flag(event: Dictionary, direction: String, left: float,
     # Only compound sprites introduce the different stem length at issue.
     if chord.is_empty():
         return left if start else right
-    var texture: Texture2D = score.glyphs.chord_textures[chord]
+    var texture = score.glyphs.chord_textures[chord]
     var bounds: Array = score.glyphs.chord_metadata[chord]["bounds"]
     var shift := Vector2((float(score.cached_head_offsets.get(str(leader.get("id","")),0.0))-
         float(score.cached_head_offsets.get(str(event.get("id","")),0.0)))/unit,
@@ -246,8 +246,8 @@ func tie_clear_flag(event: Dictionary, direction: String, left: float,
     var key: String = "%s|%s|%.4f|%.4f|%.4f|%.4f" % [direction,chord,lo,hi,shift.x,shift.y]
     if flag_clearances.has(key):
         return origin.x+float(flag_clearances[key])*unit
-    var flag: Image = texture.get_image()
-    var curve: Image = score.glyphs.tie_textures[direction].get_image()
+    var flag: Image = score.glyphs.source_image(texture)
+    var curve: Image = score.glyphs.source_image(score.glyphs.tie_textures[direction])
     var box: Array = score.glyphs.tie_metadata[direction]["bounds"]
     var cell := Vector2(float(bounds[2])/flag.get_width(),float(bounds[3])/flag.get_height())
     var edge: float = lo if start else hi

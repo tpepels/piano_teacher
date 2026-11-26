@@ -23,12 +23,14 @@ var rest_segments: Array = []
 var all_segments: Array = []
 var annotations: Node2D
 var generation := 0
+var _initial_compilation: Array = []
 
 func _invalidate_publication() -> void:
     generation += 1
 
 func clear(view: Control) -> void:
     _invalidate_publication()
+    _initial_compilation.clear()
     for segment in [first_once,annotations] + \
             repeat_segments + rest_segments:
         if segment != null and is_instance_valid(segment):
@@ -50,7 +52,7 @@ func _new_segment(view: Control, kind: String):
     segment.configure(view,_painter,_compiled_callback,kind)
     return segment
 
-func install(view: Control, windows: Array[Vector2]) -> void:
+func install(view: Control, windows: Array[Vector2], incremental: bool = false) -> void:
     # The view already released the old stream ledger before calling this.
     clear(view)
     view.clip_contents = true
@@ -60,7 +62,24 @@ func install(view: Control, windows: Array[Vector2]) -> void:
     annotations.set("painter",_painter)
     annotations.z_index = 5
     view.add_child(annotations)
+    if incremental:
+        _initial_compilation = all_segments.duplicate()
+        for segment in _initial_compilation:
+            segment.compile_enabled = false
     StreamLifecycle.present_pool(all_segments)
+
+func advance_initial_compilation() -> void:
+    # Enable one initial strip per frame, only after the preceding draw.
+    while not _initial_compilation.is_empty():
+        var segment = _initial_compilation[0]
+        if not is_instance_valid(segment) or segment.compiled:
+            _initial_compilation.pop_front()
+            continue
+        if not segment.compile_enabled:
+            segment.compile_enabled = true
+            segment.visible = true
+            segment.queue_redraw()
+        return
 
 func resize(view: Control, windows: Array[Vector2], reseed: bool = false) -> void:
     if first_once == null:

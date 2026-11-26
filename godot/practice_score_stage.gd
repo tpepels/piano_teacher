@@ -165,14 +165,15 @@ func _ready() -> void:
     held_staff.visible = false
 
 
-func present_playhead_glow(score_ready: bool) -> void:
-    if playhead_glow == null or renderer == null or not is_instance_valid(renderer):
+func present_playhead_glow(score_ready: bool, staff_renderer = null) -> void:
+    var owner = staff_renderer if is_instance_valid(staff_renderer) else renderer
+    if playhead_glow == null or not is_instance_valid(owner):
         return
-    var display: bool = score_ready and renderer.visible and renderer.native_ready
+    var display: bool = score_ready and owner.visible and owner.native_ready
     playhead_glow.visible = display
     if not display:
         return
-    var line: Rect2 = renderer.playhead_region()
+    var line: Rect2 = owner.playhead_region()
     var desired_position := Vector2(line.position.x-94.0,line.position.y-38.0)
     var desired_size := Vector2(188.0,line.size.y+76.0)
     if playhead_glow.position != desired_position:

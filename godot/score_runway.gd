@@ -61,6 +61,9 @@ func _retain_tail(old, keep_staff: bool = false) -> void:
     if keep_staff:
         _manual_staff_tail = old
 
+func staff_renderer():
+    return _manual_staff_tail if is_instance_valid(_manual_staff_tail) else null
+
 func active_revision_published(_revision: int) -> void:
     # Called by ScoreAssetSession only once the replacement has completed
     # authentic engraving. This is the handoff of staff/cursor ownership.

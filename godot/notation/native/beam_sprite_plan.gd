@@ -6,7 +6,7 @@ extends RefCounted
 
 static func build(atlas, art_key: String, anchors: Array, y0: float,
         gap: float, source_offsets: Array) -> Array:
-    var texture: Texture2D = atlas.beam_textures.get(art_key)
+    var texture = atlas.beam_textures.get(art_key)
     if texture == null or anchors.size() < 2:
         return []
     var metadata: Dictionary = atlas.beam_metadata.get(art_key,{})

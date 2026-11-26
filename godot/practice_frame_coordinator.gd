@@ -37,7 +37,7 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
         ticks: int, delta: float, busy: bool, screen: String,
         score_ready: bool, source_groups: Array,
         frame_diagnostics: bool = false, listen_diagnostics: bool = false,
-        smoke: bool = false, precise_ms: float = NAN) -> Array:
+        smoke: bool = false, precise_ms: float = NAN, staff_renderer = null) -> Array:
     if frame_diagnostics and screen == "practice":
         var renderer = practice_view.stage.renderer
         var frame_ms: float = precise_ms if is_finite(precise_ms) else float(ticks)
@@ -80,7 +80,8 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
     var stage = practice_view.stage
     if stage.renderer != null:
         if stage.has_method("present_playhead_glow"):
-            stage.present_playhead_glow(score_ready and screen == "practice")
+            stage.present_playhead_glow(screen == "practice" and
+                (score_ready or staff_renderer != null),staff_renderer)
         # Score transport/ink reconciliation happens only in
         # PracticePresentationSession, before this visual-effects frame.
     if stage.effects != null and moving:

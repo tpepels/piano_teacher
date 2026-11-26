@@ -264,7 +264,8 @@ static func present_pool(segments: Array, used: Dictionary = {}) -> void:
     for segment in segments:
         if segment == null or not is_instance_valid(segment):
             continue
-        var should_show: bool = used.has(segment) or not bool(segment.get("compiled"))
+        var should_show: bool = used.has(segment) or (
+            not bool(segment.get("compiled")) and bool(segment.get("compile_enabled")))
         if segment.visible != should_show:
             segment.visible = should_show
         if not bool(segment.get("compiled")):

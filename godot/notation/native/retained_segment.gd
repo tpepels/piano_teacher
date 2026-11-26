@@ -21,6 +21,7 @@ var status_layer
 var symbols_drawn := 0
 var beam_groups_drawn := 0
 var compiled := false
+var compile_enabled := true
 
 func configure(canvas: Control, source_painter, compiled_callback: Callable,
         segment_kind: String) -> void:
@@ -57,6 +58,8 @@ func sync_note_status(take_key: String, source, visible_ink: bool,
         status_layer.sync(take_key,source,visible_ink,physical_source_bounds)
 
 func _draw() -> void:
+    if not compile_enabled:
+        return
     compiled = false
     note_instances.clear()
     instances_by_event.clear()

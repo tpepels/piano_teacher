@@ -350,7 +350,7 @@ func nonhead_envelope(kind: String, up: bool, chord_key: String = "") -> Rect2:
         return sprite_envelopes[cache_key]
     var box: Array = score_layout.glyphs.note_bounds[key] if chord_key.is_empty() else score_layout.glyphs.chord_metadata[chord_key]["bounds"]
     var texture: Texture2D = score_layout.glyphs.note_textures[key] if chord_key.is_empty() else score_layout.glyphs.chord_textures[chord_key]
-    var picture: Image = texture.get_image()
+    var picture: Image = score_layout.glyphs.source_image(texture)
     var pixel := Vector2(float(box[2])/picture.get_width(),float(box[3])/picture.get_height())
     var head_box: Array = score_layout.glyphs.bounds["head_"+(kind if kind in ["half","whole"] else "black")]
     var positions: Array = [[0.0,0.0]] if chord_key.is_empty() else score_layout.glyphs.chord_metadata[chord_key]["head_positions"]

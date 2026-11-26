@@ -293,6 +293,34 @@ func _clear_retained_segments() -> bool:
     _retained_pool.clear(self)
     return true
 
+## Adopt an exclusively owned CPU engraving after main-thread texture upload.
+func install_prepared_score(prepared) -> bool:
+    if not _clear_retained_segments():
+        return false
+    native_ready = false
+    annotations.clear()
+    drawn_note_instances.clear()
+    engraving = prepared
+    timeline = prepared.timeline
+    painter.engraving = engraving
+    _stream_controller.bind_surface(self,_retained_pool,engraving.source_windows)
+    annotations.fingering_change_requested.connect(func(source_id, finger):
+        fingering_change_requested.emit(source_id,finger))
+    practice_timeline = timeline.model.get("practice_timeline",{}).duplicate(true)
+    density_locked = false
+    practice_contract_error = ""
+    notice = ""
+    if not _stream_controller.bind_source(timeline.model):
+        failure_reason = "Cannot recover offline score material: " + \
+            _stream_controller.source_identity_error()
+        notice = failure_reason
+        return false
+    failure_reason = ""
+    _retained_pool.install(self,engraving.source_windows(maxf(0.0,play_from_beat)),true)
+    native_ready = true
+    queue_redraw()
+    return true
+
 func _install_retained_segments() -> bool:
     if not _clear_retained_segments():
         return false
@@ -454,6 +482,8 @@ func present_flow(world_beat: float, state: Dictionary,
     _stream_controller.prune_expired(self,stream_world_beat,
         maxf(1.0,timeline.pixels_per_beat),staff_gap(),
         timeline.sounding_duration_beats,size.x*PLAYHEAD_FRACTION)
+    if native_ready:
+        _retained_pool.advance_initial_compilation()
     if not native_ready or not retained_ready():
         queue_redraw()
         return
