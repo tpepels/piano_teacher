@@ -148,15 +148,17 @@ def tempo_increase(target_bpm: int, *, quality: float, attacks: int) -> int:
 
 
 def take_graded(state: FlowState, *, passed: bool, quality: float = 0.0,
-                attacks: int = 8, accuracy_percent: float = 0.0) -> Transition:
+                attacks: int = 8, accuracy_percent: float | None = None) -> Transition:
     """docs/practice-flow.md Tempo, one graded take."""
     _require(state, Step.TEMPO)
     floor, step = floor_bpm(state.target_bpm), step_bpm(state.target_bpm)
     if not passed:
+        if accuracy_percent is not None and accuracy_percent < SETTINGS.ignored_accuracy_below_percent:
+            return Transition(state, "Same tempo", Outcome.AGAIN)
         # A near-pass is useful practice at this tempo, not evidence that
         # the learner needs slower work or another untimed preparation.
         # It also breaks a sequence of low-accuracy recovery failures.
-        if accuracy_percent >= SETTINGS.recovery_accuracy_percent:
+        if accuracy_percent is not None and accuracy_percent >= SETTINGS.recovery_accuracy_percent:
             return Transition(replace(state, failures=0, clean_at_target=0),
                               "Again at the same tempo", Outcome.AGAIN)
         failures = state.failures + 1

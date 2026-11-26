@@ -162,6 +162,8 @@ class SightReadingGenerator:
             result = event.assessment
             eligible = full_target_take(event,state)
             verdict = AssessmentVerdict.decide(result,policy="practice-flow",eligible=eligible)
+            if verdict.ignored:
+                return _base_decision(event,state)
             return TeachingDecision(1,event.event_id+":teaching",event.event_id,state.binding,
                 state.progress,state.definition,state.progress,None,None,"stop",
                 eligible and not verdict.accepted,False,"sight_reading",

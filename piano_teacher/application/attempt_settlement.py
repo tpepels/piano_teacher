@@ -423,7 +423,8 @@ class AttemptSettlement:
                         stage_key=state.binding.stage_key,unit=unit,assisted_count=pending.event.assisted_count)
                 plan.apply_teaching_progress(decision.progress_after,
                     definition=decision.definition_after, expected=expected)
-                self.repository.save(plan, state.binding.fingerprint)
+                if not (decision.verdict and decision.verdict.ignored):
+                    self.repository.save(plan, state.binding.fingerprint)
                 if self.capture.attempt_id is not None:
                     self.capture.event("progression", {
                         "decision_id": decision.decision_id, "fingerprint": state.binding.fingerprint,
@@ -498,12 +499,15 @@ class AttemptSettlement:
         announced next-stage boundary. A focused or performance review is
         settled immediately, against the same exact captured source/verdict.
         """
-        self.capture.seal(
-            played,state="completed",reason=route,result=result,
-            verdict=pending.decision.verdict,
-            eligible=(route=="full_passage" and mode=="practice"
-                      and at_target),
-            extra={"assessed_end_beat":assessed_end_beat})
+        if pending.decision.verdict is not None and pending.decision.verdict.ignored:
+            self.capture.discard_unscored_take()
+        else:
+            self.capture.seal(
+                played,state="completed",reason=route,result=result,
+                verdict=pending.decision.verdict,
+                eligible=(route=="full_passage" and mode=="practice"
+                          and at_target),
+                extra={"assessed_end_beat":assessed_end_beat})
         if route == "full_passage":
             return False
         self.settle(pending,plan=plan,binding=binding,now=now,

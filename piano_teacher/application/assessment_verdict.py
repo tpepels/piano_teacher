@@ -17,6 +17,7 @@ class AssessmentVerdict:
     clears_trouble: bool
     source_note_count: int
     extra_notes: int
+    ignored: bool = False
 
     @staticmethod
     def decide(result, *, policy: str, eligible: bool) -> "AssessmentVerdict":
@@ -29,9 +30,12 @@ class AssessmentVerdict:
         threshold = SETTINGS.minimum_accuracy_percent
         if accepted and policy == "practice-flow" and threshold > 0.0:
             accepted = result.accuracy_percent >= threshold
-        clean = bool(result and result.clean)
+        ignored = bool(policy == "practice-flow" and result and result.notes
+                       and result.accuracy_percent < SETTINGS.ignored_accuracy_below_percent)
+        accepted = accepted and not ignored
+        clean = bool(result and result.clean and not ignored)
         return AssessmentVerdict(
             policy=policy, accepted=accepted,
             clean=clean, clears_trouble=bool(eligible and accepted),
             source_note_count=len(result.notes) if result else 0,
-            extra_notes=result.extra_notes if result else 0)
+            extra_notes=result.extra_notes if result else 0, ignored=ignored)

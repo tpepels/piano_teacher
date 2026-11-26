@@ -19,6 +19,7 @@
   "grading_match_window_beats": 0.65,
   "minimum_accuracy_percent": 85.0,
   "recovery_accuracy_percent": 70.0,
+  "ignored_accuracy_below_percent": 5.0,
   "grading_max_late_attack_seconds": 0.20,
   "repeated_tempo_min_attacks": 2,
   "focus_min_onsets": 2,

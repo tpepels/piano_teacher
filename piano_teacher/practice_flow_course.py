@@ -110,7 +110,7 @@ def _entry_tempo(event, state, decision):
 
 
 def graded_progress(course, *, accepted, quality=0.0, attacks=8,
-                    offer_section_choice=True, accuracy_percent=0.0):
+                    offer_section_choice=True, accuracy_percent=None):
     """One graded Tempo take, decided by the practice flow state machine
     (application/practice_py); this only maps it onto course progress."""
     p = course.progress
@@ -158,6 +158,7 @@ def _base_decision(event, state):
     verdict = (AssessmentVerdict.decide(result, policy="practice-flow", eligible=eligible)
                if result is not None else None)
     passed = verdict.accepted if verdict is not None else False
+    ignored = bool(verdict and verdict.ignored)
     flow_outcome = None
     manual_exposure = None
     if event.kind == "manual":
@@ -166,7 +167,9 @@ def _base_decision(event, state):
     elif event.kind == "interrupted":
         continuation = "stop"
     elif event.kind in ("full_result", "focused_result"):
-        if eligible:
+        if ignored:
+            message, flow_outcome = "Same tempo · Ready when you are", Outcome.AGAIN
+        elif eligible:
             chosen, message, flow_outcome = graded_progress(
                 c, accepted=passed, quality=result.timing_quality,
                 attacks=result.attacks, offer_section_choice=route.automatic,
@@ -174,7 +177,9 @@ def _base_decision(event, state):
             result_message = "Well played!" if passed else "Try again"
             accuracy = f"{result_message} · {result.accuracy_percent:.1f}% accuracy"
             message = f"{accuracy} · {message}" if message else accuracy
-        if (not route.automatic or flow_outcome in (Outcome.PIECE_DONE, Outcome.SECTION_READY)
+        if ignored and route.automatic and route.mode == "practice":
+            continuation = "repeat"
+        elif (not route.automatic or flow_outcome in (Outcome.PIECE_DONE, Outcome.SECTION_READY)
                 or route.scope == "perform"):
             continuation = "stop"
         elif chosen.key != c.key:
@@ -206,7 +211,8 @@ def _base_decision(event, state):
             "handoff" if chosen.key != c.key else "rewind" if restart else "count_in")
     return TeachingDecision(1, event.event_id+":teaching", event.event_id, state.binding,
         c.progress, chosen.definition, chosen.progress, None, exposure, continuation,
-        eligible and not passed, eligible and route.performed_bpm >= c.progress.target_bpm,
+        eligible and not passed and not ignored,
+        eligible and not ignored and route.performed_bpm >= c.progress.target_bpm,
         "course_progression", message, flow_outcome, verdict)
 
 

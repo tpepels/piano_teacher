@@ -190,7 +190,10 @@ def validate_teaching_decision(decision, *, event, state):
         and state.progress.streak+1 >= state.course.clean_runs_required)
     if earned and (not eligible or earned != {state.course.key}):
         raise ValueError("Unearned teaching mastery")
-    if decision.invalidate_failed_streak != bool(full_target and not passed):
+    ignored = bool(decision.verdict and decision.verdict.ignored)
+    if ignored and (p != state.progress or decision.mastery_eligible or decision.remediation is not None):
+        raise ValueError("Ignored take cannot alter learning progress")
+    if decision.invalidate_failed_streak != bool(full_target and not passed and not ignored):
         raise ValueError("Invalid failed-streak checkpoint")
     if not full_target and (p.streak > state.progress.streak or earned or decision.invalidate_failed_streak):
         raise ValueError("Partial teaching event cannot earn full-target credit")

@@ -109,6 +109,15 @@ class LearningLedger:
                     context.get("rule_id"), digest, _json(_context_summary(context)), _json(context)))
             self._enforce_budget()
 
+    def discard_open_attempt(self, attempt_id: str, *, session_id: str) -> None:
+        """Remove a non-learning exposure, including checkpointed evidence."""
+        with sqlite_atomic(self.db):
+            row = self._attempt(attempt_id)
+            if row[0] != session_id or row[3] != "open" or row[4] is not None:
+                raise ValueError("Only the current open attempt can be discarded")
+            self.db.execute("DELETE FROM learning_attempts WHERE attempt_id=?",
+                            (attempt_id,))
+
     def checkpoint(self, attempt_id: str, payload: dict):
         encoded = _json(_object(payload, "checkpoint"))
         with sqlite_atomic(self.db):

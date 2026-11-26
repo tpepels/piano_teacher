@@ -189,6 +189,20 @@ class LearningCapture:
                     "played": [asdict(n) for n in played], "coverage": "checkpointed_prefix"})
                 self.flush_intervals(self._clock(), keep_phase=True)
 
+    def discard_unscored_take(self) -> None:
+        """Remove the current AFK exposure without consuming prior outcomes."""
+        if self.attempt_id is None:
+            return
+        if self.sealed is not None or self.decisions:
+            raise ValueError("Cannot discard already sealed learning evidence")
+        with self.atomic():
+            self.flush_intervals(self._clock(), keep_phase=True)
+            self.ledger.discard_open_attempt(self.attempt_id,session_id=self.session_id)
+            self.waiting_decision = self.parent_decision
+            self.attempt_id = self.context = self.sealed = self.parent_decision = None
+            self.verification_episode = None
+            self.decisions = []
+
     def seal(self, played, *, state: str, reason: str, result=None,
              eligible: bool = False, extra: dict | None = None,
              verdict=None) -> None:

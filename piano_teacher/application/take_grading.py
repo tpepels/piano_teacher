@@ -43,13 +43,21 @@ class TakeGrading:
             plan=self.lesson.plan,binding=self.lesson.decision_binding(),now=now,
             score_revision=self.lesson.revision)
         assessed = completed.assessed
+        verdict = completed.pending.decision.verdict
+        ignored = bool(verdict and verdict.ignored)
+        if ignored:
+            # Preserve the internal assessment identity for the ordinary
+            # settlement/continuation, without publishing a failed review.
+            from dataclasses import replace
+            assessed = replace(assessed,marks=[],unmapped=0,feedback="Same tempo")
+            completed = replace(completed,assessed=assessed)
         self.take.publish_completion(
             marks=assessed.marks,unmapped=assessed.unmapped)
         # The completed take's settled grades, before any transition can
         # start another transport.
         self.live_feedback_workflows.publish_final(self.take.feedback_marks)
         self.transport.finish_take()
-        self.take.finish_review(completed.summary,self.lesson.plan.identity)
+        self.take.finish_review(None if ignored else completed.summary,self.lesson.plan.identity)
         self.measurement.phase_changed("feedback", now)
         return completed
 
