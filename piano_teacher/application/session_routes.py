@@ -94,8 +94,9 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
         resumed = source_installation.install(event.prepared)
         lesson.forget_source_decisions()
         if lesson.plan.profile == "sight-reading":
+            # Score-ready acknowledgement starts the timed round only once
+            # the actual generated engraving has been prepared.
             course.open_sight_reading()
-            commands.apply("start")
         elif resumed is not None:
             course.flow_open(resumed=resumed)
         if event.opened_identifier is not None:

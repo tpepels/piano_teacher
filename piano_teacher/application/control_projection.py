@@ -121,6 +121,10 @@ def project_controls(s: Mapping) -> dict:
         elif (phase == "feedback" and mode == "practice"
               and not s.get("auto")):
             midi_action = "restart"
+    # Do not accidentally restart the completed random score when a player
+    # touches a key after the result. A new random score comes from Settings.
+    if reading:
+        midi_action = None
     # Returning from standalone Listen is a mode action, not score
     # admission; the prior UI permitted it without ready notation.
     needs_score = main not in (None, "pause", "resume", "section_next")

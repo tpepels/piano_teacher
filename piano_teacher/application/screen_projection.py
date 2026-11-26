@@ -79,6 +79,10 @@ def project_screen(s: Mapping, *, moving: bool, flash: tuple[int, str] = (0, "")
         status = f"{status} · {label}" if status else label
     prompt = notice(s, moving) if s.get("loaded") else ""
     cue = {"title":prompt, "detail":"", "tone":"warning"}
+    if (flow.get("sight_reading") and not moving and not s.get("paused")
+            and str(s.get("feedback","")).startswith("Round complete")):
+        cue = {"title":str(s["feedback"]),
+               "detail":"Settings for a new round · Play to repeat", "tone":"milestone"}
     if section_choice(s):
         value = "" if accuracy is None else f" · {accuracy:.1f}% accuracy"
         keys = "C to repeat at 100% · F for next section" if s.get("device") else "Repeat or choose Next section"

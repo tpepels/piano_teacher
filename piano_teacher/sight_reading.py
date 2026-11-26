@@ -171,7 +171,7 @@ class SightReadingGenerator:
             bpm = state.progress.target_bpm
             return replace(decision,progress_after=replace(decision.progress_after,bpm=bpm),
                 next_exposure=replace(decision.next_exposure,bpm=bpm,mode="practice",
-                                      assisted=False,automatic=False))
+                                      assisted=False,automatic=True))
         return decision
 
 
