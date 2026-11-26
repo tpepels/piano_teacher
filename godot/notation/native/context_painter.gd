@@ -338,14 +338,16 @@ func paint_context(canvas, frame: RenderPass, measure: Dictionary, previous_meas
     # Full authentic header ink remains on every repeat, but its
     # columns are compact: there is no extra opening-only blank spacer.
     var header_shift: float = 0.0
-    var crowded_meter: bool = meter_is_crowded(measure,previous_measure,gap)
+    # A practice opening has its own measured full-header margin, even
+    # when a short hidden predecessor exists in the engraving atlas.
+    var crowded_meter: bool = not opening and meter_is_crowded(measure,previous_measure,gap)
     for staff in score_layout.visible_staves():
         var center: float = score_layout.staff_center(staff)
         var clef: Dictionary = score_layout.clef_for(staff,measure)
         var signatures: Dictionary = measure.get("keys",{})
         var signature: int = int(signatures.get(staff,0))
         var previous_keys: Dictionary = previous_measure.get("keys",{})
-        var key_changed: bool = signature != int(previous_keys.get(staff,999))
+        var key_changed: bool = opening or signature != int(previous_keys.get(staff,999))
         var change_marks: Array = []
         if key_changed:
             # Cancelling an old signature requires visible naturals,

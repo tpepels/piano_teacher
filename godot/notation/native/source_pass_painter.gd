@@ -62,7 +62,10 @@ static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
     for index in range(measure_index,timeline.display_measures.size()):
         var measure: Dictionary = timeline.display_measures[index]
         var at: float = float(measure.get("start_beat",0.0))
-        var first: bool = index == 0
+        # The atlas may begin with a hidden predecessor. The selected
+        # practice window, not the atlas, owns its complete opening header.
+        var first: bool = not timeline.measures.is_empty() and \
+            absf(at-float(timeline.measures[0].get("start_beat",0.0))) < .00001
         if at > right+.00001:
             break
         if not frame.event_visible(measure):
@@ -90,7 +93,7 @@ static func paint(engraving, canvas: CanvasItem, viewport: Vector2,
         frame.context_role = str(measure.get("display_role","active"))
         var crowded_meter: bool = context_painter.paint_context(
             target,frame,measure,previous_measure,x,gap,first)
-        if not first and not crowded_meter and x>=source_first*timeline.pixels_per_beat and x<=retained_width:
+        if index != 0 and not crowded_meter and x>=source_first*timeline.pixels_per_beat and x<=retained_width:
             target.draw_string(font,Vector2(x+gap*.4,
                 layout.staff_center("right")-gap*4.3),
                 str(int(measure.get("number",0))),
