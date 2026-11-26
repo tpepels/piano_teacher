@@ -30,3 +30,6 @@ These notes are filled by Tom after he plays on the piano. These serve as input 
 
 - Resume by playing C on a connected piano, with a visible note hint on the button.
   - **Implemented; verification pending (2026-11-26):** While paused, fresh C in any octave resumes; the attack and release are consumed before grading. Main transport button shows a miniature piano-key C hint; the advanced Pause menu shows C as well.
+
+- Allow playing warm-up notes in the rests and count-ins between timed takes without registering or showing a message.
+  - **Implemented; verification pending (2026-11-26):** Ordinary attacks outside actual graded timeline segments are excluded before deferral, recording and score feedback; physical held-key display and explicit transport shortcuts remain available.

@@ -88,6 +88,13 @@ class MidiDelivery:
 
     def deliver(self, message, *, received_at: float, corrected_at=None,
                 deferred=False):
+        adjusted = self.corrected_time(received_at, corrected_at)
+        timeline = self.transport.musical_timeline
+        segment = timeline.segment_at(adjusted)
+        musical = timeline.musical(adjusted)
+        timed_attack_allowed = bool(segment is not None and segment.kind == "take"
+            and segment.mode in ("practice", "perform")
+            and segment.start_at <= musical < segment.end_at)
         facts = MidiInputFacts(self.lesson.fingerprint,self.lesson.revision,
             self.lesson.plan.identity if self.lesson.plan else "",self.lesson.plan.active_phrase if self.lesson.plan else None,
             self.lesson.plan.hand if self.lesson.plan else "both",self.lesson.plan.bpm if self.lesson.plan else 60.,
@@ -96,7 +103,8 @@ class MidiDelivery:
             self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
             self.take.cancellation_generation,
             self.midi_input.device,
-            self.score.free_keys_open_at(self.lesson, self.transport))
+            self.score.free_keys_open_at(self.lesson, self.transport),
+            timed_attack_allowed=timed_attack_allowed)
         early = self.midi_input.dispatch_midi(
             message,facts=facts,received_at=received_at,
             corrected_at=corrected_at,deferred=deferred,
@@ -107,12 +115,8 @@ class MidiDelivery:
             recorder=lambda: self.take.recorder,
             teaching=lambda: self.lesson.guided_controller,
             feedback_take=self.live_feedback_workflows.feedback_take)
-        if early:
-            # A key during the count-in, or before a Free target reaches the
-            # line, earns no credit; say so instead of silently ignoring it.
-            self.notices.flash(
-                "Wait until the note reaches the line" if self.transport.mode == "learn"
-                else "Too early – wait for the count-in, then play")
+        if early and self.transport.mode == "learn":
+            self.notices.flash("Wait until the note reaches the line")
 
 
 class MidiDeviceConnection:

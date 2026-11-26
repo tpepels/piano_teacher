@@ -249,3 +249,7 @@ experience. The owner checks MIDI response, sound, score motion, count-in,
 feedback, aid return and saved reopen on the instrument. The exact software
 revision and remaining physical/clean-machine gates belong in
 [ROADMAP](../ROADMAP.md), with the [verification protocol](development.md#verification-and-acceptance).
+
+### Warm-up between takes
+
+Ordinary piano attacks during inter-take rests and count-ins do not count toward a take and do not produce messages or score feedback. Explicit transport gestures and the physical held-key display remain available. Within a timed take, authored rests remain part of the graded music.

@@ -10,7 +10,6 @@ import math
 from .musical_scheduler import SCHEDULER
 from .session_events import MidiArrival
 from ..live_feedback import live_assessment
-from ..grading_tolerance import match_window
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +33,8 @@ class MidiInputFacts:
     # Free: earliest accepted input near the current target's arrival.
     # A key before this would answer notes still travelling in.
     guided_open_at: float | None = None
+    # Hardware attack timestamp lies within an actual graded timeline take.
+    timed_attack_allowed: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +108,12 @@ class MidiIngress:
         if effect.action or effect.completed_range is not None:
             apply_shortcut(effect)
         if effect.consumed:
+            return
+        # Ordinary keys in inter-take rests and count-ins are warm-up only.
+        # Explicit transport gestures were handled above. Do not defer or
+        # generate feedback for a key that belongs to no graded take.
+        if (facts.mode in ("practice", "perform") and message.type == "note_on"
+                and message.velocity > 0 and facts.timed_attack_allowed is False):
             return
         gates = transport_facts()
         if self.suppress_for_successor(facts,gates):
@@ -210,16 +217,12 @@ class MidiIngress:
         recorded = None
         early = False
         if facts.running and recorder and facts.mode not in ("learn", "listen"):
-            spb = SCHEDULER.seconds_per_beat(
-                facts.tempo_map.bpm_at(facts.from_beat)
-                if facts.tempo_map is not None else facts.bpm)
-            # A press before the downbeat is graded when it is close enough
-            # to be matched to the first note (it can then be early); a press
-            # further into the count-in is not part of the take.
-            if not is_on or not facts.paused and musical_at >= -match_window(spb):
+            if not is_on or (not facts.paused and musical_at >= 0.0
+                              and facts.timed_attack_allowed is not False):
                 recorded = recorder.add(message.note,is_on,musical_at)
-            elif is_on and not facts.paused:
-                early = True
+        # No notehead ghosts or graded feedback for unrecorded timed keys.
+        if facts.mode in ("practice", "perform") and recorded is None:
+            return False
         judgement = None
         if (recorded is not None and facts.phrase is not None
                 and not facts.paused):
