@@ -79,3 +79,6 @@ Uploaded Python run: 215 passed, 140 failed, 3 warnings. No commit SHA in log; i
 
 - Ignore AFK-like takes below 5% accuracy.
   - **Implemented; verification pending:** Configurable `ignored_accuracy_below_percent` is checked in the canonical verdict. Preserve progress and preceding valid recovery/verification decision, discard open attempt and cascade checkpoint/evidence rows, and retry automatic practice at the same BPM. No mastery/failure count or assessment row. Session elapsed-time totals are retained; no completed review is shown. Existing 70% recovery and 85% pass thresholds remain.
+
+- Improve residual scrolling jitter despite nominal 60 FPS.
+  - **Implemented; verification pending:** Microsecond-resolution frame sampling, same-publication source beat/world calculation, explicitly disabled 2D pixel snapping. Opt-in wall-time and projected pixel displacement/speed diagnostics distinguish actual callback pacing from Godot delta and within-passage movement. No display timing or physical MIDI verification yet.

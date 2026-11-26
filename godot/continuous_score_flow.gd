@@ -7,7 +7,7 @@ extends RefCounted
 const MusicalTimeline := preload("res://musical_timeline.gd")
 var musical = MusicalTimeline.new()
 var beat := 0.0
-var last_ms := -1
+var last_ms := -1.0
 var bpm := 40.0
 var initialized := false
 # The world the staff rests at (a Free target or idle), INF while moving.
@@ -19,12 +19,12 @@ var following := false
 var run_offset := 0.0
 var _clock_offset_ms := 0.0
 
-func _backend_ms(at_ms: int) -> float:
+func _backend_ms(at_ms: float) -> float:
     return float(at_ms)-_clock_offset_ms
 
 ## Adopt the published timeline. A new run continues from the current
 ## world; when the run ends the world stands where the run left it.
-func follow(published: Variant, at_ms: int) -> void:
+func follow(published: Variant, at_ms: float) -> void:
     # Sample the outgoing run BEFORE replacing its timeline and clock.
     var here: float = project(at_ms)
     var previous_run: int = musical.run if following else -1
@@ -66,20 +66,20 @@ func run_world(world: float) -> float:
 
 ## Beats from the first note of take `segment_id` at local `at_ms`
 ## (negative in its count-in); NAN when the take is not on the timeline.
-func take_beat(segment_id: String, at_ms: int) -> float:
+func take_beat(segment_id: String, at_ms: float) -> float:
     if not following:
         return NAN
     var start: float = musical.take_world_start(segment_id)
     return musical.world_at(_backend_ms(at_ms))-start if is_finite(start) else NAN
 
-func _follow_rate(at_ms: int) -> float:
+func _follow_rate(at_ms: float) -> float:
     var segment: Dictionary = musical.segment_at(_backend_ms(at_ms))
     if segment.is_empty():
         return bpm
     var into: float = musical.world_at(_backend_ms(at_ms))-float(segment["world_start"])
     return MusicalTimeline.bpm_at(segment,clampf(into,0.0,float(segment["beats"])))
 
-func sample(at_ms: int, _selected_bpm: float = NAN) -> float:
+func sample(at_ms: float, _selected_bpm: float = NAN) -> float:
     if at_ms >= last_ms:
         beat = project(at_ms)
         last_ms = at_ms
@@ -91,10 +91,10 @@ func sample(at_ms: int, _selected_bpm: float = NAN) -> float:
             hold_world = beat
     return beat
 
-func sample_uncommitted(at_ms: int, _proposed_bpm: float) -> float:
+func sample_uncommitted(at_ms: float, _proposed_bpm: float) -> float:
     return sample(at_ms)
 
-func project(at_ms: int) -> float:
+func project(at_ms: float) -> float:
     if not following:
         return beat
     var world: float = musical.world_at(_backend_ms(at_ms))
@@ -104,7 +104,7 @@ func project(at_ms: int) -> float:
     return maxf(beat if at_ms >= last_ms else -INF,run_offset+world)
 
 ## Free places its first target where the timeline brings the staff.
-func project_authored_future(at_ms: int, _sampled_ms: int,
+func project_authored_future(at_ms: float, _sampled_ms: int,
         _source_beat: float, _nominal_bpm: float,
         _authored_segments: Array) -> float:
     return project(at_ms)

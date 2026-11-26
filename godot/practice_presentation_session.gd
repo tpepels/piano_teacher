@@ -84,7 +84,7 @@ func retry_score() -> void:
     score_session.retry(Time.get_ticks_msec())
 
 func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
-        delta: float, busy: bool, screen: String) -> void:
+        delta: float, busy: bool, screen: String, precise_ms: float = NAN) -> void:
     # One sampled frame instant, one source beat and one forward world
     # coordinate feed every consumer in this fixed presentation order.
     # Hold/release is a projection operation, not a backend command.
@@ -92,14 +92,15 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
     # before the next state receipt; a one-time paused-state hold would
     # otherwise trap the source world behind its old limit indefinitely.
     guided.update_hold(state)
-    var beat: float = transport_beat(state,now_ms)
-    var world: float = score_flow.sample(now_ms)
+    var frame_ms: float = precise_ms if is_finite(precise_ms) else float(now_ms)
+    var beat: float = transport_beat(state,frame_ms)
+    var world: float = score_flow.sample(frame_ms)
     feedback.poll(now_ms,score_session.layout_revision
         if score_session.layout_revision == score_session.revision else -1)
     metronome.update(state,state_tick_ms,beat,now_ms)
     present_frame(state,beat,world)
     var arrivals: Array = frames.advance(state,beat,world,now_ms,delta,busy,
-        screen,score_ready(),source_groups,frame_diagnostics,listen_diagnostics,smoke)
+        screen,score_ready(),source_groups,frame_diagnostics,listen_diagnostics,smoke,frame_ms)
     if not arrivals.is_empty():
         score_effects.record_preview(arrivals,practice_view.stage)
     if runway != null:
@@ -112,7 +113,7 @@ func _source_rate(state: Dictionary, beat: float) -> float:
             beat,nominal,state.get("tempo_segments",[]))
     return nominal
 
-func transport_beat(state: Dictionary, at_ms: int) -> float:
+func transport_beat(state: Dictionary, at_ms: float) -> float:
     return visual_clock.score_beat(at_ms) if visual_clock.matches(state) \
         else float(state.get("clock_beat",0.0))
 
@@ -138,9 +139,10 @@ func accept(state: Dictionary, request_midpoint_ms: int,
         received_ms: int) -> void:
     score_effects.transition_mode(state,practice_view.stage)
     visual_clock.accept(state,request_midpoint_ms,received_ms)
-    var beat: float = transport_beat(state,received_ms)
-    # During a run of timed music the world follows the musical timeline.
+    # Both the source beat and scrolling world must see the same timeline
+    # publication. Do not evaluate the new take ID against the old timeline.
     score_flow.follow(state.get("musical_timeline"),received_ms)
+    var beat: float = transport_beat(state,received_ms)
     guided.update_hold(state)
     var playback: Variant = state.get("playback_timeline")
     var authorized: Variant = playback.get("current") \

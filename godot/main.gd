@@ -464,8 +464,9 @@ func _process(delta: float) -> void:
     var idle_mode: bool = current_screen != "practice"
     if OS.low_processor_usage_mode != idle_mode:
         OS.low_processor_usage_mode = idle_mode
+    var frame_ms: float = float(Time.get_ticks_usec()) * .001
     presentation_session.advance(state_inbox.current,state_inbox.tick_ms,
-        Time.get_ticks_msec(),delta,command_coordinator.state.pending,current_screen)
+        int(frame_ms),delta,command_coordinator.state.pending,current_screen,frame_ms)
 
 func current_state() -> Dictionary:
     return state_inbox.current.duplicate(true)

@@ -35,7 +35,7 @@ func matches(state: Dictionary) -> bool:
         bool(state.get("running",false))
 
 ## Beats since the take's opening beat (negative during its count-in).
-func score_beat(at_ms: int) -> float:
+func score_beat(at_ms: float) -> float:
     var timeline: Variant = _state.get("playback_timeline")
     var current: Variant = timeline.get("current") if timeline is Dictionary else null
     if score_flow != null and current is Dictionary:

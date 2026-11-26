@@ -37,14 +37,23 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
         ticks: int, delta: float, busy: bool, screen: String,
         score_ready: bool, source_groups: Array,
         frame_diagnostics: bool = false, listen_diagnostics: bool = false,
-        smoke: bool = false) -> Array:
+        smoke: bool = false, precise_ms: float = NAN) -> Array:
     if frame_diagnostics and screen == "practice":
+        var renderer = practice_view.stage.renderer
+        var frame_ms: float = precise_ms if is_finite(precise_ms) else float(ticks)
+        var density: float = renderer.timeline.pixels_per_beat if renderer != null else 0.0
+        var identity: String = "%s:%s:%s:%.6f" % [state.get("transport_id",-1),
+            state.get("revision",-1),state.get("phase",""),density]
+        frame_meter.record_motion(frame_ms,visual_beat,density,identity)
         var frame_result: Dictionary = frame_meter.record_frame(delta)
         if not frame_result.is_empty():
             frame_result["native_visible_noteheads"] = _visible_noteheads()
             frame_result["native_scanned_events"] = practice_view.stage.renderer.frame_scanned_events
             frame_result["phase"] = str(state.get("phase",""))
+            frame_result.merge(frame_meter.motion_report(),true)
             print("PHASE8D_FRAME_INTERVALS:",JSON.stringify(frame_result))
+    elif frame_diagnostics:
+        frame_meter.clear()
     if busy_presented != busy:
         busy_presented = busy
         settings_view.present_busy(busy)
