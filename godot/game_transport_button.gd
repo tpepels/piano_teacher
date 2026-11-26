@@ -8,6 +8,12 @@ const TEAL := Design.MINT
 const DIM := Design.SLATE
 
 var action_kind := "play"
+var piano_key_hint := ""
+
+func set_piano_key_hint(note: String) -> void:
+    if piano_key_hint != note:
+        piano_key_hint = note
+        queue_redraw()
 var live := false
 var pointer_inside := false
 var down := false
@@ -128,7 +134,8 @@ func _draw() -> void:
     # Keyboard shortcuts stay functional and in tooltips. The reference
     # gives the primary key just one centered Play/Pause label, no keycap.
     var padding: float = 12.0 if size.x < 190.0 else 18.0
-    var group_space: float = size.x - 2.0 * padding
+    var key_width: float = 26.0 if primary and not piano_key_hint.is_empty() else 0.0
+    var group_space: float = size.x - 2.0 * padding - key_width
     var label_offset: float = 27.0 if size.x < 190.0 else 30.0
     var available: float = maxf(1.0, group_space - label_offset)
     while font_size > 12 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT,
@@ -180,4 +187,15 @@ func _draw() -> void:
         - font.get_descent(font_size)) * .5 + lift
     draw_string(font, Vector2(group_x + label_offset, baseline), label,
         HORIZONTAL_ALIGNMENT_LEFT, available, font_size, ink)
+    if key_width > 0.0:
+        # Small piano keycap, with the two black keys identifying C.
+        var key_x: float = size.x-padding-key_width+3.0
+        var key_y: float = size.y*.5-17.0+lift
+        var key_rect := Rect2(key_x,key_y,23.0,34.0)
+        draw_rect(key_rect,Color(Design.FOCUS,.95 if not disabled else .45))
+        draw_rect(key_rect,ink,false,1.0)
+        draw_rect(Rect2(key_x+7.0,key_y,5.0,12.0),Design.NIGHT)
+        draw_rect(Rect2(key_x+17.0,key_y,5.0,12.0),Design.NIGHT)
+        draw_string(font,Vector2(key_x+3.0,key_y+29.0),piano_key_hint,
+            HORIZONTAL_ALIGNMENT_CENTER,17.0,13,Design.NIGHT)
 

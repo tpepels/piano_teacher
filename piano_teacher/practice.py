@@ -106,9 +106,23 @@ class Assessment:
         return 1.0-sum(ratios)/len(ratios) if ratios else 0.0
 
     @property
-    def timing_accuracy_percent(self) -> float:
-        """Timing precision of measured attacks; pitch errors are separate."""
-        return 100.0 * self.timing_quality
+    def accuracy_percent(self) -> float:
+        """Combined pitch and onset accuracy; extra attacks count as zero.
+
+        Each correctly pitched note earns continuous timing credit from 0
+        at the tolerance boundary to 1 at the expected onset. Wrong and
+        missed notes earn zero. Releases remain independently assessed.
+        """
+        credit = 0.0
+        for entry in self.notes:
+            observation = entry.observation
+            if entry.status in ("wrong", "missed") or observation is None:
+                continue
+            if (not observation.pitch_error and observation.onset_residual is not None
+                    and observation.onset_tolerance > 0):
+                credit += max(0.0, 1.0 - abs(observation.onset_residual)
+                              / observation.onset_tolerance)
+        return 100.0 * credit / max(1, len(self.notes) + self.extra_notes)
 
     @property
     def attacks(self) -> int:

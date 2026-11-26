@@ -2,6 +2,7 @@
 from __future__ import annotations
 from collections.abc import Mapping
 from .transport_commands import PAUSABLE_PHASES
+from .midi_key_shortcuts import RESUME_NOTE
 
 UI_INTENTS = frozenset((
     "ui_primary", "ui_pause", "ui_retry", "ui_listen",
@@ -109,7 +110,8 @@ def project_controls(s: Mapping) -> dict:
         "transport_active": moving,
         "primary": {"action": main or "", "label": caption(s, moving),
                     "enabled": main is not None,
-                    "requires_score": needs_score},
+                    "requires_score": needs_score,
+                    "piano_key": RESUME_NOTE if main == "resume" and s.get("device") else ""},
         "pause": {"action": pause or "", "enabled": pause is not None},
         "retry": {"action": retry or "", "enabled": retry_allowed,
                   "requires_score": True},

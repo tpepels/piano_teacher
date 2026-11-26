@@ -36,12 +36,13 @@ def keyboard(s: Mapping) -> str:
 
 
 def project_screen(s: Mapping, *, moving: bool, flash: tuple[int, str] = (0, ""),
-                   latest_timing_accuracy: float | None = None) -> dict:
+                   accuracy: float | None = None, accuracy_live: bool = False) -> dict:
     flow = s.get("flow") if isinstance(s.get("flow"), Mapping) else {}
     status = str(flow.get("status", ""))
-    if s.get("loaded") and latest_timing_accuracy is not None:
-        accuracy = f"Last accuracy: {latest_timing_accuracy:.1f}%"
-        status = f"{status} · {accuracy}" if status else accuracy
+    if s.get("loaded") and (accuracy_live or accuracy is not None):
+        value = "—" if accuracy is None else f"{accuracy:.1f}%"
+        label = f"Accuracy: {value}" if accuracy_live else f"Last accuracy: {value}"
+        status = f"{status} · {label}" if status else label
     return {"status": status,
             "notice": notice(s, moving) if s.get("loaded") else "",
             "keyboard": keyboard(s),

@@ -82,7 +82,7 @@ bar; do not make the learner sit through it.
 | Two failures in a row at 50% | Return to Free |
 | Two consecutive clean attempts at target | Complete this window/hand and advance |
 
-The header shows the last completed graded take's timing accuracy (timing quality × 100%), separately from wrong, missed and extra notes. It stays visible between attempts and is cleared on Stop. The developer-tunable `minimum_timing_accuracy_percent` in `lesson_settings.json` defaults to 0; a higher value makes otherwise clean takes below that threshold fail without weakening existing note or hold checks.
+The header shows live accuracy for the entire current graded take. Each correctly pitched note earns `max(0, 1 − |onset error| / onset tolerance)` credit; wrong and missed notes earn zero, and extra presses add zero-credit entries to the denominator. Future notes are excluded until played near their onset or their matching window expires. Before any evidence the display is blank (—); the final percentage uses the same metric. The separate timing-quality metric still controls tempo increases. The developer-tunable `minimum_accuracy_percent` in `lesson_settings.json` defaults to 0; a higher value rejects otherwise passing takes below that threshold without weakening existing note or hold checks.
 
 Timing quality is 1 when every attack is centred and 0 when attacks sit at
 the edge of their window (1 − mean |onset error| / tolerance). The length
@@ -115,6 +115,8 @@ two consecutive clean attempts at target. Then the piece is learned. The final
 test is separate from the four-bar routine window limit.
 
 ## Resume
+
+With a connected piano, press a fresh C in any octave while paused to resume. It is consumed as a transport command, including its release, even if C is a note in the exercise. The Resume button displays a piano-key hint. Calibration and keyboard-range capture take precedence.
 
 Reopening saved progress returns to the same window and hand at **Free** for
 warm-up, rather than immediately running at saved tempo. This also applies to

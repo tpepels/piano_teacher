@@ -160,7 +160,7 @@ def _base_decision(event, state):
                 c, accepted=passed, quality=result.timing_quality,
                 attacks=result.attacks)
             result_message = "Well played!" if passed else "Try again"
-            accuracy = f"{result_message} · {result.timing_accuracy_percent:.1f}% accuracy"
+            accuracy = f"{result_message} · {result.accuracy_percent:.1f}% accuracy"
             message = f"{accuracy} · {message}" if message else accuracy
         if (not route.automatic or flow_outcome is Outcome.PIECE_DONE
                 or route.scope == "perform"):

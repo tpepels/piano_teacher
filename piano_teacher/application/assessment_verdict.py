@@ -26,9 +26,9 @@ class AssessmentVerdict:
             (result.flow_passed if policy == "practice-flow" else result.passed))
         # A zero threshold is deliberately disabled. The existing note,
         # onset and optional release checks must still pass independently.
-        threshold = SETTINGS.minimum_timing_accuracy_percent
+        threshold = SETTINGS.minimum_accuracy_percent
         if accepted and policy == "practice-flow" and threshold > 0.0:
-            accepted = result.timing_accuracy_percent >= threshold
+            accepted = result.accuracy_percent >= threshold
         clean = bool(result and result.clean)
         return AssessmentVerdict(
             policy=policy, accepted=accepted,

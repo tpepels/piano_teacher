@@ -205,6 +205,9 @@ func present(state: Dictionary) -> void:
 	where_label.text = str(screen.get("status", ""))
 	var controls: Dictionary = state.get("controls", {}) if state.get("controls") is Dictionary else {}
 	var primary: Dictionary = controls.get("primary", {})
+	var piano_key := str(primary.get("piano_key", ""))
+	resume_button.text = "Resume  ·  ♪ " + piano_key if not piano_key.is_empty() else "Resume"
+	resume_button.tooltip_text = "Play C on your piano to resume" if not piano_key.is_empty() else "Resume"
 	resume_button.disabled = str(primary.get("action", "")) != "resume" \
 		or not bool(primary.get("enabled", false))
 	listen_button.disabled = not bool(controls.get("listen", {}).get("enabled", false))

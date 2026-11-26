@@ -11,6 +11,7 @@ from .score_state_publisher import ScoreProjectionFacts
 from .control_projection import project_controls
 from .screen_projection import project_screen
 from ..practice_flow_course import checkpoints
+from ..live_feedback import live_assessment
 from .session_snapshot_builder import SnapshotValues, capture as capture_session_snapshot
 from ..state_projection import SessionSnapshot, project_session_state
 
@@ -141,6 +142,23 @@ class SnapshotExtras:
         self.library = library
         self.midi_input = midi_input
 
+    def performance_accuracy(self, now: float) -> tuple[float | None, bool]:
+        """Read the entire current take, independent of engraving availability."""
+        plan, recorder = self.lesson.plan, self.take.recorder
+        if self.transport.mode not in ("practice", "perform") or plan is None:
+            return None, False
+        if recorder is not None and self.transport.running:
+            elapsed = self.timing.musical_seconds(now)
+            result = live_assessment(
+                plan.active_phrase, plan.hand, plan.bpm, recorder.presses,
+                from_beat=self.transport.play_from_beat, elapsed_seconds=elapsed,
+                tempo=self.timing.graded_tempo_map(), whole_take=True,
+                grade_note_holds=self.library.settings["grade_note_holds"])
+            if not result.notes and not result.extra_notes:
+                return None, True
+            return result.accuracy_percent, True
+        return self.take.latest_accuracy, False
+
     def add(self, state: dict, now: float) -> None:
         if self.take.pending_result is not None:
             state["bpm"] = self.timing.presentation_bpm()
@@ -214,8 +232,9 @@ class SessionReadModels:
             self.score.publish_score_state(state, facts)
             self.extras.add(state, now)
             state["controls"] = project_controls(state)
+            accuracy, live = self.extras.performance_accuracy(now)
             state["screen"] = project_screen(
                 state, moving=state["controls"]["transport_active"],
                 flash=(self.capture.notices.flash_id, self.capture.notices.flash_text),
-                latest_timing_accuracy=self.capture.take.latest_timing_accuracy)
+                accuracy=accuracy, accuracy_live=live)
             return state

@@ -140,7 +140,9 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var listen_control: Dictionary = _control("listen")
     start_button.visible = true
     start_button.text = str(primary_control.get("label","Play"))
-    start_button.tooltip_text = "Pause or resume · Space"
+    var piano_key := str(primary_control.get("piano_key",""))
+    start_button.tooltip_text = "Resume · Space or play C on your piano" if not piano_key.is_empty() else "Pause or resume · Space"
+    start_button.call("set_piano_key_hint",piano_key)
     start_button.disabled = _primary_blocked()
     start_button.call("configure", "pause" if str(primary_control.get("action","")) == "pause" else "play",
         _active_transport(parsed) and not bool(parsed.get("paused", false)))

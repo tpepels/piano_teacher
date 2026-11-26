@@ -41,8 +41,8 @@ class Take:
         return self._runtime.guided_recovery_pending
 
     @property
-    def latest_timing_accuracy(self):
-        return self._runtime.latest_timing_accuracy
+    def latest_accuracy(self):
+        return self._runtime.latest_accuracy
 
     @property
     def performance_summary(self):

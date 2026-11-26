@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+RESUME_NOTE = "C"
+RESUME_PITCH_CLASS = 0
+
 
 @dataclass(frozen=True)
 class KeyDecision:
@@ -92,6 +95,12 @@ class MidiKeyShortcuts:
             self.cancel_capture()
             self.suppressed_releases.add(pitch)
             return KeyDecision(consumed=True, completed_range=selected)
+        # While paused, a fresh C in any octave is an explicit command,
+        # including when C belongs to the current exercise. The release is
+        # consumed even after Resume opens the next grading window.
+        if device and paused and on and pitch % 12 == RESUME_PITCH_CLASS:
+            self.suppressed_releases.add(pitch)
+            return KeyDecision(consumed=True, action="resume")
         saved = self.ranges.get(device)
         if not saved or pitch in exercise_pitches:
             return KeyDecision()

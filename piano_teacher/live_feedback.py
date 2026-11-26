@@ -27,7 +27,8 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
                     played: list[PlayedNote], *, from_beat: float,
                     elapsed_seconds: float,
                     tempo: TempoMap | None = None,
-                    grade_note_holds: bool = False) -> Assessment:
+                    grade_note_holds: bool = False,
+                    whole_take: bool = False) -> Assessment:
     """Use final scoring's assignment and recorded time, with no mutable matches.
 
     An accepted early attack may light its upcoming head. An erroneous early
@@ -47,8 +48,9 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
     result = evaluate(selected, hand, bpm, eligible,
                       expected_seconds=(expected_note_seconds(phrase, tempo, from_beat)
                                         if tempo is not None else None),
-                      observation_window=(since,elapsed_seconds+onset_tolerance(
-                          SCHEDULER.seconds_per_beat(slowest))),
+                      observation_window=(None if whole_take else
+                          (since,elapsed_seconds+onset_tolerance(
+                              SCHEDULER.seconds_per_beat(slowest)))),
                       grade_note_holds=grade_note_holds)
     visible = []
     for entry in result.notes:
@@ -68,4 +70,8 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
         visible.append(entry)
     # Unmatched physical presses already travel through FeedbackEventLog as
     # actual-pitch ghosts. Never invent a second estimated ghost position.
+    if whole_take:
+        # Unmatched presses count against accuracy immediately. Future notes
+        # do not count until matched near their onset or their window expires.
+        return Assessment(tuple(visible), result.extra_notes, result.unmatched_played)
     return Assessment(tuple(visible), 0)
