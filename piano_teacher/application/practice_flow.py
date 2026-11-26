@@ -75,6 +75,27 @@ def floor_bpm(target_bpm: int) -> int:
     return max(1, round(target_bpm * .5))
 
 
+def initial_bpm(target_bpm: int, *, notes, hand: str, final: bool = False) -> int:
+    """Start simple, sparse single-hand exercises closer to source tempo.
+
+    Use the selected hand's attacks and onset spacing. Dense runs, chords,
+    both-hand practice and the final test retain the usual half-tempo start.
+    The recovery floor remains half tempo so a difficult attempt can slow.
+    """
+    floor = floor_bpm(target_bpm)
+    if final or hand not in ("left", "right"):
+        return floor
+    starts = [round(note.start, 6) for note in notes if note.hand == hand]
+    attacks = sorted(set(starts))
+    if not attacks or len(starts) != len(attacks) or len(attacks) > 4:
+        return floor
+    if any((b-a)*60.0/max(1, target_bpm) < .45
+           for a, b in zip(attacks, attacks[1:])):
+        return floor
+    fraction = 1.0 if len(attacks) <= 2 else .8
+    return max(floor, min(target_bpm, round(target_bpm*fraction)))
+
+
 def step_bpm(target_bpm: int) -> int:
     """Tempo changes in steps of 10% of the target tempo."""
     return max(1, round(target_bpm * .1))

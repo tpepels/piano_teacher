@@ -52,9 +52,9 @@ pace, without rhythm scoring. Free does not silently shrink the selected
 window to an earlier two-bar guided unit.
 
 - The next target waits at the playhead. The axis stays still while thinking.
-- Keys count only once the target is at the playhead. While it is still
-  travelling in, a key earns nothing and a short message says to wait
-  until the note reaches the line. The target travels in from beyond the
+- Keys count from 250 ms before the target's scheduled arrival at the playhead.
+  Earlier keys earn nothing and a short message asks the learner to wait.
+  The staff still follows its declared travel and hold timeline. The target travels in from beyond the
   right edge and stops exactly at the playhead, within about three seconds
   (on a slow piece the staff moves faster than the tempo to get there).
 - A correct note turns green; the staff moves to the next target.
@@ -68,7 +68,7 @@ window to an earlier two-bar guided unit.
 
 ### Tempo
 
-Start at **50% of the original target tempo**, rounded to a positive whole BPM.
+Start at a calculated tempo. For a single hand with at most four single-note attacks separated by at least 450 ms at the nominal target tempo, start at 100% (one or two attacks) or 80% (three or four attacks). Dense material, chords, two-handed practice and the whole-piece final test start at 50%. The recovery floor remains 50% of target so a learner who struggles can slow down.
 Each attempt has one authored
 bar of count-in ending immediately before the first note. Skip a leading rest
 or pickup inside the selected window, including a short rest within its first
@@ -139,8 +139,8 @@ what to do, in words that match the controls on screen:
   ready."
 - A key in the count-in (too far before the first note to be graded):
   "Too early – wait for the count-in, then play", briefly.
-- The first Tempo attempt reads "Tempo 50%" even when rounding to a whole
-  BPM moves it slightly.
+- The first Tempo attempt reads its selected tempo percentage (the 50% floor
+  is labelled 50% even when rounding to a whole BPM moves it slightly).
 
 ## Checkpoints
 

@@ -12,6 +12,9 @@ referenced outside the domain's own modules.
 """
 from __future__ import annotations
 
+# Free is untimed recognition, not a precise playhead-alignment exercise.
+FREE_EARLY_INPUT_SECONDS = 0.25
+
 
 class Score:
     def __init__(self, *, artifacts, successor, publisher, tempo_maps):
@@ -103,12 +106,12 @@ class Score:
             lesson.revision, transport.transport_id))
 
     def free_keys_open_at(self, lesson, transport) -> float | None:
-        """When keys start to count in Free: once the staff is at rest at
-        the current target (keys earn nothing while it travels or moves)."""
+        """Earliest accepted input near the current target's visual arrival."""
         if transport.mode != "learn":
             return None
         held = transport.musical_timeline.hold_open_at()
-        return held if held is not None else self.free_target_arrival(lesson, transport)
+        arrival = held if held is not None else self.free_target_arrival(lesson, transport)
+        return None if arrival is None else arrival - FREE_EARLY_INPUT_SECONDS
 
     def free_target_travel(self, lesson, transport) -> float | None:
         """Beats the first Free target travels to the playhead."""

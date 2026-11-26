@@ -30,7 +30,7 @@ from .teaching_course import at_position, next_unmastered
 from .teaching_manual import choose_manual
 from .application.assessment_verdict import AssessmentVerdict
 from .application.practice_flow import (
-    FlowState, Outcome, Step, floor_bpm, take_graded,
+    FlowState, Outcome, Step, floor_bpm, initial_bpm, take_graded,
 )
 
 def _hands(notes) -> tuple[str, ...]:
@@ -79,20 +79,25 @@ def _at_tempo(decision, bpm: int, *, reset: bool = False):
         next_exposure=replace(exposure,bpm=bpm) if exposure is not None else None)
 
 
+def _initial_tempo(course):
+    return initial_bpm(int(course.progress.target_bpm),
+        notes=course.stage.variant.notes, hand=course.hand,
+        final=course.exercise.kind == "perform")
+
+
 def _entry_tempo(event, state, decision):
     exposure = decision.next_exposure
     if exposure is None:
         return decision
     if exposure.mode in ("listen","learn"):
         return _at_tempo(decision,int(decision.progress_after.target_bpm))
-    exercise = replace(state.course, progress=decision.progress_after).exercise
-    final_entry = (exercise.kind == "perform"
+    selected_course = replace(state.course, progress=decision.progress_after)
+    final_entry = (selected_course.exercise.kind == "perform"
         and (exposure.stage_key != state.course.key
              or event.action in ("practice","perform","course_stage","open_at")))
     if (event.kind == "manual" and exposure.mode == "practice"
             and (state.route.mode in ("learn","listen") or final_entry)):
-        return _at_tempo(decision,floor_bpm(int(decision.progress_after.target_bpm)),
-                         reset=True)
+        return _at_tempo(decision,_initial_tempo(selected_course),reset=True)
     return decision
 
 
@@ -214,7 +219,7 @@ def decide(event, state, *, aid) -> TeachingDecision:
                 continuation="guided",message="Now the original notes · without tempo"),
                 int(course.progress.target_bpm),reset=True)
         # 2b -> 2c: every note found in order, Tempo starts by itself.
-        bpm = floor_bpm(int(decision.progress_after.target_bpm))
+        bpm = _initial_tempo(course)
         exposure = TeachingExposure(
             course.key, course.hand, course.stage.variant.phrase.first_attack_beat, None, bpm,
             "practice", False, True, False, "count_in")

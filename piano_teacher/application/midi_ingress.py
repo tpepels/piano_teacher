@@ -31,8 +31,8 @@ class MidiInputFacts:
     can_pause: bool
     cancellation_generation: int = 0
     device: str = ""
-    # Free: the moment the first target reaches the playhead. A key before
-    # it would answer notes that are still travelling in (or off screen).
+    # Free: earliest accepted input near the current target's arrival.
+    # A key before this would answer notes still travelling in.
     guided_open_at: float | None = None
 
 
@@ -240,8 +240,8 @@ class MidiIngress:
         if facts.mode == "learn":
             if (is_on and not facts.paused and facts.guided_open_at is not None
                     and corrected_at < facts.guided_open_at):
-                # The target is still travelling in: the key earns nothing,
-                # and the learner is told to wait for it.
+                # The target is still outside the early acceptance window.
+                # This does not change its scheduled visual arrival.
                 return True
             if teaching is not None and self.midi.connected:
                 teaching.receive(pitch=message.note,is_on=is_on,
