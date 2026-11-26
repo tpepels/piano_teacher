@@ -14,6 +14,7 @@ const Statuses := preload("res://note_status_registry.gd")
 const MAX_BUFFERED := 4096
 const WRONG_GHOST_MS := 600
 const WARMUP_GHOST_MS := 380
+const ATTACK_TRACE_MS := 1100
 
 var score: Control
 var score_revision := -1
@@ -34,6 +35,7 @@ var _visual_revisions: Dictionary = {}
 var _sounding: Dictionary = {}
 var _ghosts: Dictionary = {}
 var _warmup_ghosts: Array = []
+var _attack_markers: Array = []
 var _renderers: Array = [] # [{renderer: WeakRef, revision: int}]
 var _buffered: Array = []
 var _overflow_logged := false
@@ -114,6 +116,16 @@ func bind_score(renderer: Control, revision: int) -> void:
 ## "ignored"; every outcome is final, so the caller may acknowledge it.
 func ingest(event: Dictionary) -> String:
     var revision: int = int(event.get("revision",-1))
+    # This is independent of grade delivery and source strip binding.
+    # Buffered replay cannot duplicate a physical attack.
+    if str(event.get("kind","")) == "attack" and not bool(event.get("trace_seen",false)):
+        event = event.duplicate()
+        event["trace_seen"] = true
+        var world: Variant = event.get("attack_world_beat")
+        if (world is float or world is int) and is_finite(float(world)):
+            _attack_markers.append({"world":float(world),"run":int(event.get("attack_run",-1)),
+                "staff":str(event.get("staff","right")),"status":str(event.get("status","heard")),
+                "graded":bool(event.get("graded",false)),"shown_ms":Time.get_ticks_msec()})
     # Ephemeral ink expires independently of source-note grades.
     # Warm-up has no source strip to own it, even when no take is running.
     if str(event.get("kind","")) == "attack" and str(event.get("status","")) == "warmup":
@@ -269,8 +281,13 @@ func warmup_ghosts_for_revision(revision: int) -> Array:
     return _warmup_ghosts.filter(func(ghost: Dictionary) -> bool:
         return int(ghost["revision"]) == revision)
 
+func attack_markers() -> Array:
+    return _attack_markers
+
 func _expire_ghosts() -> void:
     var now := Time.get_ticks_msec()
+    _attack_markers = _attack_markers.filter(func(marker: Dictionary) -> bool:
+        return now-int(marker["shown_ms"]) < ATTACK_TRACE_MS)
     _warmup_ghosts = _warmup_ghosts.filter(func(ghost: Dictionary) -> bool:
         return now-int(ghost["shown_ms"]) < int(ghost["lifetime_ms"]))
     for take in _ghosts.keys():

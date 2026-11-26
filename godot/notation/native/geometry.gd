@@ -57,6 +57,37 @@ const ACCIDENTAL_GLYPHS := {"sharp":"acc_sharp","flat":"acc_flat",
     "natural":"acc_natural","double-sharp":"acc_double_sharp",
     "double-flat":"acc_double_flat","flat-flat":"acc_double_flat"}
 
+## Spell a transient MIDI pitch against the written signature, not the
+## current measure's accidental memory (ghosts never change authored ink).
+static func key_signature_spelling(pitch: int, fifths: int) -> Dictionary:
+    var letters := ["C","D","E","F","G","A","B"]
+    var naturals := [0,2,4,5,7,9,11]
+    var order := ["F","C","G","D","A","E","B"] if fifths >= 0 else ["B","E","A","D","G","C","F"]
+    var signature: Dictionary = {}
+    for letter in order.slice(0,clampi(absi(fifths),0,7)):
+        signature[letter] = 1 if fifths > 0 else -1
+    # First prefer the exact diatonic spelling, including C-flat and B-sharp.
+    var pc: int = posmod(pitch,12)
+    for index in range(7):
+        var alter: int = int(signature.get(letters[index],0))
+        if posmod(int(naturals[index])+alter,12) == pc:
+            return {"step":letters[index],"alter":alter,
+                "octave":floori(float(pitch-int(naturals[index])-alter)/12.0)-1,
+                "accidental":""}
+    # A natural that cancels the key signature needs an explicit natural.
+    for index in range(7):
+        if int(naturals[index]) == pc:
+            return {"step":letters[index],"alter":0,"octave":floori(float(pitch)/12.0)-1,
+                "accidental":"acc_natural"}
+    # For other chromatic pitches choose the signature's conventional direction.
+    var alter: int = -1 if fifths < 0 else 1
+    for index in range(7):
+        if posmod(int(naturals[index])+alter,12) == pc:
+            return {"step":letters[index],"alter":alter,
+                "octave":floori(float(pitch-int(naturals[index])-alter)/12.0)-1,
+                "accidental":"acc_flat" if alter < 0 else "acc_sharp"}
+    return {}
+
 static func diatonic_index(spelling: Dictionary) -> int:
     var name: String = str(spelling.get("step", ""))
     if not STEPS.has(name):

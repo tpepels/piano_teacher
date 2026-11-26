@@ -22,6 +22,7 @@ var score_frame: Control
 var renderer: Control
 var playhead_glow: ColorRect
 var feedback: Node # note-status ledger; strips paint its ink
+var attack_trace: Control
 var effects: Control
 var count_in: Control
 var keyboard: Control
@@ -112,6 +113,9 @@ func _ready() -> void:
     effects.z_index = 1
     feedback = preload("res://native_score_feedback.gd").new()
     score_frame.add_child(feedback)
+    attack_trace = preload("res://notation/native/attack_trace.gd").new()
+    score_frame.add_child(attack_trace)
+    attack_trace.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     if not renderer.set_density_from_env():
         push_warning("Native score density: " + str(renderer.notice))
     # Score status must live inside the score panel: feedback_label is replaced

@@ -129,6 +129,10 @@ func present_frame(state: Dictionary, beat: float, world: float) -> void:
     renderer.present_clock(beat,world-float(renderer.runway_origin_beat))
     renderer.present_flow(world,state,beat)
     practice_view.stage.feedback.present_source_beat(state,beat)
+    # The trace uses the shared world projection, including run offsets.
+    # It owns no musical clock and never assigns a grade.
+    practice_view.stage.attack_trace.present(
+        practice_view.stage.feedback.attack_markers(),renderer,score_flow,world)
 
 
 func accept(state: Dictionary, request_midpoint_ms: int,

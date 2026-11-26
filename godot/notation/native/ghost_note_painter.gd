@@ -19,26 +19,24 @@ static func paint(canvas: CanvasItem, painter, ghost: Dictionary, screen_x: floa
     var staff: String = str(ghost.get("staff","right"))
     if staff not in ["right","left"]:
         staff = "right"
-    var measure: Dictionary = {}
-    for candidate in painter.timeline.display_measures:
+    var measure: Dictionary = painter.timeline.measures[0] if not painter.timeline.measures.is_empty() else {}
+    # Count-in belongs to the incoming written key, not hidden neighbour ink.
+    for candidate in painter.timeline.measures:
         if float(candidate["start_beat"]) <= beat:
             measure = candidate
         else:
             break
     var fifths: int = int(measure.get("keys",{}).get(staff,0))
-    var names: Array = (["C","D","D","E","E","F","G","G","A","A","B","B"]
-        if fifths < 0 else ["C","C","D","D","E","F","F","G","G","A","A","B"])
-    var alters: Array = ([0,-1,0,-1,0,0,-1,0,-1,0,-1,0]
-        if fifths < 0 else [0,1,0,1,0,0,1,0,1,0,1,0])
-    var spelling: Dictionary = {"step":names[pitch%12],"alter":alters[pitch%12],"octave":pitch/12-1}
+    var spelling: Dictionary = Geometry.key_signature_spelling(pitch,fifths)
+    if spelling.is_empty():
+        return
     var step: int = Geometry.staff_step(spelling,layout.clef_for(staff,measure))
     var bottom: float = layout.staff_center(staff)+gap*2.0
     var y: float = Geometry.note_y(step,bottom,gap)
     var x: float = screen_x if is_finite(screen_x) else painter.timeline.x_at_beat(beat)
     painter.engraving.symbols.paint_ledger(canvas,null,x,y,step,bottom,gap,color)
     painter.glyphs.paint_note(canvas,"quarter",step < 4,x,y,gap,color)
-    # A wrong key must show its actual chromatic pitch unambiguously even
-    # when it differs from the current signature's ordinary spelling.
-    var alteration: int = int(alters[pitch%12])
-    var accidental: String = "acc_flat" if alteration < 0 else "acc_sharp" if alteration > 0 else "acc_natural"
-    painter.glyphs.paint(canvas,accidental,x-gap*1.65,y,gap,color,true)
+    # Only deviations from the printed signature need an accidental.
+    var accidental: String = str(spelling["accidental"])
+    if not accidental.is_empty():
+        painter.glyphs.paint(canvas,accidental,x-gap*1.65,y,gap,color,true)

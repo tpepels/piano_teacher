@@ -116,6 +116,16 @@ class MidiDelivery:
             section_choice=self.lesson.section_choice_active and not self.transport.running
                 and self.transport.intent is None,
             device_generation=self.midi_input.device_generation)
+        # Capture the calibrated attack's actual position on the same
+        # musical world that drives the scrolling staff. Do not derive it
+        # from the expected note or the time a UI poll receives feedback.
+        timeline = self.transport.musical_timeline
+        attack_world = timeline.world_at(adjusted)
+        attack_run = timeline.run
+        def feedback_with_position():
+            return {**self.live_feedback_workflows.feedback_take(),
+                    "attack_world_beat": attack_world,
+                    "attack_run": attack_run}
         early = self.midi_input.dispatch_midi(
             message,facts=facts,received_at=received_at,
             corrected_at=corrected_at,deferred=deferred,
@@ -125,7 +135,7 @@ class MidiDelivery:
             musical_seconds=self.transport_timing.musical_seconds,
             recorder=lambda: self.take.recorder,
             teaching=lambda: self.lesson.guided_controller,
-            feedback_take=self.live_feedback_workflows.feedback_take)
+            feedback_take=feedback_with_position)
         if early and self.transport.mode == "learn":
             self.notices.flash("Wait until the note reaches the line")
 
