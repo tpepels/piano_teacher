@@ -7,6 +7,8 @@ current device, source, revision, stage, hand, take and cancellation.
 from __future__ import annotations
 
 from .session_events import MidiArrival
+from ..grading_tolerance import match_window
+from .musical_scheduler import SCHEDULER
 
 
 class MidiEpoch:
@@ -62,4 +64,10 @@ class MidiEpoch:
             # An unspecified hardware timestamp can never authorize a
             # previous take's queued key in a newer transport epoch.
             return False
-        return self.corrected_time(received_at, corrected_at) >= self.transport.run_at
+        plan = self.lesson.plan
+        if plan is None:
+            return False
+        # The same-source rollover may accept a legitimate slightly early
+        # first attack. Ingress still checks the exact measure window.
+        return (self.corrected_time(received_at, corrected_at)
+                >= self.transport.run_at-match_window(SCHEDULER.seconds_per_beat(plan.bpm)))

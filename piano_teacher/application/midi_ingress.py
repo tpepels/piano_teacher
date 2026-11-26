@@ -10,6 +10,7 @@ import math
 from .musical_scheduler import SCHEDULER
 from .session_events import MidiArrival
 from ..live_feedback import live_assessment
+from ..grading_tolerance import match_window
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +34,7 @@ class MidiInputFacts:
     # Free: earliest accepted input near the current target's arrival.
     # A key before this would answer notes still travelling in.
     guided_open_at: float | None = None
-    # Hardware attack timestamp lies within an actual graded timeline take.
+    # Attack belongs to the active measure's playable interval (including timing tolerance).
     timed_attack_allowed: bool | None = None
     section_choice: bool = False
     device_generation: int = 0
@@ -111,18 +112,30 @@ class MidiIngress:
             apply_shortcut(effect)
         if effect.consumed:
             return
-        # Ordinary keys in inter-take rests and count-ins are warm-up only.
-        # Explicit transport gestures were handled above. Do not defer or
-        # generate feedback for a key that belongs to no graded take.
+        # A trailing-rest or inter-take key is audible/visible, but never
+        # enters the recorder, accuracy, or the authoritative note ledger.
         if (facts.mode in ("practice", "perform") and message.type == "note_on"
                 and message.velocity > 0 and facts.timed_attack_allowed is False):
+            adjusted = (received_at-midi_offset_seconds
+                        if corrected_at is None else corrected_at)
+            self.publish_warmup(message, facts, adjusted, musical_seconds(adjusted),
+                                feedback_take())
             return
         gates = transport_facts()
         if self.suppress_for_successor(facts,gates):
             return
         adjusted = (received_at-midi_offset_seconds
                     if corrected_at is None else corrected_at)
-        if self.defer_boundary_note(
+        # A timestamp already admitted to the active recorder must be
+        # recorded before a tick can settle that recorder. Only unresolved
+        # handoffs may defer; a short take can otherwise defer its first key.
+        current_recorder = recorder()
+        belongs_to_current = (facts.running and current_recorder is not None
+            and facts.mode in ("practice", "perform")
+            and (facts.timed_attack_allowed is True or
+                 message.type == "note_off" or
+                 (message.type == "note_on" and message.velocity == 0)))
+        if not belongs_to_current and self.defer_boundary_note(
                 message,facts=facts,transport=gates,
                 received_at=received_at,corrected_at=adjusted,
                 replaying=deferred):
@@ -130,8 +143,17 @@ class MidiIngress:
         return self.deliver(
             message,facts=facts,received_at=received_at,
             corrected_at=adjusted,musical_at=musical_seconds(adjusted),
-            recorder=recorder(),teaching=teaching(),
+            recorder=current_recorder,teaching=teaching(),
             feedback_take=feedback_take())
+
+    def publish_warmup(self, message, facts, corrected_at, musical_at, feedback_take):
+        event = self.live.receive(pitch=message.note,is_on=True,now=corrected_at,
+            phrase=facts.phrase,hand=facts.hand,bpm=facts.bpm,from_beat=facts.from_beat,
+            run_at=facts.run_at,running=False,paused=facts.paused,mode=facts.mode,
+            transport_id=facts.transport_id,tempo_map=facts.tempo_map,at=musical_at,
+            warmup=True)
+        if event is not None:
+            self.feedback_events.publish({**event,**feedback_take,"graded":False})
 
     def classify(self,message,*,facts,now,deferred=False):
         if self.calibration.active:
@@ -220,8 +242,12 @@ class MidiIngress:
         recorded = None
         early = False
         if facts.running and recorder and facts.mode not in ("learn", "listen"):
-            if not is_on or (not facts.paused and musical_at >= 0.0
-                              and facts.timed_attack_allowed is not False):
+            spb = SCHEDULER.seconds_per_beat(
+                facts.tempo_map.bpm_at(facts.from_beat)
+                if facts.tempo_map is not None else facts.bpm)
+            if not is_on or (not facts.paused and facts.timed_attack_allowed is not False
+                              and (facts.timed_attack_allowed is True
+                                   or musical_at >= -match_window(spb))):
                 recorded = recorder.add(message.note,is_on,musical_at)
         # No notehead ghosts or graded feedback for unrecorded timed keys.
         if facts.mode in ("practice", "perform") and recorded is None:

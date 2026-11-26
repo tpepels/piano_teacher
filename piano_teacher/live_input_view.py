@@ -53,6 +53,7 @@ class LiveInputView:
         running: bool, paused: bool, mode: str,
         transport_id: int, tempo_map: TempoMap | None = None,
         at: float | None = None, judgement: NoteAssessment | None = None,
+        warmup: bool = False,
     ) -> dict | None:
         if not 0 <= pitch <= 127:
             return None
@@ -80,6 +81,8 @@ class LiveInputView:
                     else:
                         source = judgement.note.source_id
                         status = observation.timing_error or "on_time"
+        if warmup:
+            status = "warmup"
         origin = tempo_map.seconds_at(from_beat) if tempo_map is not None else 0.
         beat = (tempo_map.beat_at(origin + at) if tempo_map is not None
                 else from_beat + SCHEDULER.seconds_beats(at, bpm))

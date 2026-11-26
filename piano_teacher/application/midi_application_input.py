@@ -8,6 +8,7 @@ MidiDeviceConnection scans, selects and recovers the device.
 from __future__ import annotations
 import time
 from .midi_ingress import MidiInputFacts, InputTransportFacts
+from .attack_admission import accepts_attack
 
 
 class MidiCallback:
@@ -94,18 +95,20 @@ class MidiDelivery:
     def deliver(self, message, *, received_at: float, corrected_at=None,
                 deferred=False):
         adjusted = self.corrected_time(received_at, corrected_at)
-        timeline = self.transport.musical_timeline
-        segment = timeline.segment_at(adjusted)
-        musical = timeline.musical(adjusted)
-        timed_attack_allowed = bool(segment is not None and segment.kind == "take"
-            and segment.mode in ("practice", "perform")
-            and segment.start_at <= musical < segment.end_at)
+        plan = self.lesson.plan
+        tempo = self.transport_timing.graded_tempo_map()
+        timed_attack_allowed = bool(plan is not None and self.transport.running
+            and not self.transport.paused and self.transport.mode in ("practice", "perform")
+            and accepts_attack(plan.active_phrase, hand=plan.hand,
+                boundaries=plan.piece.bar_boundaries, bpm=plan.bpm, tempo=tempo,
+                from_beat=self.transport.play_from_beat,
+                elapsed=self.transport_timing.musical_seconds(adjusted)))
         facts = MidiInputFacts(self.lesson.fingerprint,self.lesson.revision,
             self.lesson.plan.identity if self.lesson.plan else "",self.lesson.plan.active_phrase if self.lesson.plan else None,
             self.lesson.plan.hand if self.lesson.plan else "both",self.lesson.plan.bpm if self.lesson.plan else 60.,
             self.transport.mode,self.transport.running,self.transport.paused,
             self.transport.play_from_beat,self.transport.run_at,self.transport.transport_id,
-            self.transport_timing.active_tempo_map(),self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
+            tempo,self.transport.running or (self.transport.mode == "learn" and self.lesson.guided_controller is not None),
             self.take.cancellation_generation,
             self.midi_input.device,
             self.score.free_keys_open_at(self.lesson, self.transport),
