@@ -298,3 +298,5 @@ window, and the silent tail after a measure's final attack window produce
 only a brief neutral fading pitch. They do not affect assessment or trigger
 messages. Explicit transport gestures and physical held-key display remain
 available. Internal authored rests before the last attack remain graded.
+
+The playhead-aligned notification lane uses semantic outcome cues: bold mint success, champagne mastery, muted peach retry, teal tempo and blue-green Listen. Headline and smaller continuation text share one fixed lane; success and milestones scale in gently. Presentation never delays the musical timeline.

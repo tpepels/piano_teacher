@@ -119,6 +119,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     if int(transition.get("id",0)) != _transition_id:
         _transition_id = int(transition.get("id",0))
         _transition_message = str(transition.get("text",""))
+        _transition_cue = transition.get("cue",{}) if transition.get("cue") is Dictionary else {}
         _transition_until_ms = Time.get_ticks_msec() + TRANSITION_MS
     var flash: Dictionary = screen.get("flash",{}) if screen.get("flash") is Dictionary else {}
     if int(flash.get("id",0)) != _flash_id:
@@ -135,6 +136,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         present_score(_score_status)
         return
     title_label.text = str(parsed.get("title", "Piano Teacher")).replace("_", " ")
+    _notice_cue = screen.get("notice_cue",{}) if screen.get("notice_cue") is Dictionary and not _audio_error else {}
     _present_notice("Listen audio could not load. Choose Listen to try again."
         if _audio_error else str(screen.get("notice","")))
     var primary_control: Dictionary = _control("primary")
@@ -160,6 +162,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
 const MESSAGE_MS := 4000
 const TRANSITION_MS := 2400
 var _notice := ""
+var _notice_cue: Dictionary = {}
+var _transition_cue: Dictionary = {}
 var _message := ""
 var _message_until_ms := 0
 var _transition_message := ""
@@ -174,14 +178,16 @@ func _present_notice(text: String) -> void:
 
 func _show_banner() -> void:
     var now := Time.get_ticks_msec()
-    var text := _notice
+    var cue: Dictionary = _notice_cue if not _notice.is_empty() and not _notice_cue.is_empty() else {"title":_notice,"tone":"warning"}
     if not _transition_message.is_empty() and now < _transition_until_ms:
-        text = _transition_message
+        cue = _transition_cue if not _transition_cue.is_empty() else {"title":_transition_message,"tone":"info"}
     if not _flash_message.is_empty() and now < _flash_until_ms:
-        text = _flash_message
+        cue = {"title":_flash_message,"tone":"warning"}
     if not _message.is_empty() and now < _message_until_ms:
-        text = _message
-    stage.present_notice(text)
+        cue = {"title":_message,"tone":"info"}
+    if str(_notice_cue.get("tone","")) == "milestone" and not _notice.is_empty():
+        cue = _notice_cue
+    stage.present_notice(str(cue.get("title","")),str(cue.get("detail","")),str(cue.get("tone","info")))
 
 func present_busy(busy: bool) -> void:
     _busy = busy

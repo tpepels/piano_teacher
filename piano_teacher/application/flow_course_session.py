@@ -41,6 +41,7 @@ class PracticeFlowCourseSession:
         self._source_identity = source_identity
         self._phase: FlowPhase | None = None
         self._message: tuple[int, str, float] = (0, "", 0.0)
+        self._message_kind = "info"
         self._settled_decision_id: str | None = None
 
     @property
@@ -122,14 +123,22 @@ class PracticeFlowCourseSession:
             return FlowTempoEntry(True,True)
         return FlowTempoEntry(active)
 
-    def say(self, message: str) -> None:
+    def say(self, message: str, *, kind: str = "info") -> None:
         if not message:
             return
         sequence, previous, at = self._message
         now = self._clock()
-        if previous and now-at < 0.5 and message not in previous:
-            message = f"{previous} · {message}"
+        if previous and now-at < 0.5:
+            if message in previous and kind == "info":
+                return
+            if message not in previous:
+                message = f"{previous} · {message}"
+            if kind in ("info", "listen", "free", "tempo") and self._message_kind in (
+                    "faster", "clean_once", "stage_done", "section_ready", "piece_done",
+                    "again", "slower", "back_to_free"):
+                kind = self._message_kind
         self._message = (sequence+1,message,now)
+        self._message_kind = kind
 
     def execute(self, transition: practice_flow.Transition) -> FlowStepEffect:
         state = self.apply(transition)
@@ -172,7 +181,7 @@ class PracticeFlowCourseSession:
         self._phase = FlowPhase(
             plan,transition.state.stage_key,transition.state.final,
             transition.state.step)
-        self.say(transition.message)
+        self.say(transition.message, kind=transition.state.step.value)
         return self.state
 
     def listen_finished(self) -> practice_flow.Transition:
@@ -222,7 +231,7 @@ class PracticeFlowCourseSession:
             failures=progress.failures,clean=progress.streak)
         self._phase = FlowPhase(plan,projected.stage_key,
                                 projected.final,projected.step)
-        self.say(message)
+        self.say(message, kind=outcome.value)
         self._settled_decision_id = decision_id
         return self.state
 
@@ -254,4 +263,4 @@ class PracticeFlowCourseSession:
         return {"step":step,"where":where,"hand":plan.hand,
                 "tempo_percent":percent,
                 "status":f"{where} · {hand_text} · {label}",
-                "message_id":sequence,"message":message}
+                "message_id":sequence,"message":message,"message_kind":self._message_kind}

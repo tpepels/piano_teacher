@@ -61,3 +61,6 @@ These notes are filled by Tom after he plays on the piano. These serve as input 
 
 - Prevent long-delayed note corrections and require 85% accuracy for progression.
   - **Implemented; verification pending (2026-11-26):** Configurable absolute late-match limit of 200 ms, exclusive, combined with the next distinct onset and the existing matching window. Both pitch-assignment passes, live missing-note publication and measure-tail admission share the limit. Earlier matching tolerance and note-release handling remain unchanged. Practice Flow requires at least 85% combined accuracy as well as its existing error checks, including both target-tempo passes. Updated admission regression expectations and added three regression tests.
+
+- Make on-score messages more game-like with distinct positive and retry feedback.
+  - **Implemented; visual verification pending (2026-11-26):** Typed course outcomes supply distinct headlines, accuracy and next instructions. Mint successes, champagne milestones, muted peach retries and teal/blue-green phase cues share the same playhead-aligned lane, with a subtle success pulse and fade. No changes to grading or progression.

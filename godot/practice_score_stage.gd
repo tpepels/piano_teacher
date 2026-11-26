@@ -34,7 +34,9 @@ var score_retry_button: Button
 var practice_playback_banner: Label
 var notification_row: Control
 var _notice_tween: Tween
-var _notice_text := ""
+var _notice_key: Array = []
+var notice_detail: Label
+var _notice_scale := 1.0
 var _view_size := Vector2(800,600)
 
 func _clear_progress_rail(child: Node) -> void:
@@ -44,7 +46,12 @@ func _clear_progress_rail(child: Node) -> void:
 
 func _ready() -> void:
     name = "PracticeScoreStage"
-    practice_playback_banner = UI.label("", 15, Design.HIGHLIGHT)
+    practice_playback_banner = UI.label("", 20, Design.HIGHLIGHT,true)
+    notice_detail = UI.label("", 13, Design.SECONDARY_INK)
+    notice_detail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    notice_detail.clip_text = true
+    notice_detail.autowrap_mode = TextServer.AUTOWRAP_OFF
+    notice_detail.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     practice_playback_banner.visible = false
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -69,17 +76,23 @@ func _ready() -> void:
     # It is not part of the notation viewport or the count-in's drawing area.
     score_region.add_theme_constant_override("separation",2)
     notification_row = Control.new()
-    notification_row.custom_minimum_size.y = 34.0
+    notification_row.custom_minimum_size.y = 48.0
     notification_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
     notification_row.clip_contents = true
     score_region.add_child(notification_row)
     notification_row.add_child(practice_playback_banner)
+    notification_row.add_child(notice_detail)
+    notice_detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    notice_detail.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    notice_detail.visible = false
     practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    practice_playback_banner.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+    practice_playback_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     notification_row.resized.connect(_place_notice)
     _place_notice()
     practice_playback_banner.clip_text = true
-    practice_playback_banner.max_lines_visible = 2
+    practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_OFF
+    practice_playback_banner.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    practice_playback_banner.max_lines_visible = 1
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 210)
@@ -211,33 +224,58 @@ func apply_viewport(view_size: Vector2, scale: float, compact: bool) -> void:
     score_frame.custom_minimum_size.y = 135.0
     for side in ["left","right","top","bottom"]:
         score_margin_box.add_theme_constant_override("margin_" + side,1 if compact else 6)
-    practice_playback_banner.add_theme_font_size_override("font_size",UI.font_size(15,scale))
-    notification_row.custom_minimum_size.y = maxf(32.0,36.0*scale)
+    _notice_scale = scale
+    notice_detail.add_theme_font_size_override("font_size",UI.font_size(13,scale))
+    practice_playback_banner.add_theme_font_size_override("font_size",UI.font_size(20 if _notice_key.size() > 2 and _notice_key[2] in ["success","milestone"] else 16,scale))
+    notification_row.custom_minimum_size.y = maxf(46.0,50.0*scale)
     _place_notice()
     _place_count_in()
 
 func _place_notice() -> void:
     # Start the text close to the fixed reading axis, without moving ink.
-    practice_playback_banner.offset_left = notification_row.size.x*PLAYHEAD_FRACTION
+    var left: float = notification_row.size.x*PLAYHEAD_FRACTION
+    practice_playback_banner.offset_left = left
     practice_playback_banner.offset_right = -6.0
+    practice_playback_banner.offset_bottom = -maxf(17.0,19.0*_notice_scale) if notice_detail.visible else 0.0
+    notice_detail.offset_left = left
+    notice_detail.offset_right = -6.0
+    notice_detail.offset_top = notification_row.size.y-maxf(18.0,20.0*_notice_scale)
 
-func present_notice(text: String) -> void:
-    if text == _notice_text:
+func present_notice(text: String, detail: String = "", tone: String = "info") -> void:
+    var key := [text,detail,tone]
+    if key == _notice_key:
         return
-    _notice_text = text
+    _notice_key = key
     if _notice_tween != null and _notice_tween.is_valid():
         _notice_tween.kill()
     _notice_tween = create_tween()
     if text.is_empty():
-        _notice_tween.tween_property(practice_playback_banner,"modulate:a",0.0,.18)
+        _notice_tween.tween_property(notification_row,"modulate:a",0.0,.22)
         _notice_tween.tween_callback(func():
             practice_playback_banner.visible = false
-            practice_playback_banner.text = "")
-    else:
-        practice_playback_banner.text = text
-        practice_playback_banner.visible = true
-        practice_playback_banner.modulate.a = 0.0
-        _notice_tween.tween_property(practice_playback_banner,"modulate:a",1.0,.12)
+            notice_detail.visible = false)
+        return
+    var palette: Dictionary = {
+        "success":Design.HIGHLIGHT, "milestone":Color("#F4D39A"),
+        "retry":Color("#E8B29D"), "warning":Color("#E8B29D"),
+        "tempo":Design.SCORE_ACCENT, "listen":Color("#B2D9DF"),
+        "info":Design.SECONDARY_INK}
+    var color: Color = palette.get(tone,Design.SECONDARY_INK)
+    var emphatic: bool = tone in ["success","milestone"]
+    practice_playback_banner.add_theme_color_override("font_color",color)
+    practice_playback_banner.add_theme_color_override("font_shadow_color",Color(color,.23) if emphatic else Color(Design.NIGHT,.65))
+    practice_playback_banner.add_theme_font_size_override("font_size",UI.font_size(20 if emphatic else 16,_notice_scale))
+    practice_playback_banner.text = text
+    practice_playback_banner.visible = true
+    notice_detail.text = detail
+    notice_detail.visible = not detail.is_empty()
+    _place_notice()
+    notification_row.modulate.a = 0.0
+    practice_playback_banner.pivot_offset = Vector2(0,practice_playback_banner.size.y*.5)
+    practice_playback_banner.scale = Vector2(.96,.96) if emphatic else Vector2.ONE
+    _notice_tween.set_parallel(true)
+    _notice_tween.tween_property(notification_row,"modulate:a",1.0,.15)
+    _notice_tween.tween_property(practice_playback_banner,"scale",Vector2.ONE,.24).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 func _place_count_in() -> void:
     # The count-in sits in the empty run-up left of the playhead, above the
