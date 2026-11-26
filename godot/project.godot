@@ -20,6 +20,7 @@ config/features=PackedStringArray("4.7")
 window/size/viewport_width=1220
 window/size/viewport_height=780
 window/size/mode=3
+window/vsync/vsync_mode=1
 
 [rendering]
 

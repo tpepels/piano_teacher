@@ -49,13 +49,12 @@ var resume_banner_message: Label:
     get: return _chrome.resume_banner_message
 var resume_review_button: Button:
     get: return _chrome.resume_review_button
-var resume_continue_button: Button:
-    get: return _chrome.resume_continue_button
 var resume_measure_button: Button:
     get: return _chrome.resume_measure_button
 var ui_scale: float:
     get: return _chrome.ui_scale
 var _resume_open_state: Dictionary = {}
+var _resume_fade: Tween
 var advanced_pause_open := false
 var _state: Dictionary = {}
 var _score_ready := false
@@ -103,6 +102,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     _state = parsed.duplicate(true)
     if is_resume_prompt_open() and (bool(parsed.get("running",false)) or
             str(parsed.get("mode","")) == "listen" or
+            int(parsed.get("midi_input_count",0)) > int(_resume_open_state.get("midi_input_count",0)) or
+            str(parsed.get("piece_fingerprint","")) != str(_resume_open_state.get("piece_fingerprint","")) or
             int(parsed.get("lesson_step",-1)) != int(
                 _resume_open_state.get("lesson_step",-1))):
         _dismiss_resume_hint()
@@ -255,12 +256,19 @@ func is_source_picker_open() -> bool:
     return open_picker != null and open_picker.visible
 
 func is_resume_prompt_open() -> bool:
-    return resume_banner != null and resume_banner.visible
+    return resume_banner != null and resume_banner.visible and not _resume_open_state.is_empty()
 
 func _dismiss_resume_hint() -> void:
-    if resume_banner != null:
-        resume_banner.hide()
     _resume_open_state.clear()
+    if resume_banner == null or not resume_banner.visible:
+        return
+    if _resume_fade != null and _resume_fade.is_valid():
+        return
+    resume_review_button.disabled = true
+    resume_measure_button.disabled = true
+    _resume_fade = create_tween()
+    _resume_fade.tween_property(resume_banner,"modulate:a",0.0,.22)
+    _resume_fade.tween_callback(resume_banner.hide)
 
 func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
     var step: int = int(state.get("lesson_step",1))
@@ -272,8 +280,13 @@ func show_resume_prompt(state: Dictionary, allow_measure: bool) -> void:
     midi_start_suppression_requested.emit(int(state.get("midi_input_count",0)))
     _resume_open_state = state.duplicate(true)
     resume_measure_button.visible = allow_measure
-    resume_banner_message.text = "Continue at step %d?" % step
-    resume_banner_message.tooltip_text = "Your earlier progress is preserved. Play to continue the saved step."
+    resume_banner_message.text = "Saved progress · Step %d" % step
+    resume_banner_message.tooltip_text = "Play to resume your saved progress."
+    if _resume_fade != null and _resume_fade.is_valid():
+        _resume_fade.kill()
+    resume_banner.modulate.a = 1.0
+    resume_review_button.disabled = false
+    resume_measure_button.disabled = false
     _chrome.position_resume_banner()
     resume_banner.show()
 

@@ -243,7 +243,12 @@ an early/late judgement, coral an unexpected attack, and muted ink ungraded
 input. The trace is presentation only and cannot affect assessment.
 Listen lighting is ungraded and cannot award performance credit.
 
-A slightly early/late attack remains green. An onset error counts only outside
+A slightly early/late attack remains green. A note's matching window closes
+at the next distinct authored attack onset if that comes sooner than its
+ordinary matching deadline; simultaneous chord notes share a deadline.
+No attack at or after that next onset may correct a previous note. Live
+missing-note feedback and final grading use the same cutoff.
+An onset error counts only outside
 the greater of **150 ms** and **one sixteenth note at the current local tempo**.
 Allow the original matching window before the first attack, including at a
 measure boundary. Within a timed measure, grade ordinary attacks until the

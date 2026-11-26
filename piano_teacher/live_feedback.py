@@ -62,7 +62,10 @@ def live_assessment(phrase: Phrase, hand: str, bpm: float,
         if observation.actual_onset is None:
             window = max(SETTINGS.grading_match_window_min_seconds,
                          SETTINGS.grading_match_window_beats * observation.local_seconds_per_beat)
-            if onset + window > elapsed_seconds + 1e-7:
+            deadline = onset + window
+            if observation.next_attack_onset is not None:
+                deadline = min(deadline, observation.next_attack_onset)
+            if deadline > elapsed_seconds:
                 continue
         elif onset > elapsed_seconds + 1e-7:
             if (onset - elapsed_seconds > observation.onset_tolerance + 1e-7

@@ -33,7 +33,9 @@ func follow(published: Variant, at_ms: int) -> void:
         following = false
         hold_world = beat
         return
+    var before_us := Time.get_ticks_usec()
     var backend_now: float = float(backend_clock.call())
+    var after_us := Time.get_ticks_usec()
     if not is_finite(backend_now):
         return
     if not musical.load_state(published):
@@ -41,8 +43,10 @@ func follow(published: Variant, at_ms: int) -> void:
         following = false
         hold_world = beat
         return
-    _clock_offset_ms = float(Time.get_ticks_msec())-backend_now
+    # Both clocks are monotonic in the same process. Fix their offset
+    # for this run instead of injecting poll-to-poll rounding jitter.
     if not following or musical.run != previous_run:
+        _clock_offset_ms = float(before_us+after_us)*.0005-backend_now
         beat = here
         run_offset = here-musical.world_at(_backend_ms(at_ms))
         following = true

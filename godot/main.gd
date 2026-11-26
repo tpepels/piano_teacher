@@ -95,14 +95,13 @@ var startup_last_music_checked: bool:
     get: return library_catalog.startup_checked
 
 func _ready() -> void:
-    # On 120/144 Hz laptops Godot otherwise renders the entire translucent
-    # piano stage on every monitor refresh even though MIDI timing is handled
-    # by the independent Python transport. Cap visual frames, not music.
-    Engine.max_fps = 60
-    # The static score and drawers should not keep the display rendering
-    # continuously while no transport is moving.
-    OS.low_processor_usage_mode_sleep_usec = 33000
-    OS.low_processor_usage_mode = true
+    # Let the display pace rendering at its native refresh rate.
+    # A fixed 60 Hz cap plus the old 33 ms low-power sleep caused uneven
+    # scroll steps, especially on 90/120/144 Hz panels.
+    DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
+    Engine.max_fps = 0
+    OS.low_processor_usage_mode_sleep_usec = 8000
+    OS.low_processor_usage_mode = false
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
@@ -467,6 +466,12 @@ func _process(delta: float) -> void:
             midi_devices.discover()
             settings_interactions.request_settings()
             library_catalog.request_catalog()
+    # Keep continuous frame pacing for all practice states (including
+    # count-in, rests, paused feedback fades and Free holds). Other screens
+    # may save power without sleeping the moving score.
+    var idle_mode: bool = current_screen != "practice"
+    if OS.low_processor_usage_mode != idle_mode:
+        OS.low_processor_usage_mode = idle_mode
     presentation_session.advance(state_inbox.current,state_inbox.tick_ms,
         Time.get_ticks_msec(),delta,command_coordinator.state.pending,current_screen)
 

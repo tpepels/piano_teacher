@@ -35,7 +35,6 @@ var pause_sheet: Control
 var resume_banner: PanelContainer
 var resume_banner_message: Label
 var resume_review_button: Button
-var resume_continue_button: Button
 var resume_measure_button: Button
 signal dismiss_resume_requested
 signal review_previous_requested
@@ -99,22 +98,21 @@ func build() -> void:
     resume_banner.name = "ResumePracticeChoice"
     resume_banner.visible = false
     resume_banner.size_flags_horizontal = Control.SIZE_SHRINK_END
-    resume_banner.add_theme_stylebox_override("panel",
-        Design.bordered_surface(Design.CHARCOAL,6,.32))
+    resume_banner.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
     layout.add_child(resume_banner)
     var resume_row := HBoxContainer.new()
-    resume_row.add_theme_constant_override("separation",8)
+    resume_row.add_theme_constant_override("separation",16)
+    resume_row.alignment = BoxContainer.ALIGNMENT_END
     resume_banner.add_child(resume_row)
     resume_banner_message = UI.label("",13,MUTED)
     resume_banner_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     resume_banner_message.clip_text = true
     resume_banner_message.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     resume_row.add_child(resume_banner_message)
-    resume_review_button = _button("Review 2",func(): review_previous_requested.emit(),false,"secondary")
+    resume_review_button = _resume_link("Review previous steps",func(): review_previous_requested.emit())
+    resume_review_button.tooltip_text = "Review the two previous lesson steps"
     resume_row.add_child(resume_review_button)
-    resume_continue_button = _button("Continue",func(): dismiss_resume_requested.emit(),false,"utility")
-    resume_row.add_child(resume_continue_button)
-    resume_measure_button = _button("…",func(): resume_measure_requested.emit(),false,"utility")
+    resume_measure_button = _resume_link("Choose measure",func(): resume_measure_requested.emit())
     resume_measure_button.tooltip_text = "Choose a measure"
     resume_row.add_child(resume_measure_button)
     stage = ScoreStage.new()
@@ -196,10 +194,25 @@ func position_resume_banner() -> void:
     var header: Rect2 = practice_header.get_global_rect()
     var viewport_width: float = get_viewport_rect().size.x
     # Do not insert another full-width toolbar above the score.
-    var width: float = minf(430.0,maxf(230.0,viewport_width-16.0))
+    var width: float = minf(630.0,maxf(230.0,viewport_width-16.0))
     var right: float = minf(header.end.x,viewport_width-8.0)
-    resume_banner.position = Vector2(maxf(8.0,right-width),header.end.y+5.0)
-    resume_banner.size = Vector2(width,40.0)
+    resume_banner.position = Vector2(maxf(8.0,right-width),header.end.y+3.0)
+    resume_banner.size = Vector2(width,30.0)
+
+func _resume_link(caption: String, callback: Callable) -> Button:
+    var link := Button.new()
+    link.text = caption
+    link.flat = true
+    link.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    link.set_meta("ui_font_base",14)
+    link.add_theme_font_size_override("font_size",_ui_font(14))
+    link.add_theme_color_override("font_color",Design.HIGHLIGHT)
+    link.add_theme_color_override("font_hover_color",Design.STONE)
+    link.add_theme_color_override("font_pressed_color",Design.TEAL)
+    for style in ["normal","hover","pressed","focus","disabled"]:
+        link.add_theme_stylebox_override(style,StyleBoxEmpty.new())
+    link.pressed.connect(callback)
+    return link
 
 func apply_viewport(view_size: Vector2, scale: float) -> void:
     ui_scale = scale

@@ -45,6 +45,8 @@ class NoteObservation:
     hold_error: Literal["short", "long"] | None
     unreleased: bool
     ambiguous_pairing: bool
+    # Exclusive boundary at the next distinct authored attack, if any.
+    next_attack_onset: float | None = None
 
 
 @dataclass(frozen=True)
@@ -188,6 +190,8 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
 
     Matching uses the nearest unused same-pitch onset in a generous window;
     onset tolerance determines correctness; release tolerance counts only when enabled.
+    Once the next distinct authored onset arrives, no new attack can match
+    the previous note, even if its original matching window is still open.
     """
     if bpm <= 0:
         raise ValueError("Practice BPM must be positive")
@@ -206,6 +210,16 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
             start, release, local_spb = expected_seconds(note)
             duration = release - start
         timing.append((start, release, duration, local_spb))
+
+    # Group simultaneous notes as chords, rather than cutting off one chord
+    # member with another. The same deadline is used by both match passes
+    # and exposed to live feedback for the missed-note decision.
+    onsets = sorted(set(item[0] for item in timing))
+    next_attack = {start: onsets[i+1] if i+1 < len(onsets) else None
+                   for i, start in enumerate(onsets)}
+    def before_next(note_index: int, onset: float) -> bool:
+        following = next_attack[timing[note_index][0]]
+        return following is None or onset < following
 
     def observation_for(note_index: int, played_index: int | None = None) -> NoteObservation:
         note = expected[note_index]
@@ -240,7 +254,8 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
             pitch_error=event is not None and event.pitch != note.pitch,
             timing_error=timing_error, hold_error=hold_error,
             unreleased=event is not None and event.release is None,
-            ambiguous_pairing=event is not None and event.ambiguous_pairing)
+            ambiguous_pairing=event is not None and event.ambiguous_pairing,
+            next_attack_onset=next_attack[start])
 
     # Closest-onset assignment first: an omitted repeated note must not steal
     # the correct press belonging to the next 16th of the same pitch.
@@ -256,7 +271,8 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
         first = bisect_left(attacks, (start-window, -1))
         last = bisect_right(attacks, (start+window, len(played)))
         pairs.extend((abs(onset - start), note_index, event_index)
-                     for onset, event_index in attacks[first:last])
+                     for onset, event_index in attacks[first:last]
+                     if before_next(note_index, onset))
     matched = {}
     for _, note_index, event_index in sorted(pairs):
         if note_index not in matched and event_index in unused:
@@ -273,7 +289,8 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
             continue
         start, _, _, spb = timing[note_index]
         candidates = [(abs(played[j].onset-start),j) for j in unused
-                      if abs(played[j].onset-start) <= onset_tolerance(spb)]
+                      if abs(played[j].onset-start) <= onset_tolerance(spb)
+                      and before_next(note_index, played[j].onset)]
         if candidates:
             _, index = min(candidates)
             unused.remove(index)

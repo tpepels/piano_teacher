@@ -94,11 +94,7 @@ func world_at(t_ms: float) -> float:
     var first: Dictionary = segments[0]
     if m <= float(first["start_ms"]):
         return minf(float(first["world_start"]),end_world)
-    var chosen: Dictionary = first
-    for segment in segments:
-        if float(segment["start_ms"]) > m:
-            break
-        chosen = segment
+    var chosen: Dictionary = _segment_at_musical(m)
     var world: float
     var finish: float = end_ms(chosen)
     if m >= finish and chosen == segments[-1]:
@@ -120,10 +116,17 @@ func hold_world_at(t_ms: float) -> float:
 func segment_at(t_ms: float) -> Dictionary:
     if segments.is_empty():
         return {}
-    var m: float = musical_ms(t_ms)
-    var chosen: Dictionary = segments[0]
-    for segment in segments:
-        if float(segment["start_ms"]) > m:
-            break
-        chosen = segment
-    return chosen
+    return _segment_at_musical(musical_ms(t_ms))
+
+func _segment_at_musical(m: float) -> Dictionary:
+    # Segments are chronological and contiguous. Long practice runs should
+    # not scan the complete take history several times every display frame.
+    var lo := 0
+    var hi: int = segments.size()
+    while lo < hi:
+        var mid: int = (lo+hi)>>1
+        if float(segments[mid]["start_ms"]) <= m:
+            lo = mid+1
+        else:
+            hi = mid
+    return segments[maxi(0,lo-1)]
