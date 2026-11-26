@@ -181,7 +181,7 @@ func clear_score() -> bool:
         return false
     runway_origin_beat = 0.0
     runway_cutoff_beat = INF
-    runway_overlay = false
+    # ScoreRunway owns staff visibility across asset replacement.
     annotations.clear()
     super.clear_score()
     engraving.clear(timeline)

@@ -23,7 +23,8 @@ class SessionLifecycle:
         self.progress = progress
 
     def stop(self, *, reason: str, preserve_episode: bool = False,
-             persist_evidence: bool = True) -> None:
+             persist_evidence: bool = True,
+             preserve_musical: bool = False) -> None:
         self.transport.invalidate(reason)
         played = (self.take.recorder.presses
                   if self.take.recorder is not None
@@ -55,7 +56,10 @@ class SessionLifecycle:
         self.score.stop_successor()
         self.lesson.stop_guided()
         self.lesson.clear_section_choice()
-        self.transport.reset_for_stop()
+        if preserve_musical:
+            self.transport.reset_for_stop(preserve_musical=True, now=self.clock())
+        else:
+            self.transport.reset_for_stop()
         self.take.reset_for_stop()
         self.midi_input.reset_live_input()
         self.listen.cancel()

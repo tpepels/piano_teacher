@@ -41,7 +41,8 @@ class GuidedExposureInstall:
             self.lesson.plan, self.lesson.fingerprint)
         self.lifecycle.stop(
             reason=prepared.stop_reason or reason,
-            preserve_episode=prepared.recovery)
+            preserve_episode=prepared.recovery,
+            preserve_musical=reason in ("transition", "section_next"))
         self.score.reset_guided_score()
         if prepared.remediation is not None:
             self.lesson.enter_flow_aid(prepared.remediation)
@@ -81,7 +82,8 @@ class TimedExposureInstall:
         self.lifecycle.stop(
             reason=("reintegration" if timed and prepared.mode == "practice"
                     else reason),
-            preserve_episode=timed and prepared.preserve_episode)
+            preserve_episode=timed and prepared.preserve_episode,
+            preserve_musical=reason in ("transition", "section_next"))
         if not timed or prepared.mode == "practice":
             self.transport.select_opening(
                 prepared.from_beat if timed else 0.0)

@@ -58,7 +58,7 @@ class PlaybackAuthorization:
         if placed is None:
             if intent.action in ("restart", "resume") and timeline.open:
                 timeline.cut_at(now)
-            else:
+            elif not timeline.open:
                 timeline.reset()
             placed = timeline.start_after(
                 take, now=now, rest_beats=self.transport.ink_ahead_beats,

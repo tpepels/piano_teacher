@@ -86,8 +86,6 @@ func on_settings(code: int, body: PackedByteArray) -> void:
     accept_preferences(parsed)
     request_learning_status()
     _apply_window_mode(bool(preferences.get("fullscreen",true)))
-    _devices.maybe_restore(str(preferences.get("midi_device","")),
-        str(_inbox.current.get("device","")))
 
 func request_learning_status() -> void:
     if _history_pending or _history_request == null:

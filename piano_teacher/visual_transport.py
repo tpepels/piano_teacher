@@ -81,8 +81,9 @@ class VisualTransport:
         """Install the next source checkpoint chosen by AttemptProgression."""
         self.next_boundary_beat = beat
 
-    def reset_for_stop(self) -> None:
-        """Forget the visible attempt but retain the loaded score's gap duration."""
+    def reset_for_stop(self, *, preserve_musical: bool = False,
+                       now: float | None = None) -> None:
+        """Reset grading; internal handoffs may retain the moving rest."""
         self.running = False
         self._pause_floor = None
         self.paused = False
@@ -90,7 +91,10 @@ class VisualTransport:
         self.continuation_pending = False
         self.pending_rewind = None
         self.play_from_beat = 0.0
-        self.musical.reset()
+        if preserve_musical and now is not None and self.musical.open:
+            self.musical.bridge_to_rest(now)
+        else:
+            self.musical.reset()
 
     def begin_take(self) -> None:
         """Clear the former attempt."""

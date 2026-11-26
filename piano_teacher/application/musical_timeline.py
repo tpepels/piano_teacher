@@ -213,6 +213,21 @@ class MusicalTimeline:
             self.end_world = last.world_end + last.rest_after_beats
         self.next_take = None
 
+    def bridge_to_rest(self, now: float) -> None:
+        """Keep the world moving, without scheduling any playable notes."""
+        if not self.segments:
+            return
+        self.resume(now)
+        self.end_world = None
+        self.next_take = None
+        last = self.segments[-1]
+        if last.kind == "hold":
+            at = max(last.start_at, self.musical(now))
+            self.segments[-1] = replace(last, hold_seconds=at-last.start_at)
+            tempo = last.end_bpm
+            self.append(TimelineSegment(
+                "rest", last.world_end, at, (TempoSpan(0.0, tempo, tempo),)))
+
     @property
     def open(self) -> bool:
         """A run is moving and the next take may follow it."""
@@ -360,9 +375,14 @@ class MusicalTimeline:
             world, at, tempo = last.world_end, last.end_at, last.end_bpm
         else:
             world, at, tempo = 0.0, m, bpm
-        rest = max(0.0, rest_beats)
+        elapsed_rest = max(0.0, m-at)*tempo/60.0
+        rest = elapsed_rest + max(0.0, rest_beats)
         # Never start the count-in before the state can reach Godot.
         rest = max(rest, (m + lead - at) * tempo / 60.0)
+        if self.segments and last.kind == "take" and last.cut_beats is None:
+            # Keep the completed take's barline, then whole rest bars.
+            minimum = last.rest_after_beats
+            rest = minimum + max(0, math.ceil((rest-minimum)/bar_beats-1e-9))*bar_beats
         if rest > 1e-9:
             world = self.append(TimelineSegment(
                 "rest", world, at, (TempoSpan(rest, tempo, tempo),))).world_end
@@ -392,10 +412,22 @@ class MusicalTimeline:
     def start_free(self, *, now: float, travel_beats: float, bpm: float) -> None:
         """Free: the staff travels `travel_beats` at `bpm` to the first
         target, then holds there until the target is played."""
-        self.reset()
+        if self.open:
+            self.bridge_to_rest(now)
+        else:
+            self.reset()
         m = self.musical(now)
+        world, at = 0.0, m
+        if self.segments:
+            last = self.segments[-1]
+            world, at = last.world_end, last.end_at
+            elapsed = max(0.0, m-at)*last.end_bpm/60.0
+            if elapsed > 1e-9:
+                tail = self.append(TimelineSegment(
+                    "rest", world, at, (TempoSpan(elapsed, last.end_bpm, last.end_bpm),)))
+                world, at = tail.world_end, tail.end_at
         rest = self.append(TimelineSegment(
-            "rest", 0.0, m, (TempoSpan(max(0.0, travel_beats), bpm, bpm),)))
+            "rest", world, at, (TempoSpan(max(0.0, travel_beats), bpm, bpm),)))
         self.append(TimelineSegment("hold", rest.world_end, rest.end_at,
                                     (TempoSpan(0.0, bpm, bpm),)))
 

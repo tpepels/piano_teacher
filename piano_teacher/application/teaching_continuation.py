@@ -70,6 +70,7 @@ class ContinueSelectedScore:
 class StopSelectedContinuation:
     identity: ContinuationIdentity
     message: str
+    keep_moving: bool = False
 
 
 SettledEffect = (EnterSelectedExposure |
@@ -195,7 +196,8 @@ class TeachingContinuation:
         elif route == "continue":
             effect = ContinueSelectedScore(identity,exposure,facts.presentation_bpm)
         else:
-            effect = StopSelectedContinuation(identity,decision.message)
+            effect = StopSelectedContinuation(identity,decision.message,
+                keep_moving=getattr(decision.flow_outcome, "name", "") == "SECTION_READY")
         self._settled_publication = SettledPublication(effect,
             decision.flow_outcome,decision.message)
         return self._settled_publication

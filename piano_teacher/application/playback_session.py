@@ -339,9 +339,12 @@ class PlaybackSession:
         plan = self._progression.plan_full_passage(facts,PassageRuntimeFacts(
             self.auto,self._transport.run_at,self._transport.play_from_beat))
         if plan.action != "announce":
-            # Nothing follows this take on the timeline: the staff stops
-            # after its rest to the barline.
-            self._transport.musical.close()
+            decision = facts.pending.decision
+            if self.auto and (decision.next_exposure is not None
+                    or getattr(decision.flow_outcome, "name", "") == "SECTION_READY"):
+                self._transport.musical.bridge_to_rest(facts.now)
+            else:
+                self._transport.musical.close()
         if plan.action == "ready":
             self._transport.await_continuation()
             result = PassageCompletion(advance_feedback=True,next_action=plan.next_action)
@@ -372,13 +375,13 @@ class PlaybackSession:
             result = AppliedContinuation(ScheduledContinuation(
                 effect.exposure.from_beat))
         elif isinstance(effect,AwaitSelectedScore):
-            self._transport.musical.close()
             self.awaiting_score_revision = effect.identity.revision
             self.auto = False
             self._transport.cancel_continuation()
             result = AppliedContinuation(feedback="Preparing next passage")
         elif isinstance(effect,StopSelectedContinuation):
-            self._transport.musical.close()
+            if not effect.keep_moving:
+                self._transport.musical.close()
             self.auto = False
             self._transport.cancel_continuation()
             result = AppliedContinuation(feedback=effect.message or None)

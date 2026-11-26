@@ -17,9 +17,10 @@ class Transport:
         self._session = session
         self._admission = admission
 
-    def reset_for_stop(self) -> None:
-        """Return timeline and session intent to idle after Stop."""
-        self._timeline.reset_for_stop()
+    def reset_for_stop(self, *, preserve_musical: bool = False,
+                       now: float | None = None) -> None:
+        """Return the session to idle, optionally retaining the handoff clock."""
+        self._timeline.reset_for_stop(preserve_musical=preserve_musical, now=now)
         self._session.reset_for_stop()
 
 

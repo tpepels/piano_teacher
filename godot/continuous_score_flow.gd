@@ -25,20 +25,25 @@ func _backend_ms(at_ms: int) -> float:
 ## Adopt the published timeline. A new run continues from the current
 ## world; when the run ends the world stands where the run left it.
 func follow(published: Variant, at_ms: int) -> void:
+    # Sample the outgoing run BEFORE replacing its timeline and clock.
+    var here: float = project(at_ms)
     var previous_run: int = musical.run if following else -1
-    if not backend_clock.is_valid() or not musical.load_state(published):
-        if following:
-            beat = project(at_ms)
-            following = false
-            hold_world = beat
+    if not backend_clock.is_valid():
+        beat = here
+        following = false
+        hold_world = beat
         return
     var backend_now: float = float(backend_clock.call())
     if not is_finite(backend_now):
         return
+    if not musical.load_state(published):
+        beat = here
+        following = false
+        hold_world = beat
+        return
     _clock_offset_ms = float(Time.get_ticks_msec())-backend_now
     if not following or musical.run != previous_run:
-        var here: float = project(at_ms)
-        following = false
+        beat = here
         run_offset = here-musical.world_at(_backend_ms(at_ms))
         following = true
         initialized = true

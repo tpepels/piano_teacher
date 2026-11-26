@@ -71,6 +71,10 @@ func active_revision_published(_revision: int) -> void:
         _manual_staff_tail.set_transport_overlay_enabled(false)
         _manual_staff_tail.queue_redraw()
     _manual_staff_tail = null
+    if stage != null and is_instance_valid(stage.renderer):
+        stage.renderer.runway_overlay = false
+        stage.renderer.set_transport_overlay_enabled(true)
+        stage.renderer.queue_redraw()
 
 func _advance_tails(global_beat: float) -> void:
     # The renderer layers are ONE ordered FIFO of successive score sources.
@@ -104,7 +108,8 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     incoming.external_backdrop = outgoing.external_backdrop
     incoming.active_hand = str(state.get("hand","both"))
     incoming.set_density(float(outgoing.configured_density))
-    incoming.set_transport_overlay_enabled(true)
+    incoming.runway_overlay = true
+    incoming.set_transport_overlay_enabled(false)
     _link_existing_layers(incoming)
     stage.score_frame.add_child(incoming)
     stage.score_frame.move_child(incoming,outgoing.get_index()+1)
@@ -113,10 +118,8 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
     if not _scene_owner.activate_unprepared(outgoing,incoming,state):
         incoming.queue_free()
         return false
-    if outgoing.stream_pass_count() == 0:
-        outgoing.queue_free()
-    else:
-        _retain_tail(outgoing,true)
+    # Even an empty outgoing staff owns the playhead until publication.
+    _retain_tail(outgoing,true)
     return true
 
 func present_frame(_state: Dictionary, global_beat: float) -> void:

@@ -265,7 +265,8 @@ func paint_staff(canvas: CanvasItem, online: Array) -> bool:
         canvas.draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
     var font: Font = ThemeDB.fallback_font
     if not native_ready or not timeline.has_score():
-        paint_empty_moving_staff(canvas)
+        if not runway_overlay:
+            paint_empty_moving_staff(canvas)
         return false
     var gap: float = staff_gap()
     var playhead_x: float = size.x * PLAYHEAD_FRACTION
