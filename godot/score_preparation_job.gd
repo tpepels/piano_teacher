@@ -74,23 +74,25 @@ func refit(viewport_size: Vector2, configured_density: float) -> void:
     viewport = viewport_size
     density = configured_density
 
-func _fit(engraving) -> bool:
-    if engraving.prepare(density,viewport,Spacing.PLAYHEAD_FRACTION):
-        return not _should_stop()
-    result = {"invalid_bundle":engraving.incomplete_assets,"error":engraving.failure_reason}
-    return false
+func _fit() -> void:
+    var started: int = Time.get_ticks_usec()
+    var engraving = result["engraving"]
+    result.erase("error")
+    result.erase("invalid_bundle")
+    if not engraving.prepare(density,viewport,Spacing.PLAYHEAD_FRACTION):
+        result["invalid_bundle"] = engraving.incomplete_assets
+        result["error"] = engraving.failure_reason
+    var elapsed: float = float(Time.get_ticks_usec()-started)*.001
+    result["timing"]["geometry_cpu_ms"] += elapsed
+    result["timing"]["total_ms"] += elapsed
 
 func run() -> void:
     if _should_stop():
         return
     if result.has("engraving"):
-        # A superseded viewport can reuse the same CPU atlas. This only runs
-        # before the first upload, so no GPU texture crosses into the pool.
-        var started: int = Time.get_ticks_usec()
-        if _fit(result["engraving"]):
-            var elapsed: float = float(Time.get_ticks_usec()-started)*.001
-            result["timing"]["geometry_cpu_ms"] += elapsed
-            result["timing"]["total_ms"] += elapsed
+        # An upload interrupted by resize restores the CPU atlas before
+        # requeue, so the fit always uses only detached images.
+        _fit()
         return
     # If a malformed nested value aborts a typed Godot loader, this request
     # still rejects the bundle and the supervisor can issue one fresh replay.
@@ -108,8 +110,6 @@ func run() -> void:
     if not _prepare_atlas(engraving,bundle["layout"]):
         return
     var atlas_at: int = Time.get_ticks_usec()
-    if not _fit(engraving):
-        return
     # The main thread receives the sole owner after the pool task joins.
     engraving.glyphs.begin_upload()
     var layout: Dictionary = bundle["layout"]
@@ -119,5 +119,7 @@ func run() -> void:
             "decode_ms":float(decoded-started)*.001,
             "validate_ms":float(validated-decoded)*.001,
             "atlas_cpu_ms":float(atlas_at-validated)*.001,
-            "geometry_cpu_ms":float(Time.get_ticks_usec()-atlas_at)*.001,
+            "geometry_cpu_ms":0.0,
             "total_ms":float(Time.get_ticks_usec()-started)*.001}}
+    if not _should_stop():
+        _fit()

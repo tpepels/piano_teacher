@@ -362,10 +362,8 @@ func _same_preparation_viewport(job) -> bool:
     return is_instance_valid(_renderer) and _renderer.size == job.viewport and \
         float(_renderer.configured_density) == job.density
 
-func _requeue(job, before_upload: bool) -> void:
-    _queued = {"request":job.request,"body":job.body}
-    if before_upload:
-        _queued["prepared"] = job
+func _requeue(job) -> void:
+    _queued = {"request":job.request,"prepared":job}
 
 func advance_preparation() -> void:
     if _closed:
@@ -383,11 +381,13 @@ func advance_preparation() -> void:
                 _bundle_received_ms = -1
                 _begin_request("bundle","score.bundle",90.0,
                     int(completed.request["generation"]))
-            elif joined != OK or not completed.result.has("engraving"):
+            elif invalid or joined != OK or not completed.result.has("engraving"):
                 _requests.erase("bundle")
                 _fail(str(completed.result.get("error","Score preparation did not produce an engraving")))
             elif not _same_preparation_viewport(completed):
-                _requeue(completed,true)
+                _requeue(completed)
+            elif completed.result.has("error"):
+                _fail(str(completed.result["error"]))
             else:
                 _uploading = completed
                 _upload_started = Time.get_ticks_usec()
@@ -400,7 +400,8 @@ func advance_preparation() -> void:
             _uploading = null
         elif not _same_preparation_viewport(job):
             _uploading = null
-            _requeue(job,false)
+            job.result["engraving"].glyphs.rewind_upload()
+            _requeue(job)
         else:
             var started: int = Time.get_ticks_usec()
             var finished: bool = job.result["engraving"].glyphs.upload_step(2000)

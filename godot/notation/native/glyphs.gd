@@ -63,6 +63,9 @@ func prepare_head_interiors() -> void:
 func begin_upload() -> void:
     _assets.begin_upload()
 
+func rewind_upload() -> void:
+    _assets.rewind_upload()
+
 func upload_step(budget_usec: int = 2000) -> bool:
     return _assets.upload_step(budget_usec)
 

@@ -64,10 +64,23 @@ func run() -> void:
     # Supersede a real in-flight job before the session joins it.
     session.update_context(state(2),Time.get_ticks_msec())
     reply(2)
+    # Use the same real retained score after a viewport change during upload.
+    # A fresh atlas would repeat all PNG/SVG rasterization for this resize.
+    var upload_deadline: int = Time.get_ticks_msec()+5000
+    while session._uploading == null and not session.is_ready() and \
+            session.score_error.is_empty() and Time.get_ticks_msec() < upload_deadline:
+        session.advance_preparation()
+        await process_frame
+    var atlas = null
+    if session._uploading != null:
+        atlas = session._uploading.result["engraving"]
+    view.size = Vector2(1150,650)
     await wait_until_finished(2)
     check(session.is_ready() and session.rendered_revision == 2 and
         actions == [{"action":"score_ready","revision":2}],
         "Only the selected revision becomes ready after authentic retained drawing: "+session.score_error)
+    if atlas != null:
+        check(view.engraving == atlas,"Resizing during upload repeated rasterization")
     if session.is_ready():
         check(view.glyphs.textures.values()[0] is Texture2D,
             "Published glyphs have completed their texture upload")

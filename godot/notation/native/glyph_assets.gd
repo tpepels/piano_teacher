@@ -77,7 +77,7 @@ var template_images: Dictionary = {}
 const HeadMasks := preload("res://notation/native/glyph_head_masks.gd")
 var _head_masks := HeadMasks.new()
 
-# name|svg hash|scale -> [Image, ImageTexture]: shared by every renderer.
+# name|svg hash|scale -> ImageTexture, shared by every renderer.
 static var _font_raster_cache: Dictionary = {}
 # Worker jobs share immutable CPU font images, never GPU resources.
 static var _font_images: Dictionary = {}
@@ -86,7 +86,6 @@ var _font_keys: Dictionary = {}
 var _upload_queue: Array = []
 var _upload_index := 0
 var _uploaded_images: Dictionary = {}
-var _source_images: Dictionary = {}
 var _prepared_interiors: Dictionary = {}
 # Identical font images are shared across jobs and immutable.
 static var _interior_images: Dictionary = {}
@@ -114,13 +113,22 @@ func prepare_head_interiors() -> void:
 func _remember_source(texture: Texture2D, image: Image) -> void:
     # No GPU readback is needed to resize or inspect authentic pixels.
     texture.set_meta("verovio_cpu_image",image)
-    _source_images[texture.get_instance_id()] = image
 
 func source_image(art) -> Image:
     if art is Image:
         return art
-    var image: Image = _source_images.get(art.get_instance_id())
-    return image
+    return art.get_meta("verovio_cpu_image") if art.has_meta("verovio_cpu_image") else null
+
+func rewind_upload() -> void:
+    # A new viewport needs a different fit. Give the worker back only CPU
+    # images. All of the original PNG/SVG rasterization remains reusable.
+    for index in range(_upload_index):
+        var item: Array = _upload_queue[index]
+        var catalog: Dictionary = item[0]
+        var key = item[1]
+        catalog[key] = source_image(catalog[key])
+    _upload_index = 0
+    _uploaded_images.clear()
 
 func begin_upload() -> void:
     # Collect CPU upload descriptors before giving ownership to the main thread.
@@ -153,13 +161,11 @@ func upload_step(budget_usec: int = 2000) -> bool:
         var id: int = image.get_instance_id()
         var texture: Texture2D = _uploaded_images.get(id)
         if texture == null and not font_key.is_empty():
-            var cached: Array = _font_raster_cache.get(font_key,[])
-            if cached.size() == 2:
-                texture = cached[1]
+            texture = _font_raster_cache.get(font_key)
         if texture == null:
             texture = ImageTexture.create_from_image(image)
         if not font_key.is_empty():
-            _font_raster_cache[font_key] = [image,texture]
+            _font_raster_cache[font_key] = texture
         _uploaded_images[id] = texture
         _remember_source(texture,image)
         catalog[key] = texture
