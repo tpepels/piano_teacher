@@ -1,8 +1,12 @@
 """Real local inference and durable human corrections remain honest."""
+from pathlib import Path
+import shlex
+import shutil
+
 import pytest
 
 from piano_teacher.fingering import FingeringService, LumikeyProvider
-from piano_teacher.music import Note, Piece
+from piano_teacher.music import Note, Piece, load_midi
 
 
 def piece(notes):
@@ -26,6 +30,19 @@ def test_real_models_assign_playable_fingers_to_both_hands_and_respect_held_key(
     held = LumikeyProvider().predict(overlap, {"held": 3})
     assert len({a.finger for a in held.values()}) == 3
     assert all(a.finger in range(1, 6) for a in held.values())
+
+
+@pytest.mark.usefixtures("lumikey_runtime")
+def test_delayed_provider_receives_the_whole_piece(tmp_path):
+    source = load_midi(Path(__file__).parents[1] / "midi" / "Moonlight_Sonata_I.midi")
+    node = shlex.quote(shutil.which(LumikeyProvider().node))
+    delayed = tmp_path / "delayed-node"
+    delayed.write_text(f'#!/bin/sh\nsleep .15\nexec {node} "$@"\n')
+    delayed.chmod(0o700)
+    result = LumikeyProvider(node=str(delayed), timeout=10).predict(source, {})
+    assert set(result) == {note.source_id for note in source.notes}
+    assert all(any(result[note.source_id].finger for note in source.notes if note.hand == hand)
+               for hand in ("left", "right"))
 
 
 @pytest.mark.usefixtures("lumikey_runtime")

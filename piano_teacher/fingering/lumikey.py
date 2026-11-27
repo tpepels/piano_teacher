@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+from tempfile import TemporaryFile
 from time import monotonic
 from ..music import Piece, source_note_id
 from .types import Prediction
@@ -25,28 +26,32 @@ class LumikeyProvider:
 
     def _infer(self, notes):
         command = [self.node, str(RUNTIME/'bridge.cjs')]
-        payload = json.dumps({'notes': notes})
         if self._checkpoint is not None:
             self._checkpoint()
         deadline = monotonic() + self.timeout
-        with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        # CPython 3.12 drops a partially written stdin pipe on a subsequent
+        # communicate() attempt. Give Node the complete captured input before
+        # polling for its response so cancellation never affects delivery.
+        with TemporaryFile() as source:
+            source.write(json.dumps({'notes': notes}).encode('utf-8'))
+            source.seek(0)
+            with subprocess.Popen(command, stdin=source, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, text=True, start_new_session=True,
                 env={**os.environ, 'OMP_NUM_THREADS': '1'}) as process:
-            try:
-                while (remaining := deadline - monotonic()) > 0:
-                    if self._checkpoint is not None:
-                        self._checkpoint()
-                    try:
-                        output, error = process.communicate(payload, timeout=min(remaining, .05))
-                        return process.returncode, output, error
-                    except subprocess.TimeoutExpired:
-                        # communicate retains its input and output buffers between attempts.
-                        payload = None
-                raise subprocess.TimeoutExpired(command, self.timeout)
-            finally:
-                if process.returncode is None:
-                    with suppress(ProcessLookupError):
-                        os.killpg(process.pid, signal.SIGKILL)
+                try:
+                    while (remaining := deadline - monotonic()) > 0:
+                        if self._checkpoint is not None:
+                            self._checkpoint()
+                        try:
+                            output, error = process.communicate(timeout=min(remaining, .05))
+                            return process.returncode, output, error
+                        except subprocess.TimeoutExpired:
+                            continue
+                    raise subprocess.TimeoutExpired(command, self.timeout)
+                finally:
+                    if process.returncode is None:
+                        with suppress(ProcessLookupError):
+                            os.killpg(process.pid, signal.SIGKILL)
 
     @property
     def identity(self) -> dict:
