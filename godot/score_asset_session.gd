@@ -447,7 +447,7 @@ func _install_prepared(job) -> void:
     _publish_status()
     if _timing_diagnostics:
         print("SCORE_BUNDLE_MAIN_THREAD:",JSON.stringify({
-            "revision":revision,"bytes":job.body.size(),
+            "revision":revision,"bytes":job.result["timing"]["bytes"],
             "upload_cpu_ms":float(_upload_cpu_usec)*.001,
             "upload_elapsed_ms":float(started-_upload_started)*.001,
             "install_publish_ms":float(Time.get_ticks_usec()-started)*.001}))

@@ -37,7 +37,9 @@ func _init(bytes: PackedByteArray, identity: Dictionary,
 
 func _decode_bundle() -> Dictionary:
     var document := JSON.new()
-    if document.parse(body.get_string_from_utf8()) != OK or not document.data is Dictionary:
+    var parsed: Error = document.parse(body.get_string_from_utf8())
+    body = PackedByteArray()
+    if parsed != OK or not document.data is Dictionary:
         result = {"invalid_bundle":true,
             "error":"Practice engine returned no source-bound score bundle"}
         return {}
@@ -98,6 +100,7 @@ func run() -> void:
     # still rejects the bundle and the supervisor can issue one fresh replay.
     result = {"invalid_bundle":true,"error":"Score bundle contains malformed notation data"}
     var started: int = Time.get_ticks_usec()
+    var bytes_received: int = body.size()
     var bundle: Dictionary = _decode_bundle()
     if bundle.is_empty() or _should_stop():
         return
@@ -115,7 +118,7 @@ func run() -> void:
     var layout: Dictionary = bundle["layout"]
     result = {"engraving":engraving,"attacks":layout["attack_map"],
         "source_groups":LivingScore.prepare(layout),
-        "timing":{"revision":request["revision"],"bytes":body.size(),
+        "timing":{"revision":request["revision"],"bytes":bytes_received,
             "decode_ms":float(decoded-started)*.001,
             "validate_ms":float(validated-decoded)*.001,
             "atlas_cpu_ms":float(atlas_at-validated)*.001,
