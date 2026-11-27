@@ -1,6 +1,6 @@
 # Piano Teacher — roadmap
 
-**Updated 2026-11-24 · MIDI input only · Timeline rebuild T1–T6 in software (`HEAD`); piano acceptance pending**
+**Updated 2026-11-27 · MIDI input only · Timeline rebuild and score-worker migration in software · Piano acceptance pending**
 
 [Practice flow](docs/practice-flow.md) is the learner-visible contract.
 [Architecture](docs/architecture.md), [development](docs/development.md) and
@@ -60,6 +60,32 @@ meters, Moonlight and the remaining 16 repertoire files. The relocated
 archive generated and installed native notation through its bundled
 interpreter. The optional original Pathétique II source and physical piano,
 audio and display acceptance are pending.
+
+### Post-migration audit (2026-11-27)
+
+| Boundary | Verified change |
+| --- | --- |
+| Musical scheduling | A single native timing driver runs while the command lane waits for source loading, fingering or WAV reads. MIDI and ticks use the existing Free phase without constructing a learner/UI snapshot. The native recovery journey observes ticks during delayed fingering and a suspended notation process. |
+| Score worker | Cancellation terminates and reaps a stopped child. A real crash and a detached rejection each replace the child and return only the selected bundle. The test covers queue saturation, Stop, navigation, Retry, source replacement and repeated bridge startup and shutdown. Wire tests cover partial frames, malformed and out-of-order replies, and backpressure during a multi-megabyte send. |
+| Godot publication | Detached preparation and upload have a deadline even when the viewport never becomes usable. Detached validation rejects missing engraving, and Stop restores preparation after any terminal reply. A source change preserves published outgoing ink during resize. Placement is revision-bound. Atlas upload descriptors and attack lookahead are prepared off the main thread. |
+| Listen | One active render and one latest pending request. PCM cancellation checkpoints and temporary-file cleanup keep obsolete renders from delaying replacement and shutdown. |
+
+The paired Moonlight whole-piece replay measured MIDI callback p95 at
+15.96 → 0.30 ms, engine tick p95 at 26.13 → 0.27 ms, and cold bundle time
+at 57.16 → 13.84 s. Across three software-rendered lesson changes, median
+request-to-retained time was 502 → 510 ms and median maximum frame time
+was 30.92 → 24.62 ms. See the [worker audit measurements](docs/asset-worker.md)
+for the warm path, combined memory and frame measurements.
+
+The native-production verifier passed both MIDI driver journeys, the new
+score recovery journey, all 17 repertoire files and the relocated Linux
+package. The relocated package generated and installed notation with its
+bundled CPython. All 384 tests passed on CPython 3.12 and 3.14. Godot syntax
+and player behavior, the real ONNX fingering tests, the C++ mailbox test
+and the quality gate also passed.
+Physical MIDI, audio and display acceptance remain pending. The local
+MIDI backend exposed only MIDI Through, and the optional original
+Pathétique II MIDI was unavailable.
 
 ## Musical timeline rebuild (T1–T6, adopted 2026-11-24)
 

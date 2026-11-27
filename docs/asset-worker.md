@@ -6,7 +6,7 @@ meter and sounding releases. Notation consumes that same timing. Grading and Fre
 publish canonical source-note IDs; Godot resolves those IDs against the installed
 score revision and its tied heads.
 
-The native asset mailbox supervises one persistent Linux CPython subprocess.
+The native asset lane supervises one persistent Linux CPython subprocess.
 The child owns notation compilation, Verovio, asset extraction and the selected
 artifact cache. It receives a value snapshot with the original source notes,
 selected phrase, timing and fingering assignments. It has no practice engine,
@@ -31,8 +31,10 @@ stay with the application.
   socket operations at most 25 ms apart while waiting for bytes. Cancellation
   discards pending or completed replies and retires the active child when it
   holds obsolete work. Closing the channel, SIGTERM, a 50 ms grace interval
-  and SIGKILL cover both idle and uninterruptible Verovio work. The supervisor
-  waits for the child to exit before installing a replacement.
+  and SIGKILL cover both idle and uninterruptible Verovio work. Signals use
+  a Linux process descriptor (`pidfd`, Linux 5.3 or newer). The supervisor
+  waits for the child to exit before installing a replacement and accepts an
+  exit already reaped by the host.
 - **Recovery.** EOF, I/O and framing faults, and wrong response identities
   retire the worker. The supervisor replays the same logical request once
   on a fresh channel within its original deadline. A hang expires the
@@ -42,8 +44,9 @@ stay with the application.
   supervisor retires the worker only if the rejected binding still matches
   its last bundle reply. A second invalid result reaches the error panel.
 - **Shutdown.** The mailbox stops accepting requests and discards unpublished
-  work. The native asset thread cancels or closes the channel and reaps
-  the child before the bridge closes the practice engine.
+  work. The bridge joins the timing driver and the native asset lane. The
+  asset lane cancels or closes the channel and reaps the child before the
+  bridge closes the practice engine.
 
 ## IPC and publication
 
@@ -62,14 +65,18 @@ for generation. The child can reuse an identical selected document. A replay
 uses the same logical ID on a separate channel.
 
 The asset lane encodes the source after it releases the session lock and
-checks deadlines between chunks. It verifies framing, response identity, size
+checks deadlines between chunks. It retains only the last encoded source
+for an exact retry. A same-revision fingering correction replaces that source
+value and invalidates the reuse. The lane verifies framing, response identity, size
 and checksum before the engine rechecks the current selection under its lock.
 Large reply bytes transfer directly to detached Godot storage. Godot decodes
 the bundle, validates its original-note IDs, model and layout, and prepares
-CPU images and viewport geometry in the existing worker. The main thread
-checks request generation and viewport again before uploading textures in
-budgeted slices and installing retained ink. Playback acknowledgement follows
-retained readiness for the current revision.
+CPU images, viewport geometry and source attack groups in the existing
+worker. The main thread checks request generation and viewport again before
+uploading textures in budgeted slices and installing retained ink. A pending
+bundle has 45 seconds for detached preparation and upload. Visible retained
+ink compilation has its own 45-second deadline. Playback acknowledgement
+and placement measurements apply to the matching score revision.
 
 Length-prefixed JSON retains the existing Godot bundle format and avoids a
 second document encoding or base64 wrapper around the full bundle. The
@@ -116,25 +123,59 @@ cost was about 5 ms, so this protocol keeps the raw UTF-8 payload.
 
 ### Remaining latency sources
 
-- **Source loading and fingering.** Opening Moonlight still occupied
-  about 457 ms before source installation in the paired Godot runs. In
-  the subprocess run the importer took about 23 ms, the curriculum and
-  progress restore took about 120 ms, and the parallel LumiKey call took
-  424 ms. The native command lane waits for source preparation, so an open
-  can defer its next tick. The MIDI lock is released during import and
-  inference. Snapshot publication uses source-note assignments and memoized
-  fingering summaries. Context fingering travels with the notation bundle.
-- **Listen.** Each render uses the existing audio thread and publishes
-  through a source token. The basic synthesizer runs a Python PCM loop
-  and shares the embedded interpreter. The sampled path spends synthesis
-  time in FluidSynth. Superseded renders can still finish their audio
-  cache work.
-- **Godot.** Detached rasterization dominated the opening-window CPU job
-  at about 601 ms in the subprocess run. Texture creation and retained
-  installation stay on main. One upload can overrun the 2 ms budget
-  because each texture creation is indivisible. The frame maximum rose
-  in this sample even as callback and tick tail latency fell under the
-  whole-piece workload.
+- **Source loading and fingering.** Opening Moonlight took about 457 ms
+  before source installation in the original paired Godot run. Import took
+  23 ms, curriculum and progress restore took 120 ms, and the parallel
+  LumiKey call took 424 ms. The command lane still waits for source
+  preparation. The native timing driver can tick while source and fingering
+  work runs outside the session lock. Full UI snapshots still read learner
+  progress and project the current course. MIDI and clock-driven Free
+  updates use the current phase directly.
+- **Listen.** One audio thread renders the active Listen request with one
+  latest pending request. Stop or a new selection cancels PCM generation
+  at chunk boundaries. SoundFont loading itself is indivisible. The basic
+  synthesizer shares the embedded interpreter. A WAV read can still occupy
+  the serial command lane, and Godot decodes the audio on the main thread.
+- **Godot.** Detached rasterization took about 601 ms of the original
+  opening-window preparation. A resize before upload reuses the rasterized
+  CPU atlas. A resize during upload discards the outdated fit and rebuilds
+  it on the worker. Texture creation and retained drawing remain on main.
+  An individual texture upload can exceed the 2 ms slice. First use at a
+  new display scale can still resize and upload a display texture during
+  drawing. This work and retained ink compilation contribute to frame tails.
 
 The automated journeys use a synthetic MIDI device at the driver boundary.
 Actual piano, audio and display acceptance remains pending.
+
+### Post-migration audit measurements
+
+The paired audit compared `7459582a` with the current worker on the same
+host and CPU affinity. Both runs started with an empty cache, used the real
+LumiKey provider and reached the final Moonlight selection. MIDI entered
+through the embedded driver callback. The frame measurements used Godot
+4.7.2 under Xvfb with Mesa llvmpipe. The three lesson transitions each
+selected lesson 3 from a freshly opened first lesson and ended when the new
+notation passed retained readiness. Frame entries report the median of
+three per-run statistics.
+
+| Measurement | Threaded baseline | Audited subprocess |
+| --- | ---: | ---: |
+| Whole-piece selection | 956 ms | 157 ms |
+| Cold whole-piece bundle | 57.16 s | 13.84 s |
+| Warm whole-piece bundle | 58.7 ms | 28.5 ms |
+| MIDI callback p95 / max | 15.96 / 33.72 ms | 0.30 / 0.47 ms |
+| Engine tick p95 / max | 26.13 / 88.24 ms | 0.27 / 0.29 ms |
+| Embedded process peak RSS | 152.3 MiB | 69.5 MiB |
+| Sampled concurrent RSS, engine plus worker | 149.1 MiB | 181.1 MiB |
+| Opening-window frame p95 / max | 16.29 / 174.33 ms | 16.91 / 158.49 ms |
+| Main-thread atlas upload CPU / final installation | 55.12 / 3.29 ms | 58.57 / 2.14 ms |
+| Lesson selection to retained notation | 502.14 ms | 510.26 ms |
+| During lesson transition, frame p95 / max | 19.87 / 30.92 ms | 18.84 / 24.62 ms |
+
+The warm exchange carried 576 KB in and 3.66 MB out. It took 27.96 ms
+round trip, with 22.53 ms in the worker. The 5.43 ms difference includes
+both ends of the transfer and framing checks. Warm requests reuse the
+parent's encoded source and the child's prepared artifacts. The total RSS
+sum counts shared pages once per process. Opening frames still have large
+spikes during retained drawing. Lesson transition durations ranged from
+482 to 518 ms before and 488 to 525 ms after. The ranges overlap.

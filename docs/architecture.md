@@ -12,7 +12,7 @@ Godot 4.7 hosts an embedded CPython engine and a supervised score subprocess.
     Godot UI, native score surface, local audio
             |  in-process requests / replies (EngineCommands)
     native C++ bridge (PianoNative GDExtension)
-            |  command worker: serialized requests + monotonic tick
+            |  serial command worker and one monotonic timing driver
     Python PracticeEngine -> PracticeSession (one serialized event boundary)
     lesson · assessment · transport · score · persistence · projection
 
@@ -22,9 +22,10 @@ Godot 4.7 hosts an embedded CPython engine and a supervised score subprocess.
 - `godot/main.tscn` loads `main.gd`; `InProcessBus` loads `PianoNative`,
   which starts CPython and constructs `piano_teacher.inprocess.EngineCommands`.
   There is no network service, second engine or headless transport.
-- The command worker serializes musical requests and clock ticks. Source
-  import and fingering preparation release the session lock before committing
-  the source. The asset lane captures a selection and supervises notation,
+- The native bridge submits commands serially and drives clock ticks on its
+  timing thread. Both enter the same locked `PracticeSession` as MIDI. Source
+  import, fingering inference and WAV reads release that lock during the
+  expensive work. The asset lane captures a selection and supervises notation,
   Verovio and asset extraction in the subprocess. [Score worker](asset-worker.md)
 - Real MIDI arrives through `MidiConnection` callbacks with arrival
   timestamps and enters the same `PracticeSession` boundary.
@@ -34,7 +35,7 @@ Godot 4.7 hosts an embedded CPython engine and a supervised score subprocess.
 `PracticeSession.apply(event)` is the single write path. Events are typed
 (`session_events.py`): user commands, clock ticks, physical MIDI and MIDI
 shortcuts, playback (display) failure, source and fingering
-commits, settings, device, preload and history events. Each event is
+commits, settings, device and history events. Each event is
 validated against fresh state under the application lock, executed by the
 owning domain, and published as one versioned state snapshot
 (`state_contract.py`, mirrored by the generated `godot/state_contract.gd`).
@@ -66,21 +67,22 @@ Every state change enters `PracticeSession.apply` as one typed event:
 | Origin | Operation / callback | Event |
 | --- | --- | --- |
 | Learner gesture, MIDI shortcut | `practice.command` | `UserCommand` / `MidiShortcut` |
-| Native worker | `tick` | `ClockAdvanced` |
+| Native timing driver | `tick` | `ClockAdvanced` |
 | MIDI callback | arrival-stamped message | `PhysicalMidi` |
 | Score display | `playback.failure` | `PlaybackFailed` |
 | Library, fingering | `library.open`, `fingering.correct` | `SourceCommitted`, `FingeringCorrectionCommitted` |
 | Settings, devices | `settings.update`, `midi.devices`, `midi.device.select`, `hardware.action` | `SettingsChanged`, `MidiPortsRequested`, `DeviceSelected`, `HardwareRequested` |
-| Successor score | `score.stage_ready` / `score.stage_failed` | `PreloadReady` / `PreloadFailed` |
 | History | `learning.export` / `delete_piece` / `delete_learner` | `HistoryExported` / `PieceHistoryDeleted` / `LearnerHistoryDeleted` |
 | Shutdown | `close` | `SessionClosed` |
 
-Reads take the application lock and never mutate session state:
+Read requests include
 `state.snapshot`, `lesson.overview`, `library.catalog`,
 `library.health_status`, `settings.snapshot`, `learning.status`,
 `learning.statistics`, `score.bundle`, `score.semantic`,
-`score.native_layout`, `score.next_stage`, `playback.status`,
+`score.native_layout`, `playback.status`,
 `feedback.events`, `listen.audio`, `performance.diagnostics`.
+Only the capture and publication of the selected score take the session lock.
+Score placements attached to polls or commands apply to the matching revision.
 `library.health.start` only starts the background library scan.
 
 ## Domains and their sole owners
@@ -95,7 +97,7 @@ domains and workflows depend on the domain object only.
 | `Lesson` (`lesson.py`) | `SourceIdentity`, `LessonCursor`, `TeachingDecisions` (only progress writer), `GuidedSession`, `PracticeFlowCourseSession` | piece, plan and revision; window/hand/step; BPM ladder, streak, mastery, Free returns, aid; guided Free selection |
 | `Transport` (`transport.py`) | `VisualTransport`, `PlaybackSession`, `PlaybackCoordinator` | timeline (running/paused, run_at, origin, count-in, rests), session intent (mode, automatic, awaited score), physical intent/receipt ledger |
 | `Take` (`take.py`) | `AttemptRuntime`, `AttemptSettlement` | recorder, feedback marks, review/retry; immutable result → one decision → one durable receipt |
-| `Score` (`score.py`) | `ScoreArtifactRegistry`, `ScoreReadServices`, `TeachingContinuation`, `ScoreStatePublisher`, `TempoMapCache` | selected score bundle, successor preparation and reservation, score projection; the settlement's reservation port |
+| `Score` (`score.py`) | `ScoreReadServices`, `TeachingContinuation`, `ScoreStatePublisher`, `TempoMapCache` | selected source and timing, successor reservation, score projection; the settlement's reservation port |
 | `MidiInput` (`midi_input.py`) | `MidiConnection`, `MidiIngress`, `MidiKeyShortcuts`, `MidiTapCalibration`, `LiveInputView` | device, timestamped routing, deferred keys, grading gate, shortcuts, calibration |
 
 Pure policy and services outside these domains:
