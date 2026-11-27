@@ -16,18 +16,19 @@ def test_repeat_follows_held_ending_with_exactly_one_bar(practice_session, corre
     assert source["practice_timeline"]["sounding_duration_beats"] == 6
     after = session.play_take(correct=correct)
     incoming = take(after)
-    # The tied ending sounds to beat 6; the rest runs at the outgoing
-    # tempo (40) to the next barline (8), then one count-in bar eases to
-    # the incoming tempo over its first half (owner decision 2026-11-24).
+    # Ties retain their sounding end and repeat on the same world axis.
+    # Sparse material begins at the original target tempo.
     from piano_teacher.application.tempo_curve import count_in_spans, spans_seconds
-    expected = (outgoing_start+(6-.5)*60/40+(8-6)*60/40
-                +spans_seconds(count_in_spans(4,40,incoming["bpm"])))
+    bpm = before["bpm"]
+    expected = (outgoing_start+(6-.5)*60/bpm+(8-6)*60/bpm
+                +spans_seconds(count_in_spans(4,bpm,incoming["bpm"])))
     assert incoming["deadline_ms"]/1000 == pytest.approx(expected,abs=.001)
     assert incoming["transport_id"] == after["transport_id"]
     assert after["transport_id"] != before["transport_id"]
     assert incoming["count_in_beats"] == 4
     assert incoming["source"]["from_beat"] == .5
-    assert incoming["bpm"] > 40 if correct else incoming["bpm"] == 40
+    assert incoming["bpm"] == before["bpm"] == 80
+    assert after["streak"] == (1 if correct else 0)
 
 
 def test_count_in_uses_authored_six_eight_and_first_playable_attack(practice_session):
@@ -113,7 +114,7 @@ def test_unplug_after_the_last_attack_but_before_the_ending_cannot_award_progres
     start = take(before)["deadline_ms"]/1000
     session.clock.at = start
     session.strike(72)
-    session.clock.at = start+4.5
+    session.clock.at = start+3*60/before["bpm"]
     session.strike(79)
     assert session.snapshot()["midi_notes"] == 2
     session.ask("midi.device.select", name="")
@@ -141,7 +142,7 @@ def test_live_and_final_feedback_keep_the_same_authentic_source_heads(practice_s
     assert {event["source_id"] for event in live} == {source[0]["id"]}
     assert all(not event["final"] for event in live)
     assert all(event["note_id"] == layout["attack_map"][event["source_id"]] for event in live)
-    session.clock.at = start+4.5
+    session.clock.at = start+3*60/state["bpm"]
     session.strike(source[1]["midi_pitch"])
     session.tick()
     after = session.play_take(correct=False)  # Inputs above are the completed take.
@@ -150,7 +151,7 @@ def test_live_and_final_feedback_keep_the_same_authentic_source_heads(practice_s
     assert {event["source_id"] for event in final} == {note["id"] for note in source}
     assert all(event["transport_id"] == state["transport_id"] and event["release_advisory"] for event in final)
     assert all(event["note_id"] == layout["attack_map"][event["source_id"]] for event in final)
-    assert after["bpm"] > 40  # Short releases remain acceptable in normal flow.
+    assert after["bpm"] == state["bpm"] == 80 and after["streak"] == 1
 
 
 @pytest.mark.parametrize("travel", [0.0, 9.5])
@@ -169,7 +170,10 @@ def test_free_holds_where_godot_can_draw_its_first_target(practice_session, trav
     hold = state["musical_timeline"]["segments"][-1]
     assert hold["kind"] == "hold"
     bar = 4.0   # 4/4: Free always travels at least one bar
-    assert hold["world_start"] == pytest.approx(max(bar, travel))
+    movement = state["musical_timeline"]["segments"][-2]
+    assert movement["kind"] == "rest"
+    assert movement["beats"] == pytest.approx(max(bar, travel))
+    assert hold["world_start"] == pytest.approx(movement["world_start"]+movement["beats"])
     # It arrives after the travel at the piece's tempo, but within a few
     # seconds: on a long or slow travel the staff moves faster.
     deadline = state["playback_timeline"]["guided"]["deadline_at_ms"]/1000
@@ -182,16 +186,18 @@ def test_a_return_to_free_uses_the_placement_facts_of_the_latest_poll(practice_s
     the facts it sends with every state poll place that Free (owner report
     2026-11-25: the returned Free stopped short of its target)."""
     from test_midi_journeys import play, tempo
-    session = practice_session(bars=2)
+    session = practice_session(bars=2, chords=True)
     state = tempo(session)
-    state = play(session, state, wrong=(0,))
+    state = play(session, state, missing=(1,2))
     session.ask("state.snapshot", free_travel_beats=9.5, ink_ahead_beats=0.0)
-    free = play(session, state, wrong=(0,))
+    free = play(session, state, missing=(1,2))
     assert (free["mode"], free["flow"]["step"]) == ("learn", "free")
     session.ask("state.snapshot", free_travel_beats=9.5, ink_ahead_beats=0.0)
     session.ready_score()
-    hold = session.snapshot()["musical_timeline"]["segments"][-1]
-    assert hold["kind"] == "hold" and hold["world_start"] == pytest.approx(9.5)
+    movement, hold = session.snapshot()["musical_timeline"]["segments"][-2:]
+    assert hold["kind"] == "hold" and movement["kind"] == "rest"
+    assert movement["beats"] == pytest.approx(9.5)
+    assert hold["world_start"] == pytest.approx(movement["world_start"]+9.5)
 
 
 def test_unknown_placement_facts_are_refused(practice_session):

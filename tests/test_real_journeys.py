@@ -51,11 +51,17 @@ def test_random_journeys_with_a_piano_that_comes_and_goes(practice_session, monk
             session.finish_free()
             session.ready_score()
             continue
+        if state["flow"]["step"] == "section_choice":
+            session.command("section_next")
+            continue
         if not state["running"]:
             state = session.ready_score()
             if not state["running"]:
                 session.command(state["controls"]["primary"]["action"])
                 state = session.ready_score()
+            if state["mode"] == "listen":
+                session.finish_listen()
+                continue
             assert state["running"], (state["feedback"], state["controls"]["primary"])
         action = rng.choice(["clean", "clean", "wrong", "missing", "late",
                              "pause", "retry", "listen", "unplug"])

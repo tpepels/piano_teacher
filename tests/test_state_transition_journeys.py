@@ -85,7 +85,7 @@ def climb_to_mastery(session, hand, index):
         climbed.append(state["bpm"])
         session.play_take()
         assert len(climbed) <= 12
-    assert climbed[0] == 40 and climbed == sorted(climbed)
+    assert climbed[0] == (40 if hand == "both" else 80) and climbed == sorted(climbed)
     assert climbed[-2:] == [80, 80] and climbed.count(80) == 2
     return climbed
 
@@ -100,7 +100,8 @@ def test_fake_keyboard_traverses_the_complete_hand_and_final_mastery_graph(pract
         state_at(session, step="free", mode="learn", hand=hand, running=False)
         session.finish_free()
         session.ready_score()
-        state_at(session, step="tempo", mode="practice", hand=hand, bpm=40, running=True)
+        state_at(session, step="tempo", mode="practice", hand=hand,
+                 bpm=40 if hand == "both" else 80, running=True)
         # 50%, then faster after each precisely timed clean take, then two
         # clean target takes. Every attack and release is sent through the
         # test's real MIDI callback.
@@ -108,6 +109,8 @@ def test_fake_keyboard_traverses_the_complete_hand_and_final_mastery_graph(pract
         climbed = climb_to_mastery(session, hand, index)
         visited.extend((hand, bpm) for bpm in climbed)
         assert session.snapshot()["mastered"] == {"right":1,"left":2,"both":3}[hand]
+    state_at(session,step="section_choice")
+    session.command("section_next")
     session.ready_score()
     final = state_at(session, step="tempo", mode="practice", hand="both",
                      bpm=40, running=True)
@@ -131,39 +134,43 @@ def test_fake_keyboard_free_wrong_pause_resume_and_no_unearned_target(practice_s
     old_beat = held["clock_beat"]
     old_index = held["teaching"]["target_index"]
     session.tick(30)
-    session.strike(expected)
+    session.strike(61)  # C is deliberately reserved for Resume while paused.
     frozen = state_at(session, step="free", paused=True)
     assert frozen["teaching"]["target_index"] == old_index
     assert frozen["clock_beat"] == pytest.approx(old_beat)
-    session.command("resume")
+    session.strike(72)  # C resumes; its release is consumed.
     state_at(session, step="free", paused=False)
     session.strike(expected)
     session.tick(.1)   # the found note counts once its movement ends
     corrected = state_at(session, step="free")["teaching"]
     assert corrected["target_index"] == 1 and not corrected["hint_visible"]
     session.finish_free()
-    state_at(session, step="tempo", mode="practice", bpm=40)
+    state_at(session, step="tempo", mode="practice", bpm=80)
     assert not any(step["completed"] for step in session.ask("lesson.overview")["steps"])
 
 
 @pytest.mark.parametrize("fault", ["missed", "wrong", "late", "extra"])
 def test_fake_keyboard_failed_take_transitions_to_repeat_and_floor_free(practice_session, fault):
-    session = practice_session(bars=1)
+    from test_midi_journeys import play
+    session = practice_session(bars=1, chords=True)
     session.finish_listen()
     session.finish_free()
     session.ready_score()
     state_at(session, step="tempo", bpm=40)
     repeated, events = failed_take(session, fault=fault)
     state_at(session, step="tempo", bpm=40, running=True)
-    if fault == "late":
-        assert any(e.get("kind") == "attack" and e.get("status") == "late"
+    if fault != "missed":
+        assert any(e.get("kind") == "assessment" and e.get("final")
                    for e in events), events
-    elif fault in ("wrong","extra"):
-        assert any(e.get("kind") == "attack" and e.get("status") == "unexpected"
-                   for e in events), events
+    else:
+        assert not any(e.get("kind") == "assessment" and e.get("final")
+                       for e in events)
     assert repeated["lesson_steps_mastered"] == 0
-    # A second failure at the 50% floor returns to untimed original notes.
-    at_floor = session.play_take(correct=False)
+    # Silence and near-passes do not count towards recovery. Two recorded
+    # low-accuracy failures at the floor return to the original notes.
+    again = play(session,repeated,missing=(1,2))
+    assert again["flow"]["step"] == "tempo"
+    at_floor = play(session,again,missing=(1,2))
     assert at_floor["flow"]["step"] == "free"
     assert at_floor["lesson_level"] == "original"
     assert at_floor["mastered"] == 0
@@ -173,9 +180,10 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
     session = practice_session(bars=1, chords=True)
     session.finish_listen()
     original = session.ask("score.semantic")
+    from test_midi_journeys import play
     session.finish_free()
     for _ in range(2):
-        session.play_take(correct=False)
+        play(session,session.ready_score(),missing=(1,2))
     first = state_at(session, step="free", mode="learn")
     assert first["lesson_level"] == "original" and first["mastered"] == 0
     # The first floor-failure return offers no aid; only the second does.
@@ -183,7 +191,7 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
     assert not first["guided_recovery"]
     session.finish_free()
     for _ in range(2):
-        session.play_take(correct=False)
+        play(session,session.ready_score(),missing=(1,2))
     aid = state_at(session, step="free", mode="learn")
     assert aid["lesson_level"] == "original"
     assert "Simplified:" in aid["flow"]["message"]
@@ -218,7 +226,7 @@ def test_fake_keyboard_count_in_pause_and_failure_never_grade_unplayed_music(pra
     session.clock.at = current["deadline_ms"]/1000+.5
     session.command("pause")
     state_at(session, paused=True)
-    session.strike(72)
+    session.strike(61)
     assert session.snapshot()["midi_notes"] == 0
     resumed = session.command("resume")
     assert resumed["running"] and not resumed["paused"]
@@ -340,17 +348,17 @@ def test_real_state_rejects_missing_control_and_timeline(practice_session):
     assert any("playback_timeline" in issue for issue in problems(missing))
 
 @pytest.mark.parametrize("grade_holds,next_bpm", [
-    (False,"faster"), (True,40),
+    (False,True), (True,False),
 ], ids=["pedal-friendly-default","strict-held-release"])
 def test_real_midi_release_setting_changes_tempo_credit(
-        practice_session, grade_holds, next_bpm):
+        practice_session, grade_holds, accepted):
     """The same physical early release is advisory unless hold grading is on."""
     session = practice_session(bars=1, single=True)
     session.ask("settings.update", grade_note_holds=grade_holds)
     session.finish_listen()
     session.finish_free()
     active = session.ready_score()
-    assert active["flow"]["step"] == "tempo" and active["bpm"] == 40
+    assert active["flow"]["step"] == "tempo" and active["bpm"] == 80
     semantic = session.ask("score.semantic")
     assert len(semantic["notes"]) == 1
     note = semantic["notes"][0]
@@ -362,5 +370,8 @@ def test_real_midi_release_setting_changes_tempo_credit(
     session.engine.midi.port.send(int(note["midi_pitch"]),False)
     changed = session.play_take(correct=False)
     assert changed["flow"]["step"] == "tempo"
-    assert changed["bpm"] > 40 if next_bpm == "faster" else changed["bpm"] == next_bpm
+    assert changed["bpm"] == 80
+    assert changed["streak"] == (1 if accepted else 0)
+    report = session.ask("learning.statistics",scope="full")["assessments"]
+    assert report["accepted"] == int(accepted) and report["rejected"] == int(not accepted)
     assert changed["mastered"] == 0

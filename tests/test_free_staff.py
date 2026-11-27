@@ -26,8 +26,13 @@ def test_the_first_hold_is_at_the_first_target_not_the_window_opening(practice_s
     state = session.snapshot()
     first = state["teaching"]["expected_notes"][0]["beat"]
     assert first == 2.0
-    travel = 4.0     # one 4/4 bar: where the window opening is drawn
-    assert hold(session) == pytest.approx(travel+first)
+    # The same continuous world already contains the Listen passage.
+    # Travel is measured from its final rest, not absolute world zero.
+    segments = state["musical_timeline"]["segments"]
+    travel = segments[-2]
+    assert travel["kind"] == "rest"
+    assert travel["beats"] == pytest.approx(4.0+first)
+    assert hold(session) == pytest.approx(travel["world_start"]+travel["beats"])
 
 
 def test_a_target_taken_back_in_the_same_movement_keeps_the_staff_on_it(practice_session):

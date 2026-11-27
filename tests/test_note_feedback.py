@@ -65,7 +65,10 @@ class NoteTake:
 @pytest.mark.parametrize("bpm,tolerance", [(40, .375), (120, .150), (240, .150)])
 @pytest.mark.parametrize("direction", [-1, 1], ids=["early", "late"])
 def test_onsets_accept_150ms_or_a_local_sixteenth(bpm, tolerance, direction):
-    for drift, accepted in [(tolerance-.001, True), (tolerance+.001, False)]:
+    # Late assignment has an exclusive 200 ms cap, even at slow tempo.
+    from piano_teacher.lesson_settings import SETTINGS
+    limit = tolerance if direction < 0 else min(tolerance, SETTINGS.grading_max_late_attack_seconds)
+    for drift, accepted in [(limit-.001, True), (limit+.001, False)]:
         take = NoteTake(phrase(note("target", start=2, end=3)), bpm=bpm)
         onset = 2*60/bpm + direction*drift
         take.receive(60, onset)
@@ -74,8 +77,11 @@ def test_onsets_accept_150ms_or_a_local_sixteenth(bpm, tolerance, direction):
         entry = result.notes[0]
         assert result.flow_passed is accepted
         assert entry.observation.onset_tolerance == pytest.approx(tolerance)
+        outside_match = direction > 0 and drift >= SETTINGS.grading_max_late_attack_seconds
         assert entry.observation.timing_error == (
-            None if accepted else "early" if direction < 0 else "late")
+            None if accepted or outside_match else "early" if direction < 0 else "late")
+        if outside_match:
+            assert entry.status == "missed" and entry.observation.actual_onset is None
         live = take.preview(max(onset, 2*60/bpm))
         assert [(n.note.source_id, n.observation.timing_error) for n in live.notes] == [
             ("target", entry.observation.timing_error)]
@@ -246,7 +252,8 @@ def test_local_tempo_uses_the_authored_clock_for_live_and_final_observations():
     take.receive(62, .8)
     live = take.preview(.8)
     assert [(n.note.source_id, n.observation.timing_error) for n in live.notes] == [
-        ("crossing", None), ("slow", "late")]
+        ("crossing", None), ("slow", None)]
+    assert live.notes[1].status == "missed"
     take.receive(62, 1, down=False)
     take.receive(60, 1.6, down=False)
     result = take.finish()
@@ -254,7 +261,8 @@ def test_local_tempo_uses_the_authored_clock_for_live_and_final_observations():
     crossing, slow = [n.observation for n in result.notes]
     assert (crossing.expected_onset, crossing.expected_release, crossing.onset_tolerance) == (0, 1.5, .15)
     assert (slow.expected_onset, slow.expected_release, slow.onset_tolerance) == (.5, 2.5, .25)
-    assert slow.timing_error == "late" and slow.hold_error == "short"
+    assert slow.actual_onset is None and slow.actual_release is None
+    assert result.notes[1].status == "missed"
 
 
 def test_listen_keys_are_heard_without_recording_or_performance_credit():

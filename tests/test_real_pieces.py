@@ -88,7 +88,10 @@ def graded(session, transport):
 
 def assert_failed_and_repeated(before, after):
     assert after["running"] and after["transport_id"] == before["transport_id"]+1, after["feedback"]
-    assert after["bpm"] == before["bpm"] and after["streak"] == 0
+    assert after["bpm"] == before["bpm"]
+    # Zero-credit takes preserve the previous streak; a recorded failure
+    # breaks it. Neither may increase mastery or streak.
+    assert after["streak"] in (0,before["streak"])
     assert after["flow"]["message_kind"] == "again"
     assert after["lesson_steps_mastered"] == before["lesson_steps_mastered"]
 
@@ -126,7 +129,10 @@ def test_a_real_piece_opens_and_practises_without_a_break(practice_session, sour
     clean = perform(session, state, score_events(session, state))
     assert clean["running"] and clean["transport_id"] == state["transport_id"]+1
     assert graded(session, state["transport_id"]) == ["correct"]*len(notes(session))
-    assert clean["bpm"] > state["bpm"] and clean["flow"]["message_kind"] == "faster"
+    if state["bpm"] == state["target_bpm"]:
+        assert clean["bpm"] == state["bpm"] and clean["streak"] == 1
+    else:
+        assert clean["bpm"] > state["bpm"] and clean["flow"]["message_kind"] == "faster"
     assert_follows_directly(session, state, clean)
     wrong = perform(session, clean, score_events(session, clean,
         pitch=lambda n: [n["midi_pitch"]+1]))
@@ -149,6 +155,9 @@ def test_a_real_window_is_mastered_with_every_take_following_directly(practice_s
     else:
         raise AssertionError("Clean takes never mastered the window")
     assert after["bpm"] == after["target_bpm"] or after["mode"] == "listen"
+    if after["flow"]["step"] == "section_choice":
+        assert (after["first_bar"], after["last_bar"], after["hand"]) == first_window
+        after = session.command("section_next")
     assert (after["first_bar"], after["last_bar"], after["hand"]) != first_window
     assert after["mode"] == "listen" and after["playback_timeline"]["state"] != "failed"
 
@@ -310,7 +319,10 @@ def test_a_window_across_a_change_of_meter_grades_and_follows_directly(practice_
     clean = perform(session, state, score_events(session, state))
     assert graded(session, state["transport_id"]) == ["correct"]*len(
         [n for n in notes(session) if n["onset_beats"] >= state["play_from_beat"]])
-    assert clean["bpm"] > state["bpm"]
+    if state["bpm"] == state["target_bpm"]:
+        assert clean["bpm"] == state["bpm"] and clean["streak"] == 1
+    else:
+        assert clean["bpm"] > state["bpm"]
     assert_follows_directly(session, state, clean, source)
     wrong = perform(session, clean, score_events(session, clean,
         pitch=lambda n: [n["midi_pitch"]+1]))
