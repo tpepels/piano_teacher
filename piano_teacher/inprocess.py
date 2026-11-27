@@ -31,8 +31,9 @@ class EngineCommands:
         "performance.diagnostics": "performance_diagnostics",
     }
 
-    def __init__(self, *, engine: PracticeEngine | None = None):
-        self.engine = engine if engine is not None else PracticeEngine()
+    def __init__(self, shutdown_requested=None, *, engine: PracticeEngine | None = None):
+        self.engine = engine if engine is not None else PracticeEngine(
+            shutdown_requested=shutdown_requested)
         self.owned = engine is None
 
     def tick(self) -> int:

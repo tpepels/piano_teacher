@@ -45,6 +45,15 @@ PyObject *check_cancelled(PyObject *capsule, PyObject *) {
 
 PyMethodDef cancellation_method = {"cancelled", check_cancelled, METH_NOARGS, nullptr};
 
+PyObject *check_stopping(PyObject *capsule, PyObject *) {
+    auto *stopping = static_cast<const std::atomic<bool> *>(
+        PyCapsule_GetPointer(capsule, "piano.shutdown"));
+    if (!stopping) return nullptr;
+    return PyBool_FromLong(stopping->load());
+}
+
+PyMethodDef shutdown_method = {"shutdown_requested", check_stopping, METH_NOARGS, nullptr};
+
 std::string python_error() {
     if (!PyErr_Occurred()) return "Unknown Python bridge failure";
     PyObject *type = nullptr, *value = nullptr, *traceback = nullptr;
@@ -145,14 +154,19 @@ void PianoNative::initialize_python() {
     PyGILState_STATE gil = PyGILState_Ensure();
     PyObject *module = PyImport_ImportModule("piano_teacher.inprocess");
     PyObject *klass = module ? PyObject_GetAttrString(module, "EngineCommands") : nullptr;
+    // This flag is valid until the command thread and all its helpers join.
+    PyObject *capsule = klass ? PyCapsule_New(&stopping_, "piano.shutdown", nullptr) : nullptr;
+    PyObject *shutdown = capsule ? PyCFunction_New(&shutdown_method, capsule) : nullptr;
     // Physical score presentation is the engine's only transport.
-    PyObject *instance = klass ? PyObject_CallNoArgs(klass) : nullptr;
+    PyObject *instance = shutdown ? PyObject_CallOneArg(klass, shutdown) : nullptr;
     if (!instance) {
         std::lock_guard<std::mutex> guard(mutex_);
         failure_ = python_error();
     } else {
         engine_ = instance;
     }
+    Py_XDECREF(shutdown);
+    Py_XDECREF(capsule);
     Py_XDECREF(klass);
     Py_XDECREF(module);
     PyGILState_Release(gil);

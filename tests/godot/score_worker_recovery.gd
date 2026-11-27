@@ -154,6 +154,28 @@ func _exercise() -> void:
     _check(_bound(await _request("score.bundle",current),current) and _worker_pid() != pid,
         "Detached rejection did not retire and replay the matching native result")
 
+func _shutdown_during_fingering() -> void:
+    if not await _start():
+        _check(false,"Cannot start native bridge for shutdown during fingering")
+        return
+    var marker: String = OS.get_environment("PIANO_TEST_FINGERING_HOLD")
+    var arm := FileAccess.open(marker,FileAccess.WRITE)
+    arm.close()
+    _submit("library.open",{"id":"ci_state_journey.mid"})
+    var pid := 0
+    var deadline: int = Time.get_ticks_msec()+10000
+    while pid == 0 and Time.get_ticks_msec() < deadline:
+        pid = int(FileAccess.get_file_as_string(marker))
+        await process_frame
+    _check(pid > 0,"The production inference call did not reach the held provider")
+    var started: int = Time.get_ticks_msec()
+    bridge = null
+    var elapsed: int = Time.get_ticks_msec()-started
+    print("NATIVE_SHUTDOWN_DURING_FINGERING_MS:",elapsed)
+    _check(elapsed < 2000,"Native shutdown waited %d ms for the held provider" % elapsed)
+    _check(pid > 0 and not DirAccess.dir_exists_absolute("/proc/%d" % pid),
+        "Native shutdown left a live or unreaped fingering provider")
+
 func _run() -> void:
     if not ClassDB.class_exists("PianoNative"):
         GDExtensionManager.load_extension("res://native/piano_bridge.gdextension")
@@ -172,5 +194,6 @@ func _run() -> void:
             await _shutdown(_worker_pid())
         else:
             _check(false,"Cannot restart the production native bridge")
+    await _shutdown_during_fingering()
     print("NATIVE_SCORE_RECOVERY_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

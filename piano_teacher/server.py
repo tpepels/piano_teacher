@@ -29,10 +29,11 @@ class PracticeEngine:
 
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True,
                  feedback_events: FeedbackEventLog | None = None,
-                 clock: Clock | None = None):
+                 clock: Clock | None = None, *, shutdown_requested=None):
         self.__dict__.update(compose_application(
             data_dir=data_dir, enable_midi=enable_midi,
-            feedback_events=feedback_events, clock=clock))
+            feedback_events=feedback_events, clock=clock,
+            shutdown_requested=shutdown_requested))
 
     def playback_status(self) -> dict:
         with self.lock:

@@ -211,10 +211,17 @@ verify_score_recovery() {
   set_case score-recovery
   export PIANO_TEST_REAL_NODE
   PIANO_TEST_REAL_NODE="$(command -v node)"
+  export PIANO_TEST_FINGERING_HOLD="$WORK/hold-fingering"
   # Hold the real production inference call on the command lane for several
   # musical tick intervals, then run the provider and return its real result.
   cat > "$WORK/delayed-fingering-node" <<'SH'
 #!/bin/sh
+if [ -f "$PIANO_TEST_FINGERING_HOLD" ]; then
+  exec "$PIANO_TEST_REAL_NODE" -e '
+    require("node:fs").writeFileSync(process.env.PIANO_TEST_FINGERING_HOLD, String(process.pid));
+    setTimeout(() => process.exit(1), 4500);
+  '
+fi
 sleep 1
 exec "$PIANO_TEST_REAL_NODE" "$@"
 SH

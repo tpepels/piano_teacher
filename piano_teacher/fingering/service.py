@@ -4,12 +4,13 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import asdict
 import fcntl
+from functools import partial
 from hashlib import sha256
 import json
 import os
 from pathlib import Path
 import tempfile
-from threading import RLock
+from time import sleep
 
 from ..music import Piece, source_note_id
 from .types import FingerAssignment, FingeringPlan, FingeringProvider, Prediction
@@ -39,26 +40,35 @@ def _write(path: Path, value: dict) -> None:
             os.unlink(temp)
 
 
+def _check_open(shutdown_requested) -> None:
+    if shutdown_requested is not None and shutdown_requested():
+        raise ValueError("Fingering preparation cancelled during shutdown")
+
+
 class FingeringService:
-    def __init__(self, directory: Path, *, provider: FingeringProvider | None = None):
+    def __init__(self, directory: Path, *, provider: FingeringProvider | None = None,
+                 shutdown_requested=None):
+        self._checkpoint = partial(_check_open, shutdown_requested)
         if provider is None:
             from .lumikey import LumikeyProvider
-            provider = LumikeyProvider()
+            provider = LumikeyProvider(checkpoint=self._checkpoint)
         self.provider = provider
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
-        self._lock = RLock()
 
     @contextmanager
     def _locked(self, fingerprint: str):
         directory = self.directory / _digest(fingerprint)
         directory.mkdir(parents=True, exist_ok=True)
-        with self._lock, (directory/'lock').open('a') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            try:
-                yield directory
-            finally:
-                fcntl.flock(lock, fcntl.LOCK_UN)
+        with (directory/'lock').open('a') as lock:
+            while True:
+                self._checkpoint()
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    sleep(.025)
+            yield directory
 
     @staticmethod
     def _sources(piece):

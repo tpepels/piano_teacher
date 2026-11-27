@@ -100,11 +100,12 @@ from .transport_timing import TransportTiming
 
 def compose_application(data_dir: Path | None = None, enable_midi: bool = True,
                         feedback_events: FeedbackEventLog | None = None,
-                        clock: Clock | None = None) -> dict:
+                        clock: Clock | None = None, *, shutdown_requested=None) -> dict:
     """Assemble the graph in dependency order, one cohesive stage at a time."""
     r = SimpleNamespace()
     _session_state(r, clock=clock, feedback_events=feedback_events)
-    _devices_library_and_score(r, enable_midi=enable_midi, data_dir=data_dir)
+    _devices_library_and_score(r, enable_midi=enable_midi, data_dir=data_dir,
+                               shutdown_requested=shutdown_requested)
     _persistence_and_settlement(r)
     _lesson_source_and_settings_workflows(r)
     _transport_and_completion(r)
@@ -147,7 +148,7 @@ def _session_state(r, *, clock, feedback_events) -> None:
     r.guided_session.set_hints(False,now=r.now())
 
 
-def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
+def _devices_library_and_score(r, *, enable_midi, data_dir, shutdown_requested) -> None:
     """MIDI device, library and settings, Listen audio and score artifacts."""
     r.midi = MidiConnection(enabled=enable_midi, clock=r.now)
     r.live_input = LiveInputView()
@@ -161,7 +162,7 @@ def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     r._data_dir = data_dir
     r.listen = ListenSession(data_dir / "demo-audio", lock=r.lock)
-    r.fingering = FingeringService(data_dir / "fingering")
+    r.fingering = FingeringService(data_dir / "fingering", shutdown_requested=shutdown_requested)
     r.preprocessing = PreprocessingCache(data_dir / "preprocessed")
     r.teaching_continuation = TeachingContinuation(r.visual_transport)
     # The untimed guided engine owns repeat presentation epochs; no

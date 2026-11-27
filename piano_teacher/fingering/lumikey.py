@@ -1,9 +1,12 @@
 """Isolated adapter for the real published Lumikey JavaScript/ONNX provider."""
 from __future__ import annotations
+from contextlib import suppress
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
+from time import monotonic
 from ..music import Piece, source_note_id
 from .types import Prediction
 
@@ -15,9 +18,35 @@ MODEL_HASHES = {
 
 
 class LumikeyProvider:
-    def __init__(self, *, node: str | None = None, timeout: float = 300):
+    def __init__(self, *, node: str | None = None, timeout: float = 300, checkpoint=None):
         self.node = node or os.environ.get('PIANO_FINGERING_NODE', 'node')
         self.timeout = timeout
+        self._checkpoint = checkpoint
+
+    def _infer(self, notes):
+        command = [self.node, str(RUNTIME/'bridge.cjs')]
+        payload = json.dumps({'notes': notes})
+        if self._checkpoint is not None:
+            self._checkpoint()
+        deadline = monotonic() + self.timeout
+        with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, start_new_session=True,
+                env={**os.environ, 'OMP_NUM_THREADS': '1'}) as process:
+            try:
+                while (remaining := deadline - monotonic()) > 0:
+                    if self._checkpoint is not None:
+                        self._checkpoint()
+                    try:
+                        output, error = process.communicate(payload, timeout=min(remaining, .05))
+                        return process.returncode, output, error
+                    except subprocess.TimeoutExpired:
+                        # communicate retains its input and output buffers between attempts.
+                        payload = None
+                raise subprocess.TimeoutExpired(command, self.timeout)
+            finally:
+                if process.returncode is None:
+                    with suppress(ProcessLookupError):
+                        os.killpg(process.pid, signal.SIGKILL)
 
     @property
     def identity(self) -> dict:
@@ -40,17 +69,14 @@ class LumikeyProvider:
         if not notes:
             return unknown
         try:
-            process = subprocess.run([self.node, str(RUNTIME/'bridge.cjs')],
-                input=json.dumps({'notes': notes}), capture_output=True, text=True,
-                timeout=self.timeout, check=False,
-                env={**os.environ, 'OMP_NUM_THREADS': '1'})
+            status, output, error = self._infer(notes)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise RuntimeError(f'Local fingering runtime unavailable: {exc}. Run scripts/setup-fingering.sh') from exc
-        if process.returncode:
-            error = process.stderr.strip()[-2000:]
+        if status:
+            error = error.strip()[-2000:]
             raise RuntimeError(f'Local fingering inference failed: {error}. Run scripts/setup-fingering.sh')
         try:
-            entries = json.loads(process.stdout)['assignments']
+            entries = json.loads(output)['assignments']
             result = {entry['source_id']: Prediction(entry['finger'], entry.get('reason', '')) for entry in entries}
             if set(result) != {n['source_id'] for n in notes} or len(result) != len(notes):
                 raise ValueError('Model result identity mismatch')
