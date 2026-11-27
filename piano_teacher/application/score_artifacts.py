@@ -65,7 +65,16 @@ class ScoreArtifacts:
         self.preprocessing = preprocessing
         self._engraving_lock = threading.RLock()
         self._model_lock = threading.RLock()
+        self._retired = threading.Event()
         self.invalidate()
+
+    def retire(self) -> None:
+        """Cancel future work without acquiring either preparation lock."""
+        self._retired.set()
+
+    def require_active(self) -> None:
+        if self._retired.is_set():
+            raise ValueError("Score request was superseded during preparation")
 
     def invalidate(self) -> None:
         """Discard selected artifacts; durable, source-keyed entries remain reusable."""
@@ -191,6 +200,7 @@ class ScoreArtifacts:
             return self._engraving(selected)
 
     def _engraving(self, selected: ScoreSelection) -> EngravedScore:
+        self.require_active()
         cached = self.cached_layout(selected)
         if cached is not None:
             return cached
@@ -223,15 +233,18 @@ class ScoreArtifacts:
             except (TypeError, ValueError, KeyError, AssertionError):
                 layout = None
         if layout is None:
+            self.require_active()
             complete = render_layout(
                 notation, "both", total_beats=display_phrase.end-display_phrase.start,
                 bpm=piece.bpm, continuous=compact)
+            self.require_active()
             require_lesson_alignment(display_phrase, complete.layout, "both")
             layout = EngravedScore(complete.pages, project_performance_layout(complete.layout, envelope))
             require_lesson_alignment(phrase, layout.layout, selected.hand)
             self.preprocessing.write_json("engraving", key,
                 {"pages": list(layout.pages), "layout": layout.layout})
             self.preprocessing.prune()
+        self.require_active()
         self._layout_entry = (selected.identity, layout, piece.bpm, key)
         return layout
 
@@ -240,6 +253,7 @@ class ScoreArtifacts:
             return self._geometry(selected)
 
     def _geometry(self, selected: ScoreSelection) -> dict:
+        self.require_active()
         # A transient renderer retry or second layout request for the same
         # source revision must not re-extract every Verovio beam/tie/tuplet
         # fragment. Preserve an owned immutable snapshot; callers cannot
@@ -249,6 +263,7 @@ class ScoreArtifacts:
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = time.perf_counter()
         score = self._engraving(selected)
+        self.require_active()
         if diagnostics:
             print("SCORE_GEOMETRY_STAGE: engraving",
                   round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
@@ -267,7 +282,8 @@ class ScoreArtifacts:
         prepared = score_preparation.assemble_layout(score,
             notation_model=notation_model, notation_xml=notation.musicxml,
             cache=self.preprocessing, cache_key=self.engraving_cache_key or "",
-            revision=selected.revision)
+            revision=selected.revision, checkpoint=self.require_active)
+        self.require_active()
         if diagnostics:
             print("SCORE_GEOMETRY_STAGE: native-assets",
                   round((time.perf_counter()-checkpoint)*1000, 1), "ms",

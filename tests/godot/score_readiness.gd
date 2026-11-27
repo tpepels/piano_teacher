@@ -117,6 +117,16 @@ func run() -> void:
         "Barlines persist far beyond the written score")
     check(Meter.visible_lines(-4000.0,1000.0,330.0,100.0,0.0,grid).has(-4000.0),
         "Barlines persist far before the written score")
+    # Shutdown is terminal even if a reply or a new snapshot arrives later.
+    session.update_context(state(5),Time.get_ticks_msec())
+    var closing_id: int = session.pending_id("bundle")
+    reply(5)
+    session.shutdown_preparation()
+    session.complete_response("bundle",closing_id,0,bundle(5),Time.get_ticks_msec())
+    session.update_context(state(6),Time.get_ticks_msec())
+    session.advance_preparation()
+    check(not session.layout_pending and not session.is_ready() and
+        actions.is_empty(),"Shutdown cannot resurrect a cancelled score")
     session.shutdown_preparation()
     session.replace_renderer(null)
     view.queue_free()

@@ -21,19 +21,26 @@ current selection and artifact generation again after completion. Changing
 the source retires the entire artifact instance, without acquiring its
 engraving lock under the musical session lock. Each worker retains its
 own old instance until it finishes; no old layout can overwrite the new
-generation. Durable source-keyed caches remain reusable.
+generation. A new selection gets a new artifact instance on its first
+locked read, including ordinary lesson navigation. Retired instances stop
+at checkpoints between Verovio engraving, layout and atlas extraction
+phases. Durable source-keyed caches remain reusable.
 
 The Godot asset session cancels the request on replacement, Retry, close,
 failure and shutdown. Its separate CPU engraving/texture-upload path
-continues to check generation and viewport before installation. Only the
+checks a mutex-protected cancellation flag between CPU preparation
+phases and checks generation and viewport before installation. Shutdown
+is terminal and joins the task before releasing its result. Only the
 rendering thread uploads textures and installs retained ink.
 
 ## Limits and verification
 
 Cancellation does not interrupt an active native Verovio call or forcibly
-terminate a thread holding the GIL. It discards the reply and prevents stale
-queued work from starting. A slow active engraving can still delay its
-successor on the asset lane; CPython GIL contention can still affect timing.
+terminate a thread holding the GIL. It discards the reply, prevents stale
+queued work from starting, and retires obsolete source generations at
+cooperative checkpoints. A slow active engraving can still delay its
+successor on the asset lane until its next checkpoint; CPython GIL
+contention can still affect timing.
 The separate C++ mailbox test runs in core CI without Godot dependencies.
 Python tests deliberately hold the old engraving lock during navigation.
 Full embedded production and physical MIDI latency tests remain necessary.

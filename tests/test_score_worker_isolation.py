@@ -4,6 +4,8 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
+import pytest
+
 from piano_teacher.application.score_artifact_registry import ScoreArtifactRegistry
 from piano_teacher.application.score_artifacts import ScoreArtifacts
 from piano_teacher.inprocess import INVALID
@@ -26,6 +28,8 @@ def test_retiring_artifacts_does_not_wait_for_old_engraving():
             retired = workers.submit(registry.invalidate)
             retired.result(timeout=1)
             assert registry.current is not old
+            with pytest.raises(ValueError, match="superseded"):
+                old.require_active()
         finally:
             release.set()
         active.result(timeout=5)
@@ -73,8 +77,35 @@ def test_source_navigation_rejects_inflight_bundle(practice_session, monkeypatch
             navigation = workers.submit(session.select, 2, 2)
             navigation.result(timeout=3)
             assert session.snapshot()["revision"] != expected["revision"]
+            assert session.engine.score.current_artifacts is not old
+            with pytest.raises(ValueError, match="superseded"):
+                old.require_active()
         finally:
             release.set()
         status, response = active.result(timeout=5)
     assert status == INVALID
     assert "superseded during" in json.loads(response)["error"]
+
+
+def test_navigation_cannot_wait_for_retired_model_lock(practice_session):
+    session = practice_session(bars=3)
+    first = identity(session.snapshot())
+    old = session.engine.score.current_artifacts
+    entered, release = Event(), Event()
+
+    def hold_model():
+        with old._model_lock:
+            entered.set()
+            assert release.wait(5)
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        held = workers.submit(hold_model)
+        try:
+            assert entered.wait(5)
+            navigation = workers.submit(session.select, 2, 2)
+            navigation.result(timeout=3)
+            assert identity(session.snapshot()) != first
+            assert session.engine.score.current_artifacts is not old
+        finally:
+            release.set()
+        held.result(timeout=5)

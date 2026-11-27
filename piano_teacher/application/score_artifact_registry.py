@@ -1,25 +1,35 @@
-"""Current pre-engraved score artifact owner across stage promotion.
+"""One artifact generation per exact physical score selection.
 
-Promoting prepared future assets replaces this reference. Source invalidation,
-history reset and all score readers therefore act on the current artifacts
-rather than a previously captured generation.
+The musical session lock owns selection and the current pointer. Expensive
+work never holds that lock and cannot mutate another generation.
 """
 from __future__ import annotations
-from .score_artifacts import ScoreArtifacts
+
+from .score_artifacts import ScoreArtifacts, ScoreSelection
 
 
 class ScoreArtifactRegistry:
     def __init__(self, initial: ScoreArtifacts):
         self.current = initial
+        self._selection_identity: tuple | None = None
+
+    def select(self, selected: ScoreSelection) -> ScoreArtifacts:
+        """Bind a generation while holding the musical session lock."""
+        identity = selected.identity
+        if self._selection_identity is not None and identity != self._selection_identity:
+            self.invalidate()
+        self._selection_identity = identity
+        return self.current
 
     def adopt(self, prepared: ScoreArtifacts) -> None:
-        self.current = prepared
+        if prepared is not self.current:
+            self.current.retire()
+            self.current = prepared
+            self._selection_identity = None
 
     def invalidate(self) -> None:
-        """Retire an entire generation without joining its engraving lock.
-
-        The session lock owns this pointer. An in-flight reader retains its
-        old artifact instance and may finish, but can never write into the
-        new generation. Durable source-keyed cache entries remain reusable.
-        """
-        self.current = ScoreArtifacts(self.current.preprocessing)
+        """Retire without waiting for either of the old generation's locks."""
+        previous = self.current
+        self.current = ScoreArtifacts(previous.preprocessing)
+        self._selection_identity = None
+        previous.retire()

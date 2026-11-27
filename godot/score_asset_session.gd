@@ -383,12 +383,11 @@ func advance_preparation() -> void:
 
 func shutdown_preparation() -> void:
     # Only shutdown may block on a worker; navigation/retry invalidates it.
+    if _closed:
+        return
     _closed = true
     _generation += 1
-    _requests.clear()
-    request_cancelled.emit()
-    _queued.clear()
-    _uploading = null
+    _cancel_preparation()
     if _worker_id >= 0:
         WorkerThreadPool.wait_for_task_completion(_worker_id)
         _worker_id = -1
@@ -463,10 +462,7 @@ func _finish_native_score() -> void:
 func _reset_assets() -> bool:
     # Supersede both in-flight operations immediately on score change or Retry.
     # Cancel the adapter even when closing without a replacement.
-    _requests.clear()
-    request_cancelled.emit()
-    _queued.clear()
-    _uploading = null
+    _cancel_preparation()
     _slow_status_published = false
     _annotation_version = -1
     if not _hide_renderer():
@@ -487,6 +483,17 @@ func _reset_assets() -> bool:
     _publish_status()
     return true
 
+func _cancel_preparation() -> void:
+    # Main-thread owner invalidates every publication path. The CPU worker
+    # checks its mutex-protected cancellation flag between preparation phases.
+    _requests.clear()
+    request_cancelled.emit()
+    _queued.clear()
+    _uploading = null
+    if _worker_id >= 0 and _worker != null:
+        _worker.cancel()
+
+
 func _hide_renderer() -> bool:
     if is_instance_valid(_renderer):
         if not _renderer.clear_score():
@@ -501,10 +508,7 @@ func _fail(message: String, release_renderer: bool = true) -> void:
     if _closed:
         return
     _generation += 1
-    _requests.clear()
-    request_cancelled.emit()
-    _queued.clear()
-    _uploading = null
+    _cancel_preparation()
     push_error("SCORE_ASSET_FAILURE: " + message)
     var repeated: bool = _retry_attempted and \
         message == _last_native_failure and not message.is_empty()

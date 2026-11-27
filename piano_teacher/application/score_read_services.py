@@ -53,11 +53,14 @@ class ScoreReadServices:
 
     def source_model(self) -> dict:
         with self.lock:
-            return self.score_artifact_registry.current.source_model(self.selection())
+            selected = self.selection()
+            artifacts = self.score_artifact_registry.select(selected)
+            return artifacts.source_model(selected)
 
     def selected_artifacts(self) -> tuple[ScoreArtifacts, ScoreSelection]:
         with self.lock:
-            return self.score_artifact_registry.current, self.selection()
+            selected = self.selection()
+            return self.score_artifact_registry.select(selected), selected
 
     def semantic_score(self) -> dict:
         artifacts, selection = self.selected_artifacts()

@@ -12,6 +12,20 @@ var request: Dictionary
 var viewport: Vector2
 var density: float
 var result: Dictionary = {}
+var _cancel_lock := Mutex.new()
+var _cancelled := false
+
+func cancel() -> void:
+    _cancel_lock.lock()
+    _cancelled = true
+    _cancel_lock.unlock()
+
+
+func _should_stop() -> bool:
+    _cancel_lock.lock()
+    var cancelled: bool = _cancelled
+    _cancel_lock.unlock()
+    return cancelled
 
 func _init(bytes: PackedByteArray, identity: Dictionary,
         viewport_size: Vector2, configured_density: float) -> void:
@@ -21,10 +35,14 @@ func _init(bytes: PackedByteArray, identity: Dictionary,
     density = configured_density
 
 func run() -> void:
+    if _should_stop():
+        return
     var started: int = Time.get_ticks_usec()
     var document := JSON.new()
     if document.parse(body.get_string_from_utf8()) != OK or not document.data is Dictionary:
         result = {"error":"Practice engine returned no source-bound score bundle"}
+        return
+    if _should_stop():
         return
     var bundle: Dictionary = document.data
     var decoded: int = Time.get_ticks_usec()
@@ -43,16 +61,24 @@ func run() -> void:
     if not axis.load_model(model):
         result = {"error":axis.last_error}
         return
+    if _should_stop():
+        return
     var validated: int = Time.get_ticks_usec()
     var engraving := Engraving.new(axis)
     engraving.glyphs.begin_cpu_preparation()
     if not NativeScoreAssets.prepare_engraving(engraving,bundle["layout"]):
         result = {"error":engraving.failure_reason}
         return
+    if _should_stop():
+        return
     engraving.glyphs.prepare_head_interiors()
+    if _should_stop():
+        return
     var atlas_at: int = Time.get_ticks_usec()
     if not engraving.prepare(density,viewport,Spacing.PLAYHEAD_FRACTION):
         result = {"error":engraving.failure_reason}
+        return
+    if _should_stop():
         return
     # The main thread receives the sole owner after the pool task joins.
     result = {"engraving":engraving,"layout":NativeScoreAssets.compact_layout(bundle["layout"]),
