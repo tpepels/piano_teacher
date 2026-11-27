@@ -1,0 +1,4 @@
+ruff==0.11.13
+gdtoolkit==4.5.0
+shellcheck-py==0.10.0.1
+pytest==8.3.5
