@@ -25,8 +25,9 @@ Godot 4.7 hosts an embedded CPython engine and a supervised score subprocess.
 - The native bridge submits commands serially and drives clock ticks on its
   timing thread. Both enter the same locked `PracticeSession` as MIDI. Source
   import, fingering inference and WAV reads release that lock during the
-  expensive work. The asset lane captures a selection and supervises notation,
-  Verovio and asset extraction in the subprocess. [Score worker](asset-worker.md)
+  expensive work. Fingerprinting and import consume the same captured source
+  bytes. The asset lane captures a selection and supervises notation, Verovio
+  and asset extraction in the subprocess. [Score worker](asset-worker.md)
 - Real MIDI arrives through `MidiConnection` callbacks with arrival
   timestamps and enters the same `PracticeSession` boundary.
 

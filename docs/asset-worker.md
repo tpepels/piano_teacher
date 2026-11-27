@@ -44,7 +44,12 @@ stay with the application.
   supervisor retires the worker only if the rejected binding still matches
   its last bundle reply. A second invalid result reaches the error panel.
 - **Shutdown.** The mailbox stops accepting requests and discards unpublished
-  work. The bridge joins the timing driver and the native asset lane. The
+  work. The bridge's shutdown flag also interrupts a pending fingering lock
+  or provider exchange. The provider's process group is terminated and its
+  child reaped before the command lane returns. The fingering provider reads
+  a complete temporary input file, so response polling cannot truncate a
+  large request on CPython 3.12. The bridge joins the timing driver and
+  the native asset lane. The
   asset lane cancels or closes the channel and reaps the child before the
   bridge closes the practice engine.
 
@@ -128,7 +133,9 @@ cost was about 5 ms, so this protocol keeps the raw UTF-8 payload.
   23 ms, curriculum and progress restore took 120 ms, and the parallel
   LumiKey call took 424 ms. The command lane still waits for source
   preparation. The native timing driver can tick while source and fingering
-  work runs outside the session lock. Full UI snapshots still read learner
+  work runs outside the session lock. The import cache keys the exact bytes
+  parsed, even when another application replaces the selected file during
+  open. Full UI snapshots still read learner
   progress and project the current course. MIDI and clock-driven Free
   updates use the current phase directly.
 - **Listen.** One audio thread renders the active Listen request with one
@@ -137,9 +144,11 @@ cost was about 5 ms, so this protocol keeps the raw UTF-8 payload.
   synthesizer shares the embedded interpreter. A WAV read can still occupy
   the serial command lane, and Godot decodes the audio on the main thread.
 - **Godot.** Detached rasterization took about 601 ms of the original
-  opening-window preparation. A resize before upload reuses the rasterized
-  CPU atlas. A resize during upload discards the outdated fit and rebuilds
-  it on the worker. Texture creation and retained drawing remain on main.
+  opening-window preparation. A resize reuses the CPU atlas and refits on
+  the worker. If upload is in progress, the main thread restores the CPU
+  images before handing the job back. The worker releases the raw wire bytes
+  after decoding. Texture creation and retained drawing
+  remain on main.
   An individual texture upload can exceed the 2 ms slice. First use at a
   new display scale can still resize and upload a display texture during
   drawing. This work and retained ink compilation contribute to frame tails.
@@ -179,3 +188,27 @@ parent's encoded source and the child's prepared artifacts. The total RSS
 sum counts shared pages once per process. Opening frames still have large
 spikes during retained drawing. Lesson transition durations ranged from
 482 to 518 ms before and 488 to 525 ms after. The ranges overlap.
+
+#### Follow-up comparison
+
+The follow-up repeated the pairing against `7459582a` while local CI was
+running. As above, the whole-piece replay used the real embedded callback.
+Opening and lesson-change figures are medians of three paired runs under
+software OpenGL. They varied with host load.
+
+| Measurement | Threaded baseline | Follow-up |
+| --- | ---: | ---: |
+| MIDI callback p95 / max | 33.61 / 82.09 ms | 0.32 / 0.40 ms |
+| Engine tick p95 / max | 74.74 / 120.88 ms | 0.28 / 2.41 ms |
+| Cold / warm whole-piece bundle | 62.16 s / 70.19 ms | 16.32 s / 30.66 ms |
+| Sampled concurrent RSS, engine plus worker | 147.2 MiB | 178.0 MiB |
+| Opening-window frame p95 / max | 14.28 / 191.25 ms | 14.52 / 151.17 ms |
+| Lesson selection to retained notation | 537.00 ms | 478.47 ms |
+| During lesson transition, frame p95 / max | 20.01 / 31.43 ms | 21.96 / 28.17 ms |
+
+The lesson transition samples ranged from 451 to 1,160 ms before and
+461 to 737 ms after. The overlapping ranges leave the magnitude of any
+transition improvement uncertain. The warm 576 KB → 3.66 MB exchange took
+30.17 ms round trip. Software rendering still produced an opening frame above
+150 ms. Combined RSS still increased after moving generation into its own
+process.

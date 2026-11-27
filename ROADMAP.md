@@ -87,6 +87,41 @@ Physical MIDI, audio and display acceptance remain pending. The local
 MIDI backend exposed only MIDI Through, and the optional original
 Pathétique II MIDI was unavailable.
 
+### Follow-up production audit (2026-11-27)
+
+- **Shutdown during fingering.** The real native bridge took 4,552 ms to
+  close while a local provider was held for 4.5 seconds. It closed in
+  25–35 ms after the fix. The native journey checks that the provider was
+  reaped. Waiting for another instance's fingering cache lock is also
+  cancellable during shutdown. A delayed real ONNX provider confirms that
+  a whole-piece input remains complete while CPython 3.12 polls for shutdown.
+- **Source identity.** Replacing the selected MIDI file between hashing
+  and parsing reproduced the replacement note under the old fingerprint.
+  Import and fingerprinting now use the same captured bytes. The race
+  regression verifies original notes on the first open and replacement
+  notes on the next. MIDI and compressed MusicXML share the source capture
+  path.
+- **Resize during texture upload.** The software-rendered readiness test
+  reproduced a second atlas build when the viewport changed mid-upload.
+  The main thread now restores CPU images for the detached refit and resumes
+  upload for the new viewport. The current score reaches retained readiness
+  with the same atlas.
+
+The follow-up paired replay against `7459582a` measured MIDI callback p95
+at 33.61 → 0.32 ms, engine tick p95 at 74.74 → 0.28 ms and cold whole-piece
+generation at 62.16 → 16.32 s. In three software-rendered pairs, median peak
+frame time fell from 191 to 151 ms during opening and from 31 to 28 ms during
+lesson changes. Frame p95 was slightly higher in both views. Both lesson-time
+ranges overlapped. [Follow-up measurements](docs/asset-worker.md)
+
+The follow-up passed all 386 tests on CPython 3.12 and 3.14, Godot syntax
+and player behavior, real ONNX fingering, the C++ mailbox test and the
+quality gate. Native production passed both synthetic MIDI journeys, the
+extended shutdown and recovery journey, all 17 repertoire files and the
+relocated standalone package with its bundled interpreter. Physical MIDI,
+audio and display acceptance and the optional original Pathétique II MIDI
+remain pending.
+
 ## Musical timeline rebuild (T1–T6, adopted 2026-11-24)
 
 Owner request: between-take placement must make musical sense (a repeat

@@ -1,7 +1,7 @@
 """Real local inference and durable human corrections remain honest."""
-from pathlib import Path
 import shlex
 import shutil
+from pathlib import Path
 
 import pytest
 
