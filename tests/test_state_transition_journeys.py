@@ -153,8 +153,14 @@ def test_fake_keyboard_free_wrong_pause_resume_and_no_unearned_target(practice_s
     assert not any(step["completed"] for step in session.ask("lesson.overview")["steps"])
 
 
-@pytest.mark.parametrize("fault", ["missed", "wrong", "late", "extra"])
-def test_fake_keyboard_failed_take_transitions_to_repeat_and_floor_free(practice_session, fault):
+@pytest.mark.parametrize("fault, additional_failures", [
+    ("missed", 2),  # 0%: ignored; does not count towards recovery.
+    ("wrong", 2),   # 75%: near-pass; clears the recovery counter.
+    ("late", 1),    # 60%: missed attack plus extra press; counts towards recovery.
+    ("extra", 2),   # 80%: near-pass; clears the recovery counter.
+])
+def test_fake_keyboard_failed_take_transitions_to_repeat_and_floor_free(
+        practice_session, fault, additional_failures):
     from test_midi_journeys import play
     session = practice_session(bars=1, chords=True)
     session.finish_listen()
@@ -170,11 +176,15 @@ def test_fake_keyboard_failed_take_transitions_to_repeat_and_floor_free(practice
         assert not any(e.get("kind") == "assessment" and e.get("final")
                        for e in events)
     assert repeated["lesson_steps_mastered"] == 0
-    # Silence and near-passes do not count towards recovery. Two recorded
-    # low-accuracy failures at the floor return to the original notes.
-    again = play(session,repeated,missing=(1,2))
-    assert again["flow"]["step"] == "tempo"
-    at_floor = play(session,again,missing=(1,2))
+    # Only recorded failures below 70% count towards recovery. A late
+    # attack can be both a missed obligation and an extra press, unlike
+    # a wrong pitch assigned to an obligation. Require the exact number
+    # of subsequent attempts; neither premature nor delayed recovery passes.
+    at_floor = repeated
+    for _ in range(additional_failures):
+        assert at_floor["flow"]["step"] == "tempo"
+        assert at_floor["running"] and at_floor["bpm"] == 40
+        at_floor = play(session, at_floor, missing=(1,2))
     assert at_floor["flow"]["step"] == "free"
     assert at_floor["lesson_level"] == "original"
     assert at_floor["mastered"] == 0
