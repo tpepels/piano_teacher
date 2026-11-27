@@ -13,7 +13,6 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
-import hashlib
 import time
 from threading import Lock
 
@@ -117,13 +116,10 @@ class SourcePreparationSession:
                                 score_revision)
 
     def prepare(self, source: Path, *, preprocessing, fingering,
-                progress, state_lock, importer,
-                plan_type=LearningPlan,
+                progress, state_lock,
                 diagnostics: bool = False) -> PreparedSource:
         checkpoint = time.perf_counter()
-        fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
-        piece = preprocessing.load_import(
-            source, fingerprint, importer=importer)
+        fingerprint, piece = preprocessing.load_import(source, source.read_bytes())
         if diagnostics:
             now = time.perf_counter()
             print("SCORE_LOAD_STAGE: import",round((now-checkpoint)*1000,1),
@@ -141,7 +137,7 @@ class SourcePreparationSession:
                 max_workers=1,thread_name_prefix="piano-fingering") as worker:
             predicted = worker.submit(prepare_fingering)
             started_course = time.perf_counter()
-            candidate = plan_type(piece)
+            candidate = LearningPlan(piece)
             with state_lock:
                 resumed = progress.restore(candidate,fingerprint)
             course_ms = (time.perf_counter()-started_course)*1000.0

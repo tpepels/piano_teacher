@@ -17,20 +17,24 @@ MUSICXML_FORMATS = frozenset({".musicxml", ".xml", ".mxl"})
 SOURCE_FORMATS = MIDI_FORMATS | MUSICXML_FORMATS
 
 
-def import_piece(path: str | Path) -> Piece:
+def import_piece(path: str | Path, *, data: bytes | None = None) -> Piece:
     """Load one canonical source with no secondary notation owner."""
-    path = Path(path).expanduser().resolve()
-    if not path.is_file():
-        raise ValueError(f"No file found: {path}")
+    path = Path(path).expanduser()
+    if data is None:
+        path = path.resolve()
+        if not path.is_file():
+            raise ValueError(f"No file found: {path}")
     suffix = path.suffix.lower()
-    if suffix in MUSICXML_FORMATS:
-        return load_musicxml(path)
-    if suffix not in MIDI_FORMATS:
+    if suffix not in SOURCE_FORMATS:
         raise ValueError("Only MIDI (.mid, .midi) and MusicXML (.musicxml, .xml, .mxl) can be imported")
-    return load_midi(path)
+    if data is None:
+        data = path.read_bytes()
+    if suffix in MUSICXML_FORMATS:
+        return load_musicxml(path, data)
+    return load_midi(path, data=data)
 
 
-def load_musicxml(path: Path) -> Piece:
+def load_musicxml(path: Path, data: bytes) -> Piece:
     """Written score -> MIDI timeline -> the canonical MIDI importer.
 
     Each staff becomes one MIDI track, so a grand staff keeps its two hands.
@@ -40,8 +44,13 @@ def load_musicxml(path: Path) -> Piece:
     """
     from music21 import converter
     from music21.midi.translate import streamToMidiFile
+    # music21's path converter recognizes compressed MXL archives. Stage
+    # the captured bytes privately so it never reopens the learner's file.
     try:
-        score = converter.parse(str(path), format="musicxml")
+        with tempfile.TemporaryDirectory() as folder:
+            copied = Path(folder) / path.name
+            copied.write_bytes(data)
+            score = converter.parse(str(copied), format="musicxml")
     except Exception as exc:  # music21 raises many unrelated types
         raise ValueError(f"Cannot read MusicXML: {exc}") from exc
     # Grace notes have no duration of their own: the practice timeline
@@ -58,14 +67,7 @@ def load_musicxml(path: Path) -> Piece:
         # D.C. with no Fine) would leave the piece unopenable. Read it once
         # straight through instead, as the notes are written.
         midi = streamToMidiFile(_without_repeats(score))
-    with tempfile.TemporaryDirectory() as folder:
-        converted = Path(folder) / f"{path.stem}.mid"
-        midi.open(str(converted), "wb")
-        try:
-            midi.write()
-        finally:
-            midi.close()
-        piece = load_midi(converted)
+    piece = load_midi(path, data=midi.writestr())
     return replace(piece, authored_fingerings=_authored_fingerings(score, piece))
 
 

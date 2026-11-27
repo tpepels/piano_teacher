@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from io import BytesIO
 from pathlib import Path
 from collections import defaultdict, deque
 from statistics import median
@@ -171,10 +172,11 @@ def phrases_from_notes(notes: list[Note], boundaries: list[float], bars_per_phra
     return tuple(phrases)
 
 
-def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int = 2) -> Piece:
+def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int = 2,
+              data: bytes | None = None) -> Piece:
     if bars_per_phrase < 1:
         raise ValueError("bars_per_phrase must be >= 1")
-    midi = mido.MidiFile(str(path))
+    midi = mido.MidiFile(str(path), file=None if data is None else BytesIO(data))
     if midi.type == 2:
         raise ValueError("Asynchronous MIDI type 2 has no single musical timeline")
     if midi.ticks_per_beat <= 0:

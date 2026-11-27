@@ -1,5 +1,6 @@
 """Imported MIDI remains the music the player opened, including repairs."""
 from pathlib import Path
+from hashlib import sha256
 import shutil
 
 import mido
@@ -28,6 +29,34 @@ def write_tracks(path, tracks, *, meter=(4, 4)):
         midi.tracks.append(track)
     midi.save(path)
     return path
+
+
+def test_replacing_a_file_during_open_keeps_the_notes_bound_to_the_fingerprint(
+        practice_session, tmp_path, monkeypatch):
+    def source(name, pitch):
+        return write_tracks(tmp_path / name, [
+            ("Right Hand", [(0, "note_on", pitch, 80, 0), (480, "note_off", pitch, 0, 0)]),
+        ])
+
+    selected = source("selected.mid", 72)
+    replacement = source("replacement.mid", 76)
+    original = sha256(selected.read_bytes()).hexdigest()
+    updated = sha256(replacement.read_bytes()).hexdigest()
+    read_bytes = Path.read_bytes
+
+    def replace_after_read(path):
+        data = read_bytes(path)
+        if path.name == selected.name and replacement.exists():
+            replacement.replace(path)
+        return data
+
+    monkeypatch.setattr(Path, "read_bytes", replace_after_read)
+    session = practice_session(source=selected)
+    assert session.snapshot()["piece_fingerprint"] == original
+    assert [note.pitch for note in session.engine.lesson.plan.piece.notes] == [72]
+    session.engine.load(str(session.path))
+    assert session.snapshot()["piece_fingerprint"] == updated
+    assert [note.pitch for note in session.engine.lesson.plan.piece.notes] == [76]
 
 
 def test_import_preserves_crossed_hands_dynamics_meter_and_sustained_end(tmp_path):

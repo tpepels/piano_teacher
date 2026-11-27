@@ -7,8 +7,6 @@ installs a validated source or correction under the lock.
 from __future__ import annotations
 
 from pathlib import Path
-from ..learning import LearningPlan
-from ..importing.pieces import import_piece
 
 
 class SourcePreparationWorkflow:
@@ -27,7 +25,6 @@ class SourcePreparationWorkflow:
             Path(path).expanduser().resolve(),
             preprocessing=self.preprocessing, fingering=self.fingering,
             progress=self.progress, state_lock=self.lock,
-            importer=import_piece, plan_type=LearningPlan,
             diagnostics=diagnostics)
 
     def correction_identity(self, *, fingerprint: str | None = None):
