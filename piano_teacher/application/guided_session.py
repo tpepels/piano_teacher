@@ -137,13 +137,12 @@ class GuidedSession:
         if self.controller is not None:
             self.controller.set_hints(self.persistent_hints, now=now)
 
-    def marks(self, snapshot: dict, layout: dict) -> list[dict]:
+    def marks(self, snapshot: dict) -> list[dict]:
         if self.fragment is None:
             return []
         variant, phrase = self.fragment.variant, self.fragment.phrase
         source = {f"{self._stage_key}:{index}": note
                   for index, note in zip(variant.source_indices, variant.notes)}
-        glyphs = {glyph["id"]: glyph for glyph in layout.get("notes", [])}
         local_indices = {id(note): index for index, note in enumerate(phrase.notes)}
         settled = {entry["id"]: entry for entry in snapshot.get("note_feedback", [])}
         for entry in snapshot.get("expected_notes", []):
@@ -158,9 +157,8 @@ class GuidedSession:
             if local_index is None:
                 continue
             canonical_id = source_note_id(note, local_index)
-            glyph = glyphs.get(layout.get("attack_map", {}).get(canonical_id))
-            if (glyph is not None and glyph.get("is_attack")
-                    and glyph.get("pitch") == note.pitch and glyph.get("hand") == note.hand):
-                marks.append({**glyph, "target_id": identifier, "status": entry["status"],
-                              "hint_used": bool(entry.get("hint_used", False))})
+            marks.append({"source_id": canonical_id, "pitch": note.pitch,
+                          "beat": note.start - phrase.start,
+                          "target_id": identifier, "status": entry["status"],
+                          "hint_used": bool(entry.get("hint_used", False))})
         return marks

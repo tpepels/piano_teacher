@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, fields
 from types import MappingProxyType
 
 from .measure_grid import bar_number_at
-from .notation.practice_timeline import UNLOADED_GAP_BEATS, UNLOADED_METER
+from .source_timing import UNLOADED_GAP_BEATS, UNLOADED_METER
 from .music import note_name
 from .application.musical_scheduler import SCHEDULER
 

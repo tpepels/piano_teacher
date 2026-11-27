@@ -1,10 +1,10 @@
 """A4: active and future scores share one exact notation/source contract."""
-from threading import RLock
 from types import SimpleNamespace
 
 import pytest
 
-from piano_teacher.application.score_artifacts import ScoreArtifacts, ScoreSelection
+from piano_teacher.application.score_artifacts import ScoreArtifacts
+from piano_teacher.application.score_selection import ScoreSelection
 
 
 def _bundle_source(*, hand="right", notes=None, layout_revision=4,
@@ -17,18 +17,17 @@ def _bundle_source(*, hand="right", notes=None, layout_revision=4,
         )),
         hand=hand, stage_key="stage:source", revision=4,
         fingerprint="source-sha")
-    assets = ScoreArtifacts.__new__(ScoreArtifacts)
-    assets._engraving_lock = RLock()
-    assets._geometry = lambda selection: {
+    assets = ScoreArtifacts(None, source, {})
+    assets.layout = {
         "revision": layout_revision, "anchors": {"right-1": {}}}
-    assets.semantic_score = lambda selection: {
+    assets.semantic = {
         "revision": model_revision, "active_note_ids": list(active_ids)}
-    return assets, source
+    return assets
 
 
 def test_bundle_binds_both_halves_to_one_source_and_original_note_ids():
-    assets, selected = _bundle_source()
-    bundle = assets.bundle(selected)
+    assets = _bundle_source()
+    bundle = assets.bundle()
     assert bundle["status"] == "ready"
     assert (bundle["fingerprint"], bundle["revision"], bundle["stage_key"],
             bundle["hand"]) == ("source-sha", 4, "stage:source", "right")
@@ -47,9 +46,9 @@ def test_bundle_binds_both_halves_to_one_source_and_original_note_ids():
     )},
 ])
 def test_bundle_rejects_mixed_revisions_and_incorrect_authored_attack_ids(changed):
-    assets, selected = _bundle_source(**changed)
+    assets = _bundle_source(**changed)
     with pytest.raises(ValueError, match="Score bundle"):
-        assets.bundle(selected)
+        assets.bundle()
 
 
 def test_current_practice_source_exposes_single_ready_bundle(practice_session):

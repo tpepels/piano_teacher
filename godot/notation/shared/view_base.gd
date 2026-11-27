@@ -30,7 +30,7 @@ var transport_id := -1
 var running := false
 var paused := false
 var density_locked := false
-var notice := "Waiting for /score/model"
+var notice := "Waiting for sheet music"
 var visible_onsets := 0
 
 func _init() -> void:
@@ -43,22 +43,10 @@ func clear_score() -> bool:
     var density: float = timeline.pixels_per_beat
     timeline = Timeline.new()
     timeline.set_density(density)
-    notice = "Waiting for /score/model"
+    notice = "Waiting for sheet music"
     visual_scroll_beat = 0.0
     practice_timeline.clear()
     practice_contract_error = ""
-    queue_redraw()
-    return true
-
-func load_score(candidate: Dictionary) -> bool:
-    if not timeline.load_model(candidate):
-        notice = timeline.last_error
-        queue_redraw()
-        return false
-    practice_timeline = candidate.get("practice_timeline",{}).duplicate(true)
-    density_locked = false
-    practice_contract_error = ""
-    notice = ""
     queue_redraw()
     return true
 

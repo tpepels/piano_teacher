@@ -12,7 +12,6 @@ from .control_projection import project_controls
 from .screen_projection import project_screen
 from ..practice_flow_course import checkpoints
 from ..live_feedback import live_assessment
-from ..notation.display_envelope import display_envelope
 from ..music import source_note_id
 from .session_snapshot_builder import SnapshotValues, capture as capture_session_snapshot
 from ..state_projection import SessionSnapshot, project_session_state
@@ -204,7 +203,7 @@ class SessionReadModels:
         self._annotation_values = {}
 
     def _publish_annotations(self, state: dict) -> None:
-        """A compact, source-bound overlay, independent of physical score ink.
+        """Corrections for the selected musical notes, independent of geometry.
 
         Cache the display-window assignments across state polls. A correction
         may recompute adjacent fingers, so send the complete window, including
@@ -220,10 +219,8 @@ class SessionReadModels:
         selected = self.score.selection()
         key = selected.identity
         if self._annotation_plan is not fingering or self._annotation_key != key:
-            envelope = display_envelope(selected.piece, selected.phrase,
-                                        transformed=selected.transformed_rhythm)
             values = {}
-            for i, note in enumerate(envelope.phrase.notes):
+            for i, note in enumerate(selected.phrase.notes):
                 source = source_note_id(note, i)
                 assignment = fingering.assignments.get(source)
                 if assignment is not None and assignment.finger is not None:

@@ -83,7 +83,10 @@ func paint_retained_rest(canvas: CanvasItem) -> void:
     var gap: float = staff_gap()
     var silence: Dictionary = practice_timeline["gap"].duplicate(true)
     silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
-    var incoming: Variant = timeline.measures[0].get("left_barline")
+    var opening: Dictionary = timeline.measures[0]
+    silence["keys"] = opening["keys"]
+    silence["clefs"] = opening["clefs"]
+    var incoming: Variant = opening.get("left_barline")
     if incoming is Dictionary:
         silence["right_barline"] = incoming
     var frame: RenderPass = new_paint_frame(0.0,0.0,gap,0,0.0)

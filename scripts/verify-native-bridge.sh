@@ -22,6 +22,7 @@ PY_SITE="$("$PYTHON" -c 'import site; print(site.getsitepackages()[0])')"
 PY_BASE="$("$PYTHON" -c 'import sys; print(sys.base_prefix)')"
 PY_LIB="$("$PYTHON" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')"
 export PIANO_TEACHER_PYTHON_HOME="$PY_BASE"
+export PIANO_PYTHON="$PYTHON"
 export PYTHONPATH="$PWD:$PY_SITE${PYTHONPATH:+:$PYTHONPATH}"
 if [[ -n "$PY_LIB" ]]; then
   export LD_LIBRARY_PATH="$PY_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"

@@ -12,7 +12,6 @@ from typing import Protocol, Sequence
 from ..assessment_service import AssessmentService
 from ..exercise_contracts import TempoMap
 from ..feedback import project_assessment
-from ..measure_grid import phrase_grid
 from ..music import Phrase
 from ..practice import Assessment, PlayedNote, evaluate
 from ..timed_assessment import assess_timed_window, timed_live_marks
@@ -25,8 +24,7 @@ class PracticeTimingPolicy(Protocol):
 
     def live(self, phrase: Phrase, *, hand: str, bpm: float,
              played: Sequence[PlayedNote], from_beat: float,
-             elapsed_seconds: float, bar_boundaries: Sequence[float],
-             layout: dict, tempo: TempoMap | None) -> list[dict]: ...
+             elapsed_seconds: float, tempo: TempoMap | None) -> list[dict]: ...
 
 
 
@@ -43,12 +41,11 @@ class FixedTimingPolicy:
                 source, hand, bpm, events, grade_note_holds=self.grade_note_holds))
 
     def live(self, phrase, *, hand, bpm, played, from_beat,
-             elapsed_seconds, bar_boundaries, layout, tempo):
+             elapsed_seconds, tempo):
         return self.assessment.live_marks(
             phrase=phrase, hand=hand, bpm=bpm, played=list(played),
             played_from_beat=from_beat, elapsed_seconds=elapsed_seconds,
-            bar_boundaries=bar_boundaries, layout=layout,
-            projector=project_assessment, grade_note_holds=self.grade_note_holds)
+            grade_note_holds=self.grade_note_holds)
 
 
 
@@ -68,11 +65,10 @@ class MappedTimingPolicy:
             grade_note_holds=self.grade_note_holds)
 
     def live(self, phrase, *, hand, bpm, played, from_beat,
-             elapsed_seconds, bar_boundaries, layout, tempo):
+             elapsed_seconds, tempo):
         return timed_live_marks(
             phrase, hand, self._require(tempo), played, from_beat=from_beat,
             elapsed_seconds=elapsed_seconds,
-            grid=phrase_grid(phrase, bar_boundaries), layout=layout,
             grade_note_holds=self.grade_note_holds)
 
 
@@ -95,7 +91,6 @@ class PracticeAssessmentPolicies:
     def live_projection(self, phrase: Phrase, *, hand: str, bpm: float,
                         played: Sequence[PlayedNote], from_beat: float,
                         elapsed_seconds: float,
-                        bar_boundaries: Sequence[float], layout: dict,
                         tempo: TempoMap | None) -> list[dict]:
         """Project live note status with the one selected grading policy.
 
@@ -107,7 +102,7 @@ class PracticeAssessmentPolicies:
             marks = self.select(tempo).live(
                 phrase, hand=hand, bpm=bpm, played=played,
                 from_beat=from_beat, elapsed_seconds=elapsed_seconds,
-                bar_boundaries=bar_boundaries, layout=layout, tempo=tempo)
+                tempo=tempo)
         except (ValueError, RuntimeError, KeyError):
             return []
         for mark in marks:
@@ -119,11 +114,11 @@ class PracticeAssessmentPolicies:
 
     @staticmethod
     def project(result: Assessment, phrase: Phrase, *, bpm: float,
-                layout: dict, from_beat: float, tempo: TempoMap | None) -> dict:
+                from_beat: float, tempo: TempoMap | None) -> dict:
         elapsed_to_beat = None
         if tempo is not None:
             offset = tempo.seconds_at(from_beat)
             elapsed_to_beat = lambda seconds: tempo.beat_at(offset + seconds)
         return project_assessment(
-            result, phrase, bpm, layout, played_from_beat=from_beat,
+            result, phrase, bpm, played_from_beat=from_beat,
             elapsed_to_beat=elapsed_to_beat)

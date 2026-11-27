@@ -103,7 +103,6 @@ class FullPassageFacts:
     assessed_bpm: float | None
     duration: float
     now: float
-    source_model: dict
 
 
 @dataclass(frozen=True, slots=True)

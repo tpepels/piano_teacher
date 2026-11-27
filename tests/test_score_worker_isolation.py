@@ -1,38 +1,13 @@
-"""Exercise source-bound asset preparation under deliberate concurrency."""
+"""Source-bound preparation while the real engine still receives MIDI."""
 
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event
+from pathlib import Path
 
 import pytest
 
-from piano_teacher.application.score_artifact_registry import ScoreArtifactRegistry
-from piano_teacher.application.score_artifacts import ScoreArtifacts
 from piano_teacher.inprocess import INVALID
-
-
-def test_retiring_artifacts_does_not_wait_for_old_engraving():
-    old = ScoreArtifacts(None)
-    registry = ScoreArtifactRegistry(old)
-    entered, release = Event(), Event()
-
-    def engrave():
-        with old._engraving_lock:
-            entered.set()
-            assert release.wait(5)
-
-    with ThreadPoolExecutor(max_workers=2) as workers:
-        active = workers.submit(engrave)
-        try:
-            assert entered.wait(5)
-            retired = workers.submit(registry.invalidate)
-            retired.result(timeout=1)
-            assert registry.current is not old
-            with pytest.raises(ValueError, match="superseded"):
-                old.require_active()
-        finally:
-            release.set()
-        active.result(timeout=5)
 
 
 def identity(state):
@@ -55,80 +30,41 @@ def test_stale_bundle_request_is_rejected_before_engraving(practice_session):
     assert session.ask("score.bundle", **current)["revision"] == current["revision"]
 
 
-def test_source_navigation_rejects_inflight_bundle(practice_session, monkeypatch):
+@pytest.mark.parametrize("change", ["navigate", "stop", "replace"])
+def test_retired_bundle_cannot_publish(practice_session, monkeypatch, change):
     session = practice_session(bars=3)
     expected = identity(session.snapshot())
-    old = session.engine.score.current_artifacts
-    entered, release = Event(), Event()
+    supervisor = session.engine.score_read.process
+    supervisor.cache.mkdir(parents=True)
+    peer = Path(__file__).parent / "fixtures" / "score_worker_peer.py"
+    marker = supervisor.cache / "hang"
 
-    def blocked_bundle(_selected):
-        with old._engraving_lock:
-            entered.set()
-            assert release.wait(5)
-            return {"revision": expected["revision"]}
-
-    monkeypatch.setattr(old, "bundle", blocked_bundle)
-    with ThreadPoolExecutor(max_workers=2) as workers:
-        active = workers.submit(
-            session.commands.request, "score.bundle", json.dumps(expected)
-        )
+    with monkeypatch.context() as patch, ThreadPoolExecutor(1) as executor:
+        patch.setattr(supervisor, "worker_args", (str(peer), "hang"))
+        result = executor.submit(
+            session.commands.request, "score.bundle", json.dumps(expected))
         try:
-            assert entered.wait(5)
-            navigation = workers.submit(session.select, 2, 2)
-            navigation.result(timeout=3)
-            assert session.snapshot()["revision"] != expected["revision"]
-            assert session.engine.score.current_artifacts is not old
-            with pytest.raises(ValueError, match="superseded"):
-                old.require_active()
-        finally:
-            release.set()
-        status, response = active.result(timeout=5)
-    assert status == INVALID
+            deadline = time.monotonic() + 5
+            while not marker.exists() and time.monotonic() < deadline:
+                time.sleep(.005)
+            assert marker.exists(), "The subprocess never received the score request"
+            inputs = session.snapshot()["midi_input_count"]
+            session.strike(72)
+            session.tick()
+            assert session.snapshot()["midi_input_count"] == inputs + 1
+            if change == "navigate":
+                session.select(2, 2)
+            elif change == "stop":
+                session.command("stop")
+            else:
+                from session_inputs import write_midi
+                replacement = write_midi(Path(session.music) / "replacement.mid", bars=3, bpm=100)
+                session.ask("library.open", id=replacement.name)
+        except BaseException:
+            supervisor.close()
+            raise
+        code, response = result.result(5)
+    assert code == INVALID
     assert "superseded during" in json.loads(response)["error"]
-
-
-def test_navigation_cannot_wait_for_retired_model_lock(practice_session):
-    session = practice_session(bars=3)
-    first = identity(session.snapshot())
-    old = session.engine.score.current_artifacts
-    entered, release = Event(), Event()
-
-    def hold_model():
-        with old._model_lock:
-            entered.set()
-            assert release.wait(5)
-
-    with ThreadPoolExecutor(max_workers=2) as workers:
-        held = workers.submit(hold_model)
-        try:
-            assert entered.wait(5)
-            navigation = workers.submit(session.select, 2, 2)
-            navigation.result(timeout=3)
-            assert identity(session.snapshot()) != first
-            assert session.engine.score.current_artifacts is not old
-        finally:
-            release.set()
-        held.result(timeout=5)
-
-
-def test_warm_snapshot_does_not_wait_for_current_model_projection(practice_session):
-    session = practice_session(bars=3)
-    first = identity(session.snapshot())
-    assets = session.engine.score.current_artifacts
-    entered, release = Event(), Event()
-
-    def hold_projection():
-        with assets._model_lock:
-            entered.set()
-            assert release.wait(5)
-
-    with ThreadPoolExecutor(max_workers=2) as workers:
-        held = workers.submit(hold_projection)
-        try:
-            assert entered.wait(5)
-            snapshot = workers.submit(session.snapshot)
-            assert identity(snapshot.result(timeout=2)) == first
-            assert session.engine.score.current_artifacts is assets
-        finally:
-            release.set()
-        held.result(timeout=5)
+    current = identity(session.snapshot())
+    assert session.ask("score.bundle", **current)["revision"] == current["revision"]

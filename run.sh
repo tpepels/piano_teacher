@@ -49,6 +49,5 @@ if [[ ! -f "$stamp" || "$(cat "$stamp")" != "$signature" ]]; then
     printf '%s\n' "$signature" > "$tmp"
     mv -f "$tmp" "$stamp"
 fi
-# Spoken count-in clips are tracked assets. No network, installer, or
-# background process is involved in launching or playing an exercise.
+# Spoken count-in clips are tracked assets. The score worker uses local IPC.
 exec "$GODOT" --path godot -- "$@"

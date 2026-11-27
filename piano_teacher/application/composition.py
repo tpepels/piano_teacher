@@ -70,8 +70,7 @@ from .transport_actions import (
 from .learning_actions import LearningActions
 from .practice_timeline import PracticeTimeline
 from .recovery_workflows import SelectedRecovery
-from .score_artifact_registry import ScoreArtifactRegistry
-from .score_artifacts import ScoreArtifacts
+from .score_process import ScoreProcess
 from .score_read_services import ScoreReadServices
 from .score_state_publisher import ScoreStatePublisher
 from .session_evidence_context import SessionEvidenceContext
@@ -164,13 +163,11 @@ def _devices_library_and_score(r, *, enable_midi, data_dir) -> None:
     r.listen = ListenSession(data_dir / "demo-audio", lock=r.lock)
     r.fingering = FingeringService(data_dir / "fingering")
     r.preprocessing = PreprocessingCache(data_dir / "preprocessed")
-    r.score_artifact_registry = ScoreArtifactRegistry(ScoreArtifacts(r.preprocessing))
     r.teaching_continuation = TeachingContinuation(r.visual_transport)
     # The untimed guided engine owns repeat presentation epochs; no
     # Godot-side guess about missed notes or lesson progression.
     r.score_state_publisher = ScoreStatePublisher()
-    r.score = Score(artifacts=r.score_artifact_registry,
-        successor=r.teaching_continuation, publisher=r.score_state_publisher,
+    r.score = Score(successor=r.teaching_continuation, publisher=r.score_state_publisher,
         tempo_maps=r.tempo_map_cache)
 
 
@@ -231,7 +228,7 @@ def _lesson_source_and_settings_workflows(r) -> None:
     """Lesson decisions, exposures, source/settings/device workflows."""
     r.plans = PlanReinstallation(
         lesson=r.lesson,
-        transport=r.transport, score=r.score)
+        transport=r.transport)
     r.history_reads = HistoryReads(
         lesson=r.lesson, learning_evidence=r.learning_evidence,
         progress=r.progress, data_dir=r._data_dir)
@@ -295,8 +292,8 @@ def _lesson_source_and_settings_workflows(r) -> None:
         progress=r.progress, lifecycle=r.session_lifecycle, course=r.course)
 
     r.score_read = ScoreReadServices(
-        lesson=r.lesson, take=r.take, transport=r.transport,
-        score_artifact_registry=r.score_artifact_registry,
+        lesson=r.lesson, transport=r.transport,
+        process=ScoreProcess(r._data_dir / "score-preprocessed"),
         learner_progress=r.learner_progress, lock=r.lock)
     r.score.attach_read(r.score_read)
 
@@ -329,14 +326,14 @@ def _transport_and_completion(r) -> None:
         phase=r.session_phase.at, clock=r.now)
 
     r.live_feedback_workflows = LiveFeedbackWorkflows(
-        lesson=r.lesson, transport=r.transport, score=r.score,
+        lesson=r.lesson, transport=r.transport,
         policy_registry=r.policy_registry, library=r.library, take=r.take,
         live_assessment=r.live_assessment, transport_timing=r.transport_timing,
         clock=r.now)
 
     r.take_grading = TakeGrading(
         lesson=r.lesson, take=r.take, transport=r.transport,
-        transport_timing=r.transport_timing, score=r.score,
+        transport_timing=r.transport_timing,
         policy_registry=r.policy_registry,
         assessment=r.assessment,
         live_feedback_workflows=r.live_feedback_workflows,
@@ -364,7 +361,7 @@ def _transport_and_completion(r) -> None:
             learner_snapshot=r.navigation.learner_snapshot,
             elapsed_beat=r.transport_timing.elapsed_beat,
             phase=r.session_phase.at,
-            source_model=r.score.source_model,
+            practice_timing=r.score.practice_timing,
             live_feedback=r.live_feedback_workflows.latest_marks,
             active_tempo_map=r.transport_timing.active_tempo_map,
             display_phrase=lambda: r.lesson.display_phrase(

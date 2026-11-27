@@ -14,17 +14,11 @@ def _failed(stage: str, exc: Exception) -> NativeScorePreparationError:
         f"Native score {stage} preparation failed: {type(exc).__name__}: {exc}")
 
 
-def _no_checkpoint() -> None:
-    """Standalone callers need no cancellation scope."""
-
-
 def assemble_layout(source_score, *,
                     notation_model: dict,
                     notation_xml: str,
                     cache=None, cache_key: str = "",
-                    revision: int | None = None,
-                    checkpoint=_no_checkpoint) -> dict:
-    checkpoint()
+                    revision: int | None = None) -> dict:
     if notation_model is None or not notation_xml:
         raise ValueError("Score preparation requires selected notation and semantic model")
     from ..notation.assets.glyphs import native_glyphs, preparation_symbols
@@ -40,9 +34,7 @@ def assemble_layout(source_score, *,
     from ..notation.assets.chords import chord_templates
     # Variable chord shapes are pre-engraved individually and
     # reused via a disk cache.
-    checkpoint()
     layout["native_note_templates"] = note_templates(cache)
-    checkpoint()
     # Missing required Verovio assets cannot be published as a partially
     # usable native score. The caller retries the same selected source.
     try:
@@ -52,7 +44,6 @@ def assemble_layout(source_score, *,
     # These fragments are cut directly from this lesson's original
     # Verovio engraving. They retain the two real note identities,
     # leaving the Godot transport in complete control of timing.
-    checkpoint()
     try:
         from ..notation.assets.beams import (
             beam_fragments, expected_beam_groups)
@@ -67,7 +58,6 @@ def assemble_layout(source_score, *,
                   len(layout["native_beam_fragments"]))
     except Exception as exc:
         raise _failed("beam fragments", exc) from exc
-    checkpoint()
     try:
         directions = {str(identifier): bool(fragment["stem_up"])
             for fragment in layout["native_beam_fragments"].values()
@@ -79,7 +69,6 @@ def assemble_layout(source_score, *,
             pages=source_score.pages)
     except Exception as exc:
         raise _failed("chord templates", exc) from exc
-    checkpoint()
     try:
         from ..notation.assets.tuplets import tuplet_fragments
         layout["native_tuplet_fragments"] = tuplet_fragments(
@@ -87,7 +76,6 @@ def assemble_layout(source_score, *,
             cache, cache_key, notation_xml=notation_xml)
     except Exception as exc:
         raise _failed("tuplet fragments", exc) from exc
-    checkpoint()
     try:
         from ..notation.assets.slurs import (
             slur_fragments, slur_pairs_from_xml)
@@ -105,6 +93,5 @@ def assemble_layout(source_score, *,
             cache_key)
     except Exception as exc:
         raise _failed("slur fragments", exc) from exc
-    checkpoint()
     return layout
 

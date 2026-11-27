@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from functools import cached_property
 from typing import Protocol, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -43,15 +44,20 @@ class FingeringPlan:
     error: str = ''
     schema: int = 1
 
-    def summary(self) -> dict:
+    @cached_property
+    def _summary(self) -> dict:
         known = sum(a.finger is not None for a in self.assignments.values())
         return {'status': self.status, 'provider': self.provider,
                 'source_fingerprint': self.source_fingerprint,
                 'assigned': known, 'unknown': len(self.assignments)-known,
                 'manual': sum(a.manual is not None for a in self.assignments.values()),
                 'review': sum(a.finger is not None and bool(a.reason) for a in self.assignments.values()),
-                'issues': list(dict.fromkeys(a.reason for a in self.assignments.values() if a.reason))[:8],
+                'issues': tuple(dict.fromkeys(
+                    a.reason for a in self.assignments.values() if a.reason))[:8],
                 'error': self.error}
+
+    def summary(self) -> dict:
+        return {**self._summary, 'issues': list(self._summary['issues'])}
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -46,6 +46,7 @@ cat > "$STAGE/PianoTeacher" <<'LAUNCH'
 set -Eeuo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 export PIANO_TEACHER_PYTHON_HOME="$HERE/runtime/python"
+export PIANO_PYTHON="$HERE/runtime/python/bin/python3"
 export PYTHONHOME="$HERE/runtime/python"
 export LD_LIBRARY_PATH="$HERE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 PY_VER="$("$HERE/runtime/python/bin/python3" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
@@ -54,7 +55,7 @@ export PATH="$HERE/bin:$PATH"
 # CI verifies the installed *package*, from a relocated clean extraction.
 # This opt-in mode never touches normal desktop startup or the score clock.
 if [[ "${PIANO_TEACHER_HEADLESS_SMOKE:-0}" == "1" ]]; then
-  exec "$HERE/bin/godot" --headless --audio-driver Dummy --quit-after 180 \
+  exec "$HERE/bin/godot" --headless --audio-driver Dummy --quit-after 1200 \
     --path "$HERE/godot" -- --in-process
 fi
 exec "$HERE/bin/godot" --path "$HERE/godot" -- --in-process "$@"
@@ -75,7 +76,7 @@ PY
 # one entry scene; test scripts and their imported .uid files are excluded.
 rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot"
 rm -f "$STAGE/godot/.mcp.json"
-for fixture in native_bridge_smoke production_ui_smoke production_session_journey; do
+for fixture in native_bridge_smoke production_ui_smoke production_session_journey production_fake_midi_journey; do
   rm -f "$STAGE/godot/$fixture.gd" "$STAGE/godot/$fixture.gd.uid"
 done
 python3 scripts/verify-package-contents.py --root "$STAGE" --package

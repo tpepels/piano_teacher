@@ -14,7 +14,7 @@ from ..music import Phrase
 from ..practice import Assessment, PlayedNote
 from ..exercise_contracts import TempoMap
 from .practice_assessment import PracticeAssessmentPolicies
-from .score_artifacts import ScoreSelection
+from .score_selection import ScoreSelection
 
 
 @dataclass(slots=True)
@@ -268,8 +268,7 @@ class AttemptSettlement:
             piece=chosen.piece,phrase=chosen.stage.variant.phrase,
             hand=chosen.hand,stage_key=chosen.key,revision=score_revision+1,
             fingerprint=state.binding.fingerprint,
-            transformed_rhythm=chosen.stage.transformed_rhythm,
-            display_name=str(chosen.stage.display_name or "")) if changed else None)
+            transformed_rhythm=chosen.stage.transformed_rhythm) if changed else None)
         source = state.course.stage.variant.phrase
         duration = source.sounding_end-source.start
         outcome = self.settle(pending,plan=plan,binding=binding,now=now,
@@ -282,7 +281,7 @@ class AttemptSettlement:
         self, *, phrase: Phrase, hand: str, bpm: float,
         played: Sequence[PlayedNote], from_beat: float, end_beat: float,
         tempo: TempoMap | None, policies: PracticeAssessmentPolicies,
-        layout_for_feedback: Callable[[], dict], mode: str,
+        mode: str,
         performance_review: Callable[[Phrase, Assessment], dict],
         prepare_decision: Callable, plan,
         binding: TeachingBinding, now: float,
@@ -300,7 +299,7 @@ class AttemptSettlement:
             assessed = assess_completed_take(
                 phrase=phrase,hand=hand,bpm=bpm,played=frozen_played,
                 from_beat=from_beat,end_beat=end_beat,tempo=tempo,
-                policies=policies,layout_for_feedback=layout_for_feedback)
+                policies=policies)
             result = assessed.result
             route = completion_route(mode)
             summary = performance_review(phrase,result)

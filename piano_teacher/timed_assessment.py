@@ -52,11 +52,10 @@ def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
 
 def timed_live_marks(phrase: Phrase, hand: str, tempo: TempoMap,
                      played: Sequence[PlayedNote], *, from_beat: float,
-                     elapsed_seconds: float, grid: Sequence[float],
-                     layout: dict, grade_note_holds: bool = False) -> list[dict]:
+                     elapsed_seconds: float, grade_note_holds: bool = False) -> list[dict]:
     """Project the same canonical observation stream using the tempo map."""
     result = live_assessment(
         phrase, hand, 60, list(played), from_beat=from_beat,
         elapsed_seconds=elapsed_seconds, tempo=tempo,
         grade_note_holds=grade_note_holds)
-    return project_assessment(result, phrase, 60, layout)["marks"]
+    return project_assessment(result, phrase, 60)["marks"]

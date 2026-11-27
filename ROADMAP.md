@@ -41,6 +41,19 @@ The separate final examination uses the whole original piece.
 | 2026-11-24 | Import MusicXML again (as the same MIDI timeline). Remove the Lesson path; add checkpoints every 4 measures. Game-style menus; 4.3 staff spaces per sixteenth; header glyphs never touch; status colour bleeds from the head. |
 | 2026-11-24 | The course is a list of steps with a cursor; the aid is a phase; after a jump back, mastered windows are skipped. Tempo rises by 10% × (1 + timing quality) × length factor. MusicXML fingerings are kept. Calibration gets its own page and a tolerant measurement. Every control type gets its own visible look. |
 
+## Multiprocess score generation (S1–S5, 2026-11-27)
+
+| Phase | Work and acceptance | Status |
+| --- | --- | --- |
+| S1 | Record a baseline under score load. Derive preparation timing from the selected musical source, and publish grading and Free feedback by source-note ID. Verify pickup, meter, sounding tails and note judgments in the existing journeys. | Implemented |
+| S2 | Run the single notation and asset pipeline in a persistent exec-launched CPython worker. Transfer a value snapshot of the selected source and authoritative timing in bounded frames. Keep the generation cache in the child. | Implemented |
+| S3 | Reuse the native mailbox to supervise one active request. Bind every exchange to request and selection identity, prioritize current work, cancel obsolete work, enforce deadlines, and reap and replace failed children. Validate before delivering bytes to detached Godot preparation. | Implemented |
+| S4 | Exercise source replacement, navigation, Retry, Stop, saturation, malformed and stale replies, crashes, timeouts, large bundles and shutdown. Run native journeys and the relocated standalone package with its bundled Python. | Final verification running |
+| S5 | Compare MIDI callback, engine tick, frame and generation intervals, memory and IPC costs. Document source loading, fingering, Listen audio and main-thread installation costs. Record physical acceptance separately. | Local measurements recorded. Piano acceptance pending. |
+
+[Worker contract and measurements](docs/asset-worker.md) describe the live
+process, the publication boundaries and the remaining latency sources.
+
 ## Musical timeline rebuild (T1–T6, adopted 2026-11-24)
 
 Owner request: between-take placement must make musical sense (a repeat

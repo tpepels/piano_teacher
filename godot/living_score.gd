@@ -52,7 +52,6 @@ static func cue(groups: Array, beat: float, assessed: Array = [],
             continue
         var status: String = str(mark.get("status", ""))
         if status in ["correct", "wrong", "missed", "early", "late", "short", "long", "assisted"]:
-            consumed[str(mark.get("note_id", mark.get("id", "")))] = true
             consumed[str(mark.get("source_id", ""))] = true
     var emphasis: float = clampf(
         1.0 - maxf(0.0, onset-beat) / lead_beats, 0.0, 1.0)

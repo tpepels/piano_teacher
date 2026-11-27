@@ -93,11 +93,10 @@ class AssessmentService:
 
     def live_marks(self, *, phrase: Phrase, hand: str, bpm: float, played,
                    played_from_beat: float, elapsed_seconds: float,
-                   bar_boundaries, layout: dict, projector=project_assessment,
                    grade_note_holds: bool = False) -> list[dict]:
         """Project the canonical scorer's current observations."""
         result = live_assessment(
             phrase, hand, bpm, list(played), from_beat=played_from_beat,
             elapsed_seconds=elapsed_seconds, grade_note_holds=grade_note_holds)
-        return projector(result, phrase, bpm, layout,
+        return project_assessment(result, phrase, bpm,
                          played_from_beat=played_from_beat)["marks"]

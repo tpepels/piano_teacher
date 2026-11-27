@@ -13,6 +13,7 @@ import math
 from xml.etree import ElementTree as ET
 from ..music import Phrase, source_note_id
 from ..measure_grid import phrase_grid
+from ..source_timing import source_meter
 from .midi_beaming import beam_midi_measure
 from .piano_registers import distribute_piano_registers
 
@@ -30,16 +31,6 @@ class LessonScore:
 
 def _ticks(beat: float) -> int:
     return round(beat * DIVISIONS)
-
-
-def _signature(beats: float) -> tuple[int, int]:
-    # Only a fallback when the source supplies no explicit meter context.
-    fraction = Fraction(beats).limit_denominator(16)
-    if abs(float(fraction) - beats) > .005:
-        raise ValueError(f"Cannot express exercise bar duration: {beats}")
-    if fraction.denominator == 1:
-        return fraction.numerator, 4
-    return fraction.numerator, 4 * fraction.denominator
 
 
 def _pitch(parent: ET.Element, value: int, spelling=None) -> None:
@@ -713,6 +704,9 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
     grid = phrase_grid(phrase, boundaries)
     bars = len(grid) - 1
     changes = sorted(time_signatures)
+    if any(not math.isfinite(beat) or numerator <= 0 or denominator <= 0
+           for beat, numerator, denominator in changes):
+        raise ValueError("Invalid imported time signature")
     barline_at = {}
     for mark in barlines:
         key = (round(mark.beat, 8), mark.location)
@@ -741,10 +735,6 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             measure.insert(index, tag)
         else:
             measure.append(tag)
-
-    def meter_at(beat: float, length: float) -> tuple[int, int]:
-        active = [(n, d) for offset, n, d in changes if offset <= beat + 1e-7]
-        return active[-1] if active else _signature(length)
 
     root = ET.Element("score-partwise", version="4.0")
     work = ET.SubElement(root, "work")
@@ -791,7 +781,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             bar_start, bar_end = _ticks(grid[b]), _ticks(grid[b+1])
             if bar_end <= bar_start:
                 raise ValueError("Source measure has no duration")
-            beats, beat_type = meter_at(phrase.start + grid[b], grid[b+1] - grid[b])
+            beats, beat_type = source_meter(phrase.start + grid[b], grid[b+1] - grid[b], changes)
             if beats <= 0 or beat_type <= 0:
                 raise ValueError("Invalid imported time signature")
             measure = ET.SubElement(part, "measure", number=str(phrase.first_bar+b))

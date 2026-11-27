@@ -231,7 +231,7 @@ func paint_note(canvas, frame: RenderPass, event: Dictionary, x: float,
 
 
 func paint_beams(canvas, frame: RenderPass, data: Dictionary, gap: float) -> void:
-    # There is no primitive-polygon fallback: load_score() already checked
+    # There is no primitive-polygon fallback: native preparation already checked
     # that each expected multi-note group has genuine Verovio beam ink.
     for group in data.get("groups",[]):
         var members: Array = group.get("members",[])

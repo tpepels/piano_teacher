@@ -11,6 +11,7 @@ import os
 import time
 import traceback
 
+from .application.score_ipc import BINDING_FIELDS, DEADLINE_SECONDS, OPERATIONS
 from .server import PracticeEngine
 
 OK = 0
@@ -28,7 +29,6 @@ class EngineCommands:
         "settings.snapshot": "preferences",
         "learning.status": "learning_history_status",
         "performance.diagnostics": "performance_diagnostics",
-        "score.semantic": "semantic_score",
     }
 
     def __init__(self, *, engine: PracticeEngine | None = None):
@@ -43,7 +43,29 @@ class EngineCommands:
     def _reply(status: int, value: object) -> tuple[int, bytes]:
         return status, json.dumps(value, separators=(",", ":")).encode("utf-8")
 
-    def request(self, operation: str, payload_json: str = "") -> tuple[int, bytes]:
+    def asset_request(self, operation: str, payload: str, timeout: float, cancelled):
+        return self.request(operation, payload, timeout=timeout, cancelled=cancelled)
+
+    def poll_asset_worker(self) -> None:
+        self.engine.score_read.process.poll()
+
+    def close_asset_worker(self) -> None:
+        self.engine.score_read.process.close()
+
+    def _score_request(self, operation, values, *, cancelled, timeout):
+        if values.keys() - {"generation", "rejected_generation"} != set(BINDING_FIELDS) and values:
+            raise ValueError("Score request needs a complete source identity")
+        for field in ("revision", "generation", "rejected_generation"):
+            if field in values and (type(values[field]) is not int or values[field] < 0):
+                raise ValueError(f"Score {field} must be a nonnegative integer")
+        if ("rejected_generation" in values and
+                values["rejected_generation"] >= values.get("generation", -1)):
+            raise ValueError("A score retry must advance its cancellation generation")
+        return self.engine.score_read.prepare(operation, values, cancelled=cancelled,
+                                              timeout=timeout)
+
+    def request(self, operation: str, payload_json: str = "", *,
+                cancelled=None, timeout=DEADLINE_SECONDS) -> tuple[int, bytes | bytearray]:
         started = time.perf_counter()
         try:
             values = json.loads(payload_json) if payload_json else {}
@@ -67,12 +89,12 @@ class EngineCommands:
                 return self._reply(OK, self.drain_feedback_events(acknowledged))
             if operation == "midi.devices":
                 return self._reply(OK, {"devices": engine.ports()})
-            if operation == "score.bundle":
-                if values and set(values) != {"fingerprint", "revision", "stage_key", "hand"}:
-                    raise ValueError("Score request needs a complete source identity")
-                return self._reply(OK, engine.score_bundle(values or None))
-            if operation == "score.native_layout":
-                return self._reply(OK, engine.geometry())
+            if operation in OPERATIONS:
+                if cancelled is not None and "generation" not in values:
+                    raise ValueError("Native score request needs a cancellation generation")
+                if timeout <= 0:
+                    raise TimeoutError("Score request exceeded its deadline in the queue")
+                return self._score_request(operation, values, cancelled=cancelled, timeout=timeout)
             if operation == "playback.status":
                 if values:
                     raise ValueError("playback.status takes no input")
@@ -142,7 +164,7 @@ class EngineCommands:
                 return self._reply(UNKNOWN, {"error": f"Unknown operation: {operation}"})
             return self._reply(
                 OK, engine.state())
-        except (KeyError, ValueError, TypeError, RuntimeError) as exc:
+        except (KeyError, ValueError, TypeError, RuntimeError, TimeoutError) as exc:
             return self._reply(INVALID, {"error": str(exc)})
         except Exception as exc:
             traceback.print_exc()

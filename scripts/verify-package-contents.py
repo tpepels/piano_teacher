@@ -14,6 +14,7 @@ DEV_ONLY_GODOT_PATHS = (
     "godot/native_bridge_smoke.gd",
     "godot/production_ui_smoke.gd",
     "godot/production_session_journey.gd",
+    "godot/production_fake_midi_journey.gd",
 )
 
 
@@ -52,6 +53,7 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
             "godot/project.godot", "godot/native/piano_bridge.gdextension",
             "godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so",
             "runtime/python/bin/python3",
+            "piano_teacher/application/score_worker.py",
         ):
             if not (root / path).is_file():
                 result.append(f"Package missing required asset: {path}")

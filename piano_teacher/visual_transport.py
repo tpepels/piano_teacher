@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import math
 
-from .notation.practice_timeline import UNLOADED_GAP_BEATS
+from .source_timing import UNLOADED_GAP_BEATS
 from .application.musical_scheduler import SCHEDULER
 from .application.transport_commands import resume_timeline, resume_timing
 from .application.musical_timeline import MusicalTimeline

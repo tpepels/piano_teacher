@@ -48,6 +48,7 @@ var _annotation_version := -1
 # keep Browse visible rather than presenting an identical mysterious Retry.
 var _last_native_failure := ""
 var _retry_attempted := false
+var _recovered_bundle := false
 var _identical_failure_repeats := 0
 var _retained_started_ms := -1
 var _slow_status_published := false
@@ -151,6 +152,7 @@ func update_context(state: Dictionary, now_ms: int) -> void:
     _fingerprint = fingerprint
     _stage_key = stage_key
     if changed:
+        _recovered_bundle = false
         _last_native_failure = ""
         _retry_attempted = false
         _identical_failure_repeats = 0
@@ -246,10 +248,17 @@ func fail(message: String) -> void:
     _fail(message)
 
 func request_layout() -> bool:
-    if _closed or layout_pending or not _loaded or not score_error.is_empty():
+    if _closed or layout_pending or not _loaded or layout_revision == revision or \
+            not score_error.is_empty():
         return false
     _begin_request("bundle","score.bundle",90.0)
     return true
+
+func cancel_pending() -> void:
+    if not layout_pending:
+        return
+    _generation += 1
+    _cancel_preparation()
 
 func retry(now_ms: int) -> bool:
     if _closed or not _loaded:
@@ -258,6 +267,7 @@ func retry(now_ms: int) -> bool:
     # Persist the prior raw error across _reset_assets() for exact failure
     # comparison, but never carry it into a different score revision.
     _retry_attempted = true
+    _recovered_bundle = false
     _generation += 1
     if not _reset_assets():
         return false
@@ -293,14 +303,17 @@ func complete_response(kind: String, request_id: int, code: int,
     _queued = {"request":request,"body":body}
     _start_worker_if_possible()
 
-func _begin_request(kind: String, path: String, timeout: float) -> void:
+func _begin_request(kind: String, path: String, timeout: float, rejected_generation := -1) -> void:
     _next_request_id += 1
     _requests[kind] = {"id":_next_request_id,"generation":_generation,
         "revision":revision,"fingerprint":_fingerprint,
         "stage_key":_stage_key,"hand":str(_state.get("hand",""))}
     var identity := {
         "fingerprint":_fingerprint,"revision":revision,
-        "stage_key":_stage_key,"hand":str(_state.get("hand",""))}
+        "stage_key":_stage_key,"hand":str(_state.get("hand","")),
+        "generation":_generation}
+    if rejected_generation >= 0:
+        identity["rejected_generation"] = rejected_generation
     request_requested.emit(kind,_next_request_id,path,timeout,identity)
 
 func _take_request(kind: String, request_id: int) -> Dictionary:
@@ -352,7 +365,13 @@ func advance_preparation() -> void:
         var completed = _worker
         _worker = null
         if _request_is_current(completed.request):
-            if joined != OK or completed.result.has("error") or not completed.result.has("engraving"):
+            var invalid: bool = completed.result.get("invalid_bundle",false)
+            if invalid and not _recovered_bundle:
+                _recovered_bundle = true
+                _generation += 1
+                _begin_request("bundle","score.bundle",90.0,
+                    int(completed.request["generation"]))
+            elif joined != OK or not completed.result.has("engraving"):
                 _requests.erase("bundle")
                 _fail(str(completed.result.get("error","Score preparation did not produce an engraving")))
             elif not _same_preparation_viewport(completed):

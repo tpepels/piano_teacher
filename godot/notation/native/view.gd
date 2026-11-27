@@ -5,7 +5,6 @@ extends "res://notation/shared/view_base.gd"
 # the installed Verovio font, cached as individual Godot ImageTextures.
 # There is no full-page SVG bitmap or custom imitation of a music glyph.
 # Incomplete notation is rejected; production reports a preparation error.
-const Geometry := preload("res://notation/native/geometry.gd")
 const ViewportFit := preload("res://notation/native/viewport_fit.gd")
 const MAX_STAFF_GAP := ViewportFit.MAX_STAFF_GAP
 # A piano learner needs upcoming notation in view. Preserve the largest
@@ -217,56 +216,6 @@ func set_density_from_env() -> bool:
     if not super.set_density_from_env():
         return false
     configured_density = timeline.pixels_per_beat
-    return true
-
-func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
-        tie_items: Dictionary = {}, chord_items: Dictionary = {},
-        beam_items: Dictionary = {},
-        tuplet_items: Dictionary = {},
-        slur_items: Dictionary = {},
-        required_slurs: Array = [], slurs_complete: bool = true,
-        required_beams: Array = [], beams_complete: bool = true) -> bool:
-    if not _clear_retained_segments():
-        return false
-    native_ready = false
-    var ok: bool = engraving.load_assets(items,note_items,tie_items,chord_items,
-        beam_items,tuplet_items,slur_items,required_slurs,slurs_complete,
-        required_beams,beams_complete)
-    failure_reason = engraving.failure_reason
-    return ok
-
-func load_score(candidate: Dictionary) -> bool:
-    if not _clear_retained_segments():
-        return false
-    connector_geometry.clear_cache()
-    annotations.clear()
-    drawn_note_instances.clear()
-    native_ready = false
-    if not glyphs.ready() or not glyphs.note_ready() or not glyphs.ties_ready():
-        failure_reason = "Authentic Verovio symbol, note or tie atlas is not loaded"
-        notice = failure_reason
-        return false
-    failure_reason = Geometry.supported(candidate)
-    if not failure_reason.is_empty():
-        notice = failure_reason
-        return false
-    if not super.load_score(candidate):
-        failure_reason = notice
-        return false
-    if not _stream_controller.bind_source(candidate):
-        failure_reason = "Cannot recover offline score material: " + \
-            _stream_controller.source_identity_error()
-        notice = failure_reason
-        return false
-    if not engraving.prepare(configured_density,size,PLAYHEAD_FRACTION):
-        failure_reason = engraving.failure_reason
-        notice = failure_reason
-        return false
-    failure_reason = ""
-    if not _install_retained_segments():
-        return false
-    native_ready = true
-    queue_redraw()
     return true
 
 func _gui_input(event: InputEvent) -> void:

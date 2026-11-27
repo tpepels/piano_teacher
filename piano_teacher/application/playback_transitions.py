@@ -66,8 +66,7 @@ class PlaybackTransition:
     exposure: object
 
     @classmethod
-    def from_effect(cls, effect, *, action: str,
-                    source_changed: bool) -> "PlaybackTransition":
+    def from_effect(cls, effect, *, action: str) -> "PlaybackTransition":
         exposure = effect.decision.next_exposure
         if exposure is None:
             raise ValueError("No selected exposure for the playback request")
@@ -75,8 +74,6 @@ class PlaybackTransition:
             route = "listen"
         elif effect.state.route.mode == "learn" and exposure.mode == "practice":
             route = "prepare_practice"
-        elif source_changed:
-            route = "reload_score"
         elif exposure.mode == "learn":
             route = "learn"
         elif exposure.preparation == "rewind":

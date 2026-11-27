@@ -94,7 +94,8 @@ func _process(_delta: float) -> bool:
                     return true
                 fingerprint = str(values.get("piece_fingerprint",""))
                 print("PIANO_NATIVE_MIDI_OPEN_OK revision=",revision)
-                _submit("score.bundle")
+                _submit("score.bundle",{"fingerprint":fingerprint,"revision":revision,
+                    "stage_key":values["stage_key"],"hand":values["hand"],"generation":0})
             "score.bundle":
                 var layout: Variant = values.get("layout")
                 var model: Variant = values.get("model")

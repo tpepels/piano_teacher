@@ -54,7 +54,7 @@ class TimedStart:
             started = self.transport.begin_timed(
                 TimedTakeSource(p.active_phrase,p.piece.bar_boundaries,
                     p.piece.time_signatures,p.bpm,
-                    self.score.source_model()["practice_timeline"]["gap"]["duration_beats"]),
+                    self.score.practice_timing()["gap"]["duration_beats"]),
                 TimedStartRequest(mode=mode,
                     position=self.lesson.opening_beat if from_beat is None else from_beat,
                     automatic=selected.automatic if selected is not None else mode == "practice",

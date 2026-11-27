@@ -34,45 +34,56 @@ func _init(bytes: PackedByteArray, identity: Dictionary,
     viewport = viewport_size
     density = configured_density
 
-func run() -> void:
-    if _should_stop():
-        return
-    var started: int = Time.get_ticks_usec()
+func _decode_bundle() -> Dictionary:
     var document := JSON.new()
     if document.parse(body.get_string_from_utf8()) != OK or not document.data is Dictionary:
-        result = {"error":"Practice engine returned no source-bound score bundle"}
-        return
-    if _should_stop():
-        return
-    var bundle: Dictionary = document.data
-    var decoded: int = Time.get_ticks_usec()
+        result = {"invalid_bundle":true,
+            "error":"Practice engine returned no source-bound score bundle"}
+        return {}
+    return document.data
+
+func _validated_axis(bundle: Dictionary):
     var problem: String = NativeScoreAssets.bundle_error(bundle,{
         "fingerprint":request["fingerprint"],"revision":request["revision"],
         "hand":request["hand"],"stage_key":request["stage_key"]})
     if not problem.is_empty():
-        result = {"error":problem}
-        return
+        result = {"invalid_bundle":true,"error":problem}
+        return null
     var model: Dictionary = bundle["model"]
     problem = Geometry.supported(model)
     if not problem.is_empty():
-        result = {"error":problem}
-        return
+        result = {"invalid_bundle":true,"error":problem}
+        return null
     var axis := Timeline.new()
     if not axis.load_model(model):
-        result = {"error":axis.last_error}
-        return
+        result = {"invalid_bundle":true,"error":axis.last_error}
+        return null
+    return axis
+
+func _prepare_atlas(engraving, layout: Dictionary) -> bool:
+    engraving.glyphs.begin_cpu_preparation()
+    if not NativeScoreAssets.prepare_engraving(engraving,layout):
+        result = {"invalid_bundle":true,"error":engraving.failure_reason}
+        return false
     if _should_stop():
+        return false
+    engraving.glyphs.prepare_head_interiors()
+    return not _should_stop()
+
+func run() -> void:
+    if _should_stop():
+        return
+    var started: int = Time.get_ticks_usec()
+    var bundle: Dictionary = _decode_bundle()
+    if result.has("error") or _should_stop():
+        return
+    var decoded: int = Time.get_ticks_usec()
+    var axis = _validated_axis(bundle)
+    if axis == null or _should_stop():
         return
     var validated: int = Time.get_ticks_usec()
     var engraving := Engraving.new(axis)
-    engraving.glyphs.begin_cpu_preparation()
-    if not NativeScoreAssets.prepare_engraving(engraving,bundle["layout"]):
-        result = {"error":engraving.failure_reason}
-        return
-    if _should_stop():
-        return
-    engraving.glyphs.prepare_head_interiors()
-    if _should_stop():
+    if not _prepare_atlas(engraving,bundle["layout"]):
         return
     var atlas_at: int = Time.get_ticks_usec()
     if not engraving.prepare(density,viewport,Spacing.PLAYHEAD_FRACTION):

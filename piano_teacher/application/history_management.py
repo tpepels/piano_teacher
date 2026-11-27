@@ -36,10 +36,9 @@ class HistoryReads:
 class PlanReinstallation:
     """Install a fresh plan for the same piece at its first step."""
 
-    def __init__(self, *, lesson, transport, score):
+    def __init__(self, *, lesson, transport):
         self.lesson = lesson
         self.transport = transport
-        self.score = score
 
     def fresh_plan(self) -> LearningPlan | None:
         selected = self.lesson.plan
@@ -57,7 +56,6 @@ class PlanReinstallation:
         self.lesson.set_course_guided(False)
         self.transport.select_source()
         self.lesson.clear_guided_selection()
-        self.score.invalidate_artifacts()
         self.lesson.advance_revision()
 
 

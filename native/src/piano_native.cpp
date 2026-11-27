@@ -26,6 +26,25 @@ std::string utf8(const String &value) {
     return std::string(encoded.get_data(), encoded.length());
 }
 
+void store_bytes(PackedByteArray &bytes, const char *data, size_t count) {
+    bytes.resize(static_cast<int64_t>(count));
+    if (count != 0) std::memcpy(bytes.ptrw(), data, count);
+}
+
+struct CancellationProbe {
+    const void *context;
+    bool (*cancelled)(const void *);
+};
+
+PyObject *check_cancelled(PyObject *capsule, PyObject *) {
+    auto *probe = static_cast<CancellationProbe *>(
+        PyCapsule_GetPointer(capsule, "piano.score-cancellation"));
+    if (!probe) return nullptr;
+    return PyBool_FromLong(probe->cancelled(probe->context));
+}
+
+PyMethodDef cancellation_method = {"cancelled", check_cancelled, METH_NOARGS, nullptr};
+
 std::string python_error() {
     if (!PyErr_Occurred()) return "Unknown Python bridge failure";
     PyObject *type = nullptr, *value = nullptr, *traceback = nullptr;
@@ -139,17 +158,32 @@ void PianoNative::initialize_python() {
 }
 
 bool PianoNative::is_asset_operation(const std::string &operation) {
-    // Read-only operations whose Python side runs outside the engine lock
-    // (ScoreArtifacts serializes itself). Only these may leave worker_.
+    // Score process IPC and independent history reads use the asset lane.
     return operation == "score.bundle" ||
            operation == "score.native_layout" || operation == "score.semantic" ||
            operation == "learning.statistics";
 }
 
 void PianoNative::asset_loop() {
-    while (auto next = assets_.take()) {
-        assets_.complete(execute(*next));
+    while (!stopping_) {
+        auto next = assets_.take_for(std::chrono::milliseconds(250));
+        if (next) {
+            assets_.complete(execute(*next, next->operation != "learning.statistics"));
+        } else if (!stopping_) {
+            const auto gil = PyGILState_Ensure();
+            PyObject *result = PyObject_CallMethod(
+                static_cast<PyObject *>(engine_), "poll_asset_worker", nullptr);
+            Py_XDECREF(result);
+            if (PyErr_Occurred()) PyErr_Print();
+            PyGILState_Release(gil);
+        }
     }
+    const auto gil = PyGILState_Ensure();
+    PyObject *result = PyObject_CallMethod(
+        static_cast<PyObject *>(engine_), "close_asset_worker", nullptr);
+    Py_XDECREF(result);
+    if (PyErr_Occurred()) PyErr_Print();
+    PyGILState_Release(gil);
 }
 
 void PianoNative::worker_loop() {
@@ -242,36 +276,66 @@ int PianoNative::tick_engine() {
     return next_ms;
 }
 
-PianoNative::Reply PianoNative::execute(const Command &command) {
+PianoNative::Reply PianoNative::execute(const Command &command, bool subprocess_score) {
     Reply output{command.id, 3, {}};
     if (!engine_) {
         std::lock_guard<std::mutex> guard(mutex_);
         const std::string detail = failure_.empty() ? "Python bridge unavailable" : failure_;
-        output.bytes.assign(detail.begin(), detail.end());
+        store_bytes(output.bytes, detail.data(), detail.size());
         return output;
     }
     PyGILState_STATE gil = PyGILState_Ensure();
-    PyObject *response = PyObject_CallMethod(
-        static_cast<PyObject *>(engine_), "request", "ss",
-        command.operation.c_str(), command.body.c_str());
+    auto *engine = static_cast<PyObject *>(engine_);
+    PyObject *response = nullptr;
+    if (subprocess_score) {
+        struct Context {
+            PianoNative *bridge;
+            int64_t id;
+        } context{this, command.id};
+        CancellationProbe probe{&context, [](const void *data) {
+            const auto &ctx = *static_cast<const Context *>(data);
+            return ctx.bridge->assets_.cancelled(ctx.id);
+        }};
+        PyObject *capsule = PyCapsule_New(&probe, "piano.score-cancellation", nullptr);
+        PyObject *cancelled = capsule ? PyCFunction_New(&cancellation_method, capsule) : nullptr;
+        if (cancelled) {
+            const double queued = (monotonic_milliseconds() - command.enqueued_ms) * .001;
+            response = PyObject_CallMethod(engine, "asset_request", "ssdO",
+                command.operation.c_str(), command.body.c_str(), 85.0 - queued, cancelled);
+        }
+        Py_XDECREF(cancelled);
+        Py_XDECREF(capsule);
+    } else {
+        response = PyObject_CallMethod(engine, "request", "ss",
+            command.operation.c_str(), command.body.c_str());
+    }
     if (response && PyTuple_Check(response) && PyTuple_Size(response) == 2) {
         PyObject *status = PyTuple_GetItem(response, 0);
         PyObject *payload = PyTuple_GetItem(response, 1);
         const long code = PyLong_Check(status) ? PyLong_AsLong(status) : -1;
         char *ptr = nullptr;
         Py_ssize_t count = 0;
-        if (!PyErr_Occurred() && code >= 0 && code <= 3 &&
-                PyBytes_AsStringAndSize(payload, &ptr, &count) == 0 && count >= 0) {
+        if (PyByteArray_Check(payload)) {
+            ptr = PyByteArray_AsString(payload);
+            count = PyByteArray_Size(payload);
+        } else {
+            PyBytes_AsStringAndSize(payload, &ptr, &count);
+        }
+        if (!PyErr_Occurred() && code >= 0 && code <= 3 && ptr && count >= 0) {
             output.status = static_cast<int>(code);
-            output.bytes.assign(ptr, ptr + count);
+            // The reply owns the buffer and no Python code can mutate it.
+            // Allocate/copy detached bytes without the musical interpreter lock.
+            Py_BEGIN_ALLOW_THREADS
+            store_bytes(output.bytes, ptr, static_cast<size_t>(count));
+            Py_END_ALLOW_THREADS
         } else {
             PyErr_Clear();
             const std::string error = "Invalid Python bridge response";
-            output.bytes.assign(error.begin(), error.end());
+            store_bytes(output.bytes, error.data(), error.size());
         }
     } else {
         std::string error = python_error();
-        output.bytes.assign(error.begin(), error.end());
+        store_bytes(output.bytes, error.data(), error.size());
     }
     Py_XDECREF(response);
     PyErr_Clear();
@@ -281,7 +345,7 @@ PianoNative::Reply PianoNative::execute(const Command &command) {
 
 int64_t PianoNative::submit(const String &operation, const String &body) {
     int64_t id;
-    Command command{0, utf8(operation), utf8(body)};
+    Command command{0, utf8(operation), utf8(body), monotonic_milliseconds()};
     const bool asset = is_asset_operation(command.operation);
     {
         std::lock_guard<std::mutex> guard(mutex_);
@@ -312,11 +376,7 @@ Array PianoNative::take_responses() {
         Dictionary message;
         message["id"] = reply.id;
         message["status"] = reply.status;
-        PackedByteArray bytes;
-        bytes.resize(static_cast<int>(reply.bytes.size()));
-        if (!reply.bytes.empty())
-            std::memcpy(bytes.ptrw(), reply.bytes.data(), reply.bytes.size());
-        message["body"] = bytes;
+        message["body"] = reply.bytes;
         result.push_back(message);
     }
     return result;

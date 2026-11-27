@@ -10,14 +10,13 @@ from ..music import Phrase
 
 
 class TakeGrading:
-    def __init__(self, *, lesson, take, transport, transport_timing, score,
+    def __init__(self, *, lesson, take, transport, transport_timing,
                  policy_registry, assessment, live_feedback_workflows,
                  measurement):
         self.lesson = lesson
         self.take = take
         self.transport = transport
         self.transport_timing = transport_timing
-        self.score = score
         self.policy_registry = policy_registry
         self.assessment = assessment
         self.live_feedback_workflows = live_feedback_workflows
@@ -36,7 +35,6 @@ class TakeGrading:
                     if self.take.recorder else ()),
             from_beat=self.transport.play_from_beat,end_beat=ending,
             tempo=self.transport_timing.graded_tempo_map(),policies=self.policy_registry.grading,
-            layout_for_feedback=self.score.completed_take_layout,
             mode=self.transport.mode,
             performance_review=self.performance_review,
             prepare_decision=self.lesson.prepare_decision,

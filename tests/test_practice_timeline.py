@@ -42,6 +42,19 @@ def test_count_in_uses_authored_six_eight_and_first_playable_attack(practice_ses
     assert min(note["onset_beats"] for note in session.ask("score.semantic")["notes"]) == .5
 
 
+def test_navigation_publishes_source_timing_before_notation(practice_session, monkeypatch):
+    from piano_teacher.application import score_artifacts
+
+    session = practice_session(bars=3, meter=(6, 8))
+
+    def cannot_compile(*args, **kwargs):
+        raise AssertionError("a musical snapshot compiled notation")
+
+    monkeypatch.setattr(score_artifacts, "build_lesson_score", cannot_compile)
+    session.select(2, 2)
+    assert session.snapshot()["practice_timeline"]["gap"]["duration_beats"] == 3
+
+
 def test_resume_after_playing_preserves_full_authored_five_four_count_in(practice_session):
     # A paused graded take must reopen with one complete authored measure,
     # including when the local meter has more than four quarter beats.
@@ -141,7 +154,7 @@ def test_live_and_final_feedback_keep_the_same_authentic_source_heads(practice_s
             if event["kind"] == "assessment"]
     assert {event["source_id"] for event in live} == {source[0]["id"]}
     assert all(not event["final"] for event in live)
-    assert all(event["note_id"] == layout["attack_map"][event["source_id"]] for event in live)
+    assert all(event["source_id"] in layout["attack_map"] and "note_id" not in event for event in live)
     session.clock.at = start+3*60/state["bpm"]
     session.strike(source[1]["midi_pitch"])
     session.tick()
@@ -150,7 +163,7 @@ def test_live_and_final_feedback_keep_the_same_authentic_source_heads(practice_s
              if event["kind"] == "assessment" and event.get("final")]
     assert {event["source_id"] for event in final} == {note["id"] for note in source}
     assert all(event["transport_id"] == state["transport_id"] and event["release_advisory"] for event in final)
-    assert all(event["note_id"] == layout["attack_map"][event["source_id"]] for event in final)
+    assert all(event["source_id"] in layout["attack_map"] and "note_id" not in event for event in final)
     assert after["bpm"] == state["bpm"] == 80 and after["streak"] == 1
 
 

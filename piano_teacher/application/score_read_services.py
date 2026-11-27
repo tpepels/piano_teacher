@@ -1,23 +1,23 @@
-"""Read-only source/score selection and on-demand native asset API.
-
-All methods resolve the *current* artifact generation. Engraving and native
-asset compilation take place after the brief selection snapshot, outside
-the musical worker lock; no competing renderer or score source exists.
-"""
+"""Capture musical inputs and authorize source-bound worker replies."""
 from __future__ import annotations
-from ..engraving.engraving import EngravedScore
-from .score_artifacts import ScoreArtifacts, ScoreSelection
+
+from time import monotonic
+
+from ..source_timing import selected_practice_timeline
+from .score_ipc import BINDING_FIELDS, DEADLINE_SECONDS, document_bytes
+from .score_process import ScoreCancelled
+from .score_selection import ScoreSelection
 
 
 class ScoreReadServices:
-    def __init__(self, *, lesson, take, transport,
-                          score_artifact_registry, learner_progress, lock):
+    def __init__(self, *, lesson, transport, process, learner_progress, lock):
         self.lesson = lesson
-        self.take = take
         self.transport = transport
-        self.score_artifact_registry = score_artifact_registry
+        self.process = process
         self.learner_progress = learner_progress
         self.lock = lock
+        self._timing = None
+        self._cancellation_generation = 0
 
     def selection(self) -> ScoreSelection:
         plan = self.lesson.plan
@@ -30,8 +30,7 @@ class ScoreReadServices:
             revision=self.lesson.revision,
             fingerprint=self.lesson.fingerprint,
             transformed_rhythm=(remediation.transformed_rhythm
-                if remediation is not None else plan.active_stage.transformed_rhythm),
-            display_name=remediation.focus if remediation is not None else "")
+                if remediation is not None else plan.active_stage.transformed_rhythm))
 
     def displayed_score(self, *, learning: bool | None = None, aid=...) -> tuple:
         """What the drawn score depends on (not its revision number):
@@ -51,64 +50,55 @@ class ScoreReadServices:
                 phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
                 tuple((n.source_id, n.start, n.end, n.pitch) for n in phrase.notes))
 
-    def source_model(self) -> dict:
+    def practice_timing(self) -> dict:
         with self.lock:
             selected = self.selection()
-            artifacts = self.score_artifact_registry.select(selected)
-            return artifacts.source_model(selected)
+            return self._timing_for(selected)
 
-    def selected_artifacts(self) -> tuple[ScoreArtifacts, ScoreSelection]:
+    def _timing_for(self, selected: ScoreSelection) -> dict:
+        timing = self._timing
+        if timing is None or timing[0] != selected.identity:
+            timing = (selected.identity,
+                      selected_practice_timeline(selected.piece, selected.phrase))
+            self._timing = timing
+        return timing[1]
+
+    def cancel_preparation(self) -> None:
+        self._cancellation_generation += 1
+
+    def prepare(self, operation, expected, *, cancelled=None,
+                timeout=DEADLINE_SECONDS) -> tuple[int, bytearray]:
+        deadline = monotonic() + timeout
         with self.lock:
             selected = self.selection()
-            return self.score_artifact_registry.select(selected), selected
+            if expected and selected.binding != {key: expected.get(key) for key in BINDING_FIELDS}:
+                raise ScoreCancelled("Score request was superseded before preparation")
+            timing = self._timing_for(selected)
+            generation = self._cancellation_generation
 
-    def semantic_score(self) -> dict:
-        artifacts, selection = self.selected_artifacts()
-        return artifacts.semantic_score(selection)
+        def obsolete():
+            # These cheap reads can stop a job early. The exact check under
+            # the session lock below is the publication boundary.
+            return (generation != self._cancellation_generation
+                    or selected.revision != self.lesson.revision
+                    or (cancelled is not None and cancelled()))
 
-    def engraving(self) -> EngravedScore:
-        artifacts, selection = self.selected_artifacts()
-        return artifacts.engraving(selection)
-
-    def geometry(self) -> dict:
-        artifacts, selection = self.selected_artifacts()
-        return artifacts.geometry(selection)
-
-    def bundle(self, expected: dict | None = None) -> dict:
-        """Compile an exact selection; never substitute a later source."""
-        artifacts, selection = self.selected_artifacts()
-        identity = {
-            "fingerprint": selection.fingerprint,
-            "revision": selection.revision,
-            "stage_key": selection.stage_key,
-            "hand": selection.hand,
-        }
-        if expected is not None and expected != identity:
-            raise ValueError("Score request was superseded before preparation")
-        result = artifacts.bundle(selection)
-        # Only the short selection check takes the session lock. A retired
-        # artifact may populate its own cache but cannot publish live ink.
+        status, body = self.process.request(
+            operation, selected.binding,
+            lambda checkpoint: document_bytes(selected.document(timing), checkpoint),
+            generation=expected.get("generation", generation), cancelled=obsolete,
+            rejected_generation=expected.get("rejected_generation"),
+            timeout=deadline-monotonic(), validate_json=cancelled is None)
         with self.lock:
-            if self.score_artifact_registry.current is not artifacts:
-                raise ValueError("Score request was superseded during preparation")
-            if self.selection().identity != selection.identity:
-                raise ValueError("Score request was superseded during preparation")
-        return result
-
-    def completed_take_layout(self) -> dict:
-        cached = self.score_artifact_registry.current.cached_layout(self.selection())
-        if cached is None:
-            raise RuntimeError(
-                "Admitted score layout is unavailable for completed feedback")
-        return cached.layout
+            if (obsolete() or self.lesson.plan is None
+                    or self.selection().identity != selected.identity):
+                raise ScoreCancelled("Score request was superseded during preparation")
+            if monotonic() >= deadline:
+                raise TimeoutError("Score request exceeded its publication deadline")
+        return status, body
 
     def guided_marks(self, snapshot: dict) -> list[dict]:
-        if self.lesson.plan is None:
-            return []
-        engraving = self.score_artifact_registry.current.cached_layout(
-            self.selection())
-        return (self.lesson.guided_marks(snapshot, engraving.layout)
-                if engraving is not None else [])
+        return self.lesson.guided_marks(snapshot)
 
     def lesson_overview(self) -> dict:
         return self.learner_progress.lesson_overview(

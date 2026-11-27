@@ -9,11 +9,10 @@ from ..live_feedback import live_scope
 
 
 class LiveFeedbackWorkflows:
-    def __init__(self, *, lesson, transport, score, policy_registry, library,
+    def __init__(self, *, lesson, transport, policy_registry, library,
                           take, live_assessment, transport_timing, clock):
         self.lesson = lesson
         self.transport = transport
-        self.score = score
         self.policy_registry = policy_registry
         self.library, self.live_assessment = library, live_assessment
         self.take = take
@@ -57,18 +56,14 @@ class LiveFeedbackWorkflows:
         self.live_assessment.publish(marks, self.feedback_take(),scope_start_beat=scope)
 
     def live_feedback(self, elapsed_seconds: float) -> list[dict]:
-        """Read the current cached source and ask the single grading owner."""
+        """Ask the grading owner for observations on the active source."""
         plan = self.lesson.plan
         if plan is None or not self.transport.running:
-            return []
-        engraved = self.score.current_artifacts.cached_layout(self.score.selection())
-        if engraved is None:
             return []
         return self.policy_registry.grading.live_projection(
             plan.active_phrase, hand=plan.hand, bpm=plan.bpm,
             played=self.take.recorder.presses if self.take.recorder else (),
             from_beat=self.transport.play_from_beat,
             elapsed_seconds=elapsed_seconds,
-            bar_boundaries=plan.piece.bar_boundaries,
-            layout=engraved.layout, tempo=self.transport_timing.graded_tempo_map())
+            tempo=self.transport_timing.graded_tempo_map())
 

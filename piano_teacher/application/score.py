@@ -1,6 +1,6 @@
 """The score domain: one owner for the selected score and its successor.
 
-Internals: artifacts (ScoreArtifactRegistry), read (ScoreReadServices),
+Internals: read (ScoreReadServices),
 successor (TeachingContinuation: next-stage readiness, reservation and
 schedule), publisher (ScoreStatePublisher) and tempo_maps (TempoMapCache).
 Score is also the successor-reservation port the settlement transaction
@@ -17,8 +17,7 @@ FREE_EARLY_INPUT_SECONDS = 0.25
 
 
 class Score:
-    def __init__(self, *, artifacts, successor, publisher, tempo_maps):
-        self._artifacts = artifacts
+    def __init__(self, *, successor, publisher, tempo_maps):
         self._read = None
         self._successor = successor
         self._publisher = publisher
@@ -30,25 +29,8 @@ class Score:
             raise RuntimeError("read is already attached")
         self._read = read
 
-    # --- score_artifact_registry
-
-    @property
-    def current_artifacts(self):
-        return self._artifacts.current
-
-    def invalidate_artifacts(self, *args, **kwargs):
-        return self._artifacts.invalidate(*args, **kwargs)
-
-    # --- score_read
-
-    def bundle(self, *args, **kwargs):
-        return self._read.bundle(*args, **kwargs)
-
-    def completed_take_layout(self, *args, **kwargs):
-        return self._read.completed_take_layout(*args, **kwargs)
-
-    def geometry(self, *args, **kwargs):
-        return self._read.geometry(*args, **kwargs)
+    def cancel_preparation(self) -> None:
+        self._read.cancel_preparation()
 
     def guided_marks(self, *args, **kwargs):
         return self._read.guided_marks(*args, **kwargs)
@@ -62,11 +44,8 @@ class Score:
     def displayed_score(self, *args, **kwargs):
         return self._read.displayed_score(*args, **kwargs)
 
-    def semantic_score(self, *args, **kwargs):
-        return self._read.semantic_score(*args, **kwargs)
-
-    def source_model(self, *args, **kwargs):
-        return self._read.source_model(*args, **kwargs)
+    def practice_timing(self, *args, **kwargs):
+        return self._read.practice_timing(*args, **kwargs)
 
     # --- teaching_continuation
 

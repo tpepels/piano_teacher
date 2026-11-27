@@ -5,6 +5,7 @@ state. This boundary exposes the stable native operations and read ports.
 """
 from __future__ import annotations
 
+import json
 import os
 import time
 from pathlib import Path
@@ -92,7 +93,8 @@ class PracticeEngine:
         return self.practice_session.apply(LearnerHistoryDeleted(confirm))
 
     def close(self) -> None:
-        """Close the session, then wait for the Listen audio worker to stop."""
+        """Reap the score process and close the session and Listen worker."""
+        self.score_read.process.close()
         worker = self.listen.thread
         self.practice_session.apply(SessionClosed())
         if worker is not None:
@@ -182,14 +184,12 @@ class PracticeEngine:
             state.pop(key, None)
         return state
 
-    def semantic_score(self) -> dict:
-        return self.score.semantic_score()
-
-    def geometry(self) -> dict:
-        return self.score.geometry()
-
     def score_bundle(self, expected: dict | None = None) -> dict:
-        return self.score.bundle(expected)
+        status, response = self.score_read.prepare("score.bundle", expected or {})
+        document = json.loads(response)
+        if status:
+            raise ValueError(document["error"])
+        return document
 
     def lesson_overview(self) -> dict:
         with self.lock:

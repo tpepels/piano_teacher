@@ -48,6 +48,8 @@ func apply_assignments(values: Dictionary) -> void:
     for event in score_layout.ordered_events:
         if str(event.get("kind","")) != "note" or not bool(event.get("is_attack",false)):
             continue
+        if event.get("display_role") == "context":
+            continue
         var source: String = str(event.get("source_id",""))
         if source.is_empty():
             continue

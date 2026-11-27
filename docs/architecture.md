@@ -7,23 +7,25 @@ behaviour is specified in [practice-flow.md](practice-flow.md).
 
 ## Runtime shape
 
-One Godot 4.7 desktop process with embedded CPython:
+Godot 4.7 hosts an embedded CPython engine and a supervised score subprocess.
 
     Godot UI, native score surface, local audio
             |  in-process requests / replies (EngineCommands)
     native C++ bridge (PianoNative GDExtension)
             |  command worker: serialized requests + monotonic tick
-            |  asset worker: score bundles, engraving, fingering
     Python PracticeEngine -> PracticeSession (one serialized event boundary)
-            |
     lesson · assessment · transport · score · persistence · projection
+
+    native asset mailbox -> score subprocess (separate CPython)
+    source snapshot -> notation -> Verovio -> native score bundle
 
 - `godot/main.tscn` loads `main.gd`; `InProcessBus` loads `PianoNative`,
   which starts CPython and constructs `piano_teacher.inprocess.EngineCommands`.
   There is no network service, second engine or headless transport.
-- The command worker serializes every request and the clock tick. Expensive
-  MIDI import, Verovio engraving and fingering inference run on the asset
-  worker, outside the application lock, under a source-mutation guard.
+- The command worker serializes musical requests and clock ticks. Source
+  import and fingering preparation release the session lock before committing
+  the source. The asset lane captures a selection and supervises notation,
+  Verovio and asset extraction in the subprocess. [Score worker](asset-worker.md)
 - Real MIDI arrives through `MidiConnection` callbacks with arrival
   timestamps and enters the same `PracticeSession` boundary.
 

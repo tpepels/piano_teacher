@@ -72,7 +72,7 @@ class SnapshotReadPorts:
     learner_snapshot: Callable[..., Any]
     elapsed_beat: Callable[..., Any]
     phase: Callable[..., Any]
-    source_model: Callable[..., Any]
+    practice_timing: Callable[..., Any]
     live_feedback: Callable[..., Any]
     active_tempo_map: Callable[..., Any]
     display_phrase: Callable[..., Any]
@@ -129,7 +129,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         return SessionSnapshot(mode=state.mode, feedback=state.feedback,
             device=state.midi_device, revision=state.score_revision,
             transport_id=state.transport_id, activity=activity)
-    practice_timeline = reads.source_model()["practice_timeline"]
+    practice_timeline = reads.practice_timing()
     ex, variant = p.exercise, p.active_variant
     # Only the current exercise's hand rows are used by the HUD.
     # Capturing/freezing the full sequence of thousands of lesson stages

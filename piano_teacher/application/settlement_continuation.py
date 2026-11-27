@@ -112,7 +112,7 @@ class SettlementContinuation:
             pending=pending,stage_key=self.lesson.plan.identity,bpm=self.lesson.plan.bpm,
             target_bpm=self.lesson.plan.target_bpm,
             assessed_bpm=self.take.pending_assessed_bpm,
-            duration=duration,now=now,source_model=self.score.source_model()))
+            duration=duration,now=now))
         if completion.next_action is not None:
             self.notices.next_action = completion.next_action
         if completion.advance_feedback:
@@ -172,6 +172,5 @@ class SettlementContinuation:
             self.lesson.select_opening(0.0)
             self.lesson.publish_revision(committed.selection.revision)
             self.transport.wait_for_player()
-            self.score.current_artifacts.invalidate()
         self.take.effects_applied(pending)
         return outcome.message

@@ -106,7 +106,19 @@ func run() -> void:
         actions == [{"action":"score_ready","revision":3}],"Retry installs the selected score: "+session.score_error)
     actions.clear()
     session.update_context(state(4),Time.get_ticks_msec())
-    session.complete_response("bundle",session.pending_id("bundle"),0,"{}".to_utf8_buffer(),Time.get_ticks_msec())
+    var malformed_id: int = session.pending_id("bundle")
+    var replayed: Array = []
+    session.request_requested.connect(func(_kind, _id, _path, _timeout, identity):
+        replayed.append(identity))
+    session.complete_response("bundle",malformed_id,0,"{}".to_utf8_buffer(),Time.get_ticks_msec())
+    var deadline: int = Time.get_ticks_msec()+5000
+    while replayed.is_empty() and Time.get_ticks_msec() < deadline:
+        session.advance_preparation()
+        await process_frame
+    check(replayed.size() == 1 and replayed[0].get("rejected_generation",-1) >= 0 and
+        actions.is_empty(),"An invalid payload retries once and identifies the child reply to retire")
+    session.complete_response("bundle",session.pending_id("bundle"),0,
+        "{}".to_utf8_buffer(),Time.get_ticks_msec())
     await wait_until_finished(4)
     check(not session.is_ready() and not session.score_error.is_empty() and
         session.status().retry_visible and actions.is_empty(),"Malformed score fails visibly without authorizing playback")

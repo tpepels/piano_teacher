@@ -126,24 +126,3 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
         result.update(mapping_schema='source-note-v1', attack_map=attack_map,
                       continuation_map=dict(continuation_map))
     return result
-
-
-def locate_beat(layout: dict, beat: float) -> dict:
-    """Find normalized x/y and page at musical beat. Safe across line wraps."""
-    anchors = layout["anchors"]
-    if not anchors:
-        raise ValueError("No positioned events")
-    index = 0
-    for i, anchor in enumerate(anchors):
-        if anchor["beat"] <= beat + 1e-9:
-            index = i
-        else:
-            break
-    left = anchors[index]
-    pos = dict(left)
-    if index + 1 < len(anchors):
-        right = anchors[index + 1]
-        if (left["page"], left["system"]) == (right["page"], right["system"]) and right["beat"] > left["beat"]:
-            alpha = min(1.0, max(0.0,(beat-left["beat"])/(right["beat"]-left["beat"])))
-            pos["x"] = left["x"] + alpha*(right["x"]-left["x"])
-    return pos

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -12,7 +13,7 @@
 namespace piano {
 
 // Single-consumer mailbox. Commands and replies are native values only;
-// no Godot objects or Python references cross the queue. All state,
+// no scene objects or Python references cross the queue. All state,
 // including cancellation and the wait predicate, has one mutex owner.
 template <typename Command, typename Reply>
 class AssetMailbox {
@@ -45,12 +46,20 @@ public:
         available_.wait(guard, [this] {
             return stopped_ || !pending_.empty();
         });
-        if (stopped_) return std::nullopt;
-        Command command = std::move(pending_.front());
-        pending_.pop_front();
-        active_ = command.id;
-        discard_active_ = false;
-        return command;
+        return take_pending();
+    }
+
+    std::optional<Command> take_for(std::chrono::milliseconds interval) {
+        std::unique_lock<std::mutex> guard(mutex_);
+        available_.wait_for(guard, interval, [this] {
+            return stopped_ || !pending_.empty();
+        });
+        return take_pending();
+    }
+
+    bool cancelled(int64_t id) {
+        std::lock_guard<std::mutex> guard(mutex_);
+        return stopped_ || active_ != id || discard_active_;
     }
 
     void complete(Reply reply) {
@@ -62,9 +71,7 @@ public:
         discard_active_ = false;
     }
 
-    // Cancellation never waits for the engraving and cannot affect a
-    // state-changing command. An already executing library call finishes
-    // normally, but its reply cannot be delivered.
+    // The active supervisor observes cancellation without waiting for the child.
     void cancel(int64_t id) {
         std::lock_guard<std::mutex> guard(mutex_);
         auto erase_id = [id](auto &queue) {
@@ -92,6 +99,15 @@ public:
             discard_active_ = true;
         }
         available_.notify_all();
+    }
+private:
+    std::optional<Command> take_pending() {
+        if (stopped_ || pending_.empty()) return std::nullopt;
+        Command command = std::move(pending_.back());
+        pending_.pop_back();
+        active_ = command.id;
+        discard_active_ = false;
+        return command;
     }
 };
 

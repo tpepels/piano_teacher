@@ -33,7 +33,7 @@ class RuntimeTimings:
             "midi_callback": self._describe(self.midi_ms),
             "full_state": self._describe(self.state_ms),
             "engine_tick": self._describe(self.tick_ms),
-            "multiprocessing": False,
+            "score_generation": "supervised subprocess",
             "midi_visual_delivery": "in-process bounded event ring",
             "measurement": "embedded Python processing time; excludes Bluetooth input and display latency",
         }

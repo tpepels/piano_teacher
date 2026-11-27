@@ -130,6 +130,8 @@ func request_command(operation: String, payload: Dictionary) -> void:
         sight_reading_view.present_busy(true)
     var err: int = state.dispatch(action_request,operation,payload)
     if err == OK:
+        if state.control_action in ["stop","ui_stop"]:
+            score_session.cancel_pending()
         return
     practice_view.present_busy(false)
     settings_view.present_busy(false)
@@ -152,6 +154,7 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
     if sight_reading_view != null:
         sight_reading_view.present_busy(false)
     var operation: String = str(completed["operation"])
+    var stopped: bool = str(completed["action"]) in ["stop","ui_stop"]
     if operation == "practice.command":
         practice_view.finish_action()
     if code != 0:
@@ -162,6 +165,8 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
         var queued_library_failed: bool = state.discard_library()
         command_failure_presenter.present(
             message,operation,queued_library_failed)
+        if stopped:
+            score_session.request_layout()
         _flush_transport_action()
         return
     var opened: Variant = Reply.decode_reply(body) if operation in ["library.open","sight_reading.start"] else null
@@ -220,6 +225,8 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
             last_published_control_started_ms,int(completed["started_ms"]))
     succeeded.emit(decision,opened,code,presentation_body,
         int(completed["started_ms"]))
+    if stopped:
+        score_session.request_layout()
     _flush_transport_action()
     refresh_requested.emit()
     var deferred: Dictionary = state.take_library()

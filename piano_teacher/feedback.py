@@ -1,33 +1,16 @@
-"""Translate an assessment into score-relative annotations using Verovio IDs.
-
-A feedback marker is never assigned an invented notehead coordinate. Unmatched
-notes remain in the textual assessment and are reported separately.
-"""
+"""Translate assessed notes into facts in canonical source coordinates."""
 from __future__ import annotations
 
 from .music import Phrase, note_name, source_note_id
 from .practice import Assessment, note_dimensions
 from typing import Callable
-from .engraving.geometry import locate_beat
 from .application.musical_scheduler import SCHEDULER
 
 
-def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict, *,
+def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, *,
                        played_from_beat: float = 0.0,
                        elapsed_to_beat: Callable[[float], float] | None = None) -> dict:
-    """Return positioned note errors and leftover played notes for one attempt.
-
-    Production feedback requires exact engraved source identity. It cannot
-    assign a grade to a nearby glyph by pitch or onset.
-    """
-    glyphs = list(layout.get("notes", []))
-    if layout.get("mapping_schema") != "source-note-v1":
-        raise ValueError("Note feedback requires a canonical source-note-v1 engraving")
-    from .lesson_validation import require_lesson_alignment
-    require_lesson_alignment(phrase,layout,'both')
-    by_id = {glyph.get('id'): glyph for glyph in glyphs}
-    by_source = {source: by_id[identifier]
-                 for source, identifier in layout['attack_map'].items()}
+    """Project grades by source identity; the renderer owns glyph placement."""
     # Hand-built fixtures may omit a source ID; their deterministic source
     # index is still authoritative, never a guessed pitch/onset match.
     anonymous_identity = {}
@@ -46,8 +29,7 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             source = anonymous_identity.get(id(entry.note))
             if source is None:
                 source = anonymous_value.get(entry.note)
-        glyph = by_source.get(source)
-        if glyph is None:
+        if source is None:
             unmapped += 1
             continue
         observation = entry.observation
@@ -58,12 +40,8 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             # Pitch, onset and release are independent observations. A key
             # still held past its release is "unreleased", never "short".
             "dimensions": note_dimensions(entry),
-            "page": int(glyph["page"]),
-            "x": float(glyph["x"]),
-            "y": float(glyph["y"]),
             "pitch": entry.note.pitch,
-            "note_id": glyph["id"],
-            "source_id": glyph["source_id"],
+            "source_id": source,
             "beat": beat,
             # Attempt-seconds deadline until which a still-held key is within
             # the grader's own hold tolerance. Live display only (see
@@ -73,18 +51,15 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
                     - observation.expected_onset) + observation.duration_tolerance}
                if held else {}),
         })
-    # The extra note has no notated notehead. Use the real beat-time x
-    # coordinate, with an explicit estimated-position marker near the system.
+    # Extra attacks carry their played beat and pitch for presentation.
     for played in assessment.unmatched_played:
         beat = (elapsed_to_beat(played.onset) if elapsed_to_beat is not None
                 else played_from_beat + SCHEDULER.seconds_beats(played.onset,bpm))
-        if beat < 0 or beat > layout.get("beats", 0):
+        if beat < 0 or beat > phrase.sounding_end - phrase.start:
             unmapped += 1
             continue
-        point = locate_beat(layout, beat)
         result.append({
-            "status": "extra", "page": int(point["page"]),
-            "x": float(point["x"]), "y": max(0.0, float(point["top"]) - 0.020),
+            "status": "extra",
             "pitch": played.pitch, "label": note_name(played.pitch),
             "beat": beat, "estimated": True,
         })

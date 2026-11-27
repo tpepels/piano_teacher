@@ -1,305 +1,144 @@
-"""Selected notation and source engraving, independent of session state.
+"""The selected notation and native ink cache, owned by the score child."""
 
-This owner receives source values, never an engine, learning plan, transport
-or renderer callback. It serializes its own work under two locks of its own,
-so the application calls it OUTSIDE the engine lock: a cold Verovio engraving
-must not stall the musical tick or the MIDI callback.
-
-- ``_model_lock`` guards cold model preparation. Once the immutable source
-  model is published, a session snapshot reads its entry without that lock.
-- ``_engraving_lock`` guards engraving and native asset preparation (seconds
-  when cold). Lock order is always engraving -> model, never the reverse.
-
-The selected layout is published as one immutable entry, so ``cached_layout``
-never waits for an engraving.
-"""
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import os
-import threading
 import time
-from dataclasses import dataclass
+from functools import cached_property
 
+from ..engraving.engraving import EngravedScore, render_layout
 from ..fingering.projection import project_model
 from ..lesson_validation import require_lesson_alignment
-from ..music import Phrase, Piece, source_note_id
-from ..notation.lesson import (LessonScore, build_lesson_score,
-                               infer_piece_clefs, infer_midi_clef_plan)
+from ..music import source_note_id
+from ..notation.display_envelope import (
+    display_envelope, project_display_model, project_performance_layout,
+)
+from ..notation.lesson import build_lesson_score, infer_midi_clef_plan, infer_piece_clefs
 from ..notation.model import build_score_model
-from ..notation.display_envelope import (display_envelope, project_display_model,
-                                          project_performance_layout)
 from ..preprocessing_cache import PreprocessingCache
-from ..engraving.engraving import EngravedScore, render_layout
-from . import score_preparation
-
-
-@dataclass(frozen=True)
-class ScoreSelection:
-    piece: Piece
-    phrase: Phrase
-    hand: str
-    stage_key: str
-    revision: int
-    fingerprint: str
-    transformed_rhythm: bool = False
-    display_name: str = ""
-
-    @property
-    def identity(self) -> tuple:
-        phrase = self.phrase
-        # Replacing only the derived fingering plan must not invalidate
-        # admitted geometry. All authored inputs retain their identity.
-        piece = self.piece
-        return (id(piece.notes), id(piece.phrases), piece.title, piece.bpm,
-                piece.bar_boundaries, piece.time_signatures, piece.key_signatures,
-                piece.clef_changes, piece.barlines, piece.source_format,
-                self.fingerprint, self.stage_key, self.hand,
-                self.transformed_rhythm, self.revision,
-                phrase.first_bar, phrase.last_bar, phrase.start, phrase.end)
+from ..source_timing import SCHEMA as TIMELINE_SCHEMA
+from .score_preparation import assemble_layout
+from .score_selection import ScoreSelection
 
 
 class ScoreArtifacts:
-    def __init__(self, preprocessing: PreprocessingCache):
+    def __init__(self, preprocessing: PreprocessingCache, selected: ScoreSelection, timing: dict):
         self.preprocessing = preprocessing
-        self._engraving_lock = threading.RLock()
-        self._model_lock = threading.RLock()
-        self._retired = threading.Event()
-        self.invalidate()
+        self.selected = selected
+        self.timing = timing
 
-    def retire(self) -> None:
-        """Cancel future work without acquiring either preparation lock."""
-        self._retired.set()
+    @cached_property
+    def envelope(self):
+        selected = self.selected
+        return display_envelope(selected.piece, selected.phrase,
+                                transformed=selected.transformed_rhythm)
 
-    def require_active(self) -> None:
-        if self._retired.is_set():
-            raise ValueError("Score request was superseded during preparation")
+    @cached_property
+    def notation(self):
+        piece = self.selected.piece
+        return build_lesson_score(
+            self.envelope.phrase, boundaries=piece.bar_boundaries,
+            time_signatures=piece.time_signatures, key_signatures=piece.key_signatures,
+            clef_changes=piece.clef_changes, default_clefs=infer_piece_clefs(piece.notes),
+            inferred_clefs=infer_midi_clef_plan(piece.notes, piece.bar_boundaries),
+            barlines=piece.barlines)
 
-    def invalidate(self) -> None:
-        """Discard selected artifacts; durable, source-keyed entries remain reusable."""
-        with self._engraving_lock, self._model_lock:
-            self._notation_identity: tuple | None = None
-            self._notation: LessonScore | None = None
-            self._notation_model: dict | None = None
-            self._model: dict | None = None
-            self._source_model_entry: tuple | None = None
-            self._projected_model: dict | None = None
-            self._projected_fingering = None
-            self._prepared_layout_identity: tuple | None = None
-            self._prepared_layout: dict | None = None
-            # (identity, layout, source_bpm, cache_key), replaced atomically.
-            self._layout_entry: tuple | None = None
+    @cached_property
+    def notation_model(self) -> dict:
+        selected = self.selected
+        return build_score_model(self.notation, boundaries=selected.piece.bar_boundaries,
+                                 hand=selected.hand, revision=selected.revision)
 
-    def _selected_notation(self, selected: ScoreSelection) -> LessonScore:
-        with self._model_lock:
-            return self._selected_notation_locked(selected)
+    @cached_property
+    def semantic(self) -> dict:
+        selected = self.selected
+        model = project_display_model(
+            self.notation_model, self.envelope, selected.hand, self.timing)
+        if (self.timing.get("schema") != TIMELINE_SCHEMA
+                or self.timing.get("source_duration_beats") != model["duration_beats"]
+                or self.timing.get("sounding_duration_beats") != model["sounding_duration_beats"]):
+            raise ValueError("Notation differs from its authoritative source timing")
+        return project_model(model, selected.piece.fingering_plan)
 
-    def _selected_notation_locked(self, selected: ScoreSelection) -> LessonScore:
-        if selected.identity != self._notation_identity or self._notation is None:
-            piece = selected.piece
-            envelope = display_envelope(piece, selected.phrase,
-                transformed=selected.transformed_rhythm)
-            notation = build_lesson_score(
-                envelope.phrase, boundaries=piece.bar_boundaries,
-                time_signatures=piece.time_signatures,
-                key_signatures=piece.key_signatures,
-                clef_changes=piece.clef_changes,
-                default_clefs=infer_piece_clefs(piece.notes),
-                inferred_clefs=infer_midi_clef_plan(piece.notes, piece.bar_boundaries),
-                barlines=piece.barlines)
-            self._notation = notation
-            self._notation_identity = selected.identity
-            self._notation_model = None
-            self._model = None
-            self._source_model_entry = None
-            self._projected_model = None
-        return self._notation
+    def prepare(self, operation: str) -> dict:
+        if operation == "score.semantic":
+            return self.semantic
+        if operation == "score.native_layout":
+            return self.layout
+        return self.bundle()
 
-    def source_model(self, selected: ScoreSelection) -> dict:
-        """Read the immutable source contract, never waiting on warm projection.
+    def bundle(self) -> dict:
+        selected = self.selected
+        model = self.semantic
+        source_ids = [source_note_id(note, index)
+                      for index, note in enumerate(selected.phrase.notes)]
+        if not source_ids or len(source_ids) != len(set(source_ids)):
+            raise ValueError("Score bundle has missing or duplicate source note IDs")
+        graded = {identifier for identifier, note in zip(source_ids, selected.phrase.notes, strict=True)
+                  if selected.hand == "both" or note.hand == selected.hand}
+        if set(model["active_note_ids"]) != graded:
+            raise ValueError("Score bundle notation does not match graded MIDI source IDs")
+        layout = self.layout
+        if layout["revision"] != selected.revision or model["revision"] != selected.revision:
+            raise ValueError("Score bundle contains mixed revisions")
+        return {"status": "ready", **selected.binding, "source_note_ids": source_ids,
+                "layout": layout, "model": model}
 
-        The model and identity publish together. Only cold preparation takes
-        the model lock; a worker's fingering projection or serialization
-        cannot delay the musical owner's usual snapshot.
-        """
-        identity = selected.identity
-        entry = self._source_model_entry
-        if entry is not None and entry[0] == identity:
-            return entry[1]
-        with self._model_lock:
-            notation = self._selected_notation_locked(selected)
-            if self._model is None:
-                envelope = display_envelope(selected.piece, selected.phrase,
-                    transformed=selected.transformed_rhythm)
-                self._notation_model = build_score_model(notation,
-                    boundaries=selected.piece.bar_boundaries,
-                    hand=selected.hand, revision=selected.revision)
-                self._model = project_display_model(
-                    self._notation_model, envelope, selected.hand)
-                self._source_model_entry = (identity, self._model)
-            return self._model
+    def _cached_engraving(self, key: str) -> EngravedScore | None:
+        cached = self.preprocessing.read_json("engraving", key)
+        if cached is None:
+            return None
+        selected = self.selected
+        try:
+            pages, geometry = cached["pages"], cached["layout"]
+            if (not isinstance(pages, list) or not pages
+                    or not all(isinstance(page, str) for page in pages)
+                    or not isinstance(geometry, dict)):
+                return None
+            require_lesson_alignment(selected.phrase, geometry, selected.hand)
+        except (TypeError, ValueError, KeyError, AssertionError):
+            return None
+        print("PREPROCESS_ENGRAVING_CACHE_HIT:", selected.phrase.first_bar,
+              selected.phrase.last_bar, selected.piece.bpm)
+        return EngravedScore(tuple(pages), geometry)
 
-    def semantic_score(self, selected: ScoreSelection) -> dict:
-        # Native geometry needs this exact projection, then score.semantic
-        # requests it again. Build the source/fingering mapping once for a
-        # selected stage and revision; return isolated snapshots to consumers.
-        with self._model_lock:
-            source = self.source_model(selected)
-            fingering = selected.piece.fingering_plan
-            if self._projected_model is None or self._projected_fingering is not fingering:
-                self._projected_model = project_model(deepcopy(source), fingering)
-                self._projected_fingering = fingering
-            return deepcopy(self._projected_model)
-
-    def bundle(self, selected: ScoreSelection) -> dict:
-        """Prepare one source/revision-keyed physical score contract.
-
-        The current source and future preloads use this same compilation
-        boundary. Authentic layout/ink and projected original MIDI note
-        identities must agree *before* the native renderer may admit the
-        source. No live lesson, transport or UI state is read here.
-        """
-        with self._engraving_lock:
-            layout = self._geometry(selected)
-            model = self.semantic_score(selected)
-            if (layout.get("revision") != selected.revision
-                    or model.get("revision") != selected.revision):
-                raise ValueError("Score bundle contains mixed revisions")
-            # The engraving and active semantic projection resolve the
-            # same canonical fallback IDs for legitimate imported sources
-            # without explicit identifiers (including supported warm-ups).
-            source_ids = tuple(source_note_id(note, index)
-                               for index, note in enumerate(selected.phrase.notes))
-            if (not source_ids or len(source_ids) != len(set(source_ids))):
-                raise ValueError("Score bundle has missing or duplicate source note IDs")
-            graded_ids = {source_note_id(note, index)
-                          for index, note in enumerate(selected.phrase.notes)
-                          if selected.hand == "both" or note.hand == selected.hand}
-            if set(model.get("active_note_ids", ())) != graded_ids:
-                raise ValueError("Score bundle notation does not match graded MIDI source IDs")
-            return {
-                "status": "ready",
-                "fingerprint": selected.fingerprint,
-                "revision": selected.revision,
-                "stage_key": selected.stage_key,
-                "hand": selected.hand,
-                "source_note_ids": list(source_ids),
-                "layout": layout,
-                "model": model,
-            }
-
-    def cached_layout(self, selected: ScoreSelection) -> EngravedScore | None:
-        """Feedback may read only ink belonging to this exact source selection.
-
-        Lock-free: reads one atomically published entry, so the musical tick
-        never waits for an engraving in progress.
-        """
-        entry = self._layout_entry
-        return entry[1] if entry is not None and entry[0] == selected.identity else None
-
-    def source_bpm_changed(self, source_bpm: float) -> bool:
-        entry = self._layout_entry
-        return entry is not None and entry[2] != source_bpm
-
-    @property
-    def engraving_cache_key(self) -> str | None:
-        entry = self._layout_entry
-        return entry[3] if entry is not None else None
-
-    def engraving(self, selected: ScoreSelection) -> EngravedScore:
-        with self._engraving_lock:
-            return self._engraving(selected)
-
-    def _engraving(self, selected: ScoreSelection) -> EngravedScore:
-        self.require_active()
-        cached = self.cached_layout(selected)
+    def _engrave(self, key: str, *, compact: bool) -> EngravedScore:
+        cached = self._cached_engraving(key)
         if cached is not None:
             return cached
-        piece, phrase = selected.piece, selected.phrase
-        notation = self._selected_notation(selected)
-        envelope = display_envelope(piece, phrase, transformed=selected.transformed_rhythm)
-        display_phrase = envelope.phrase
-        # Short exercises remain continuous; larger works retain bounded pages.
+        selected = self.selected
+        envelope = self.envelope
+        complete = render_layout(
+            self.notation, "both", total_beats=envelope.phrase.end-envelope.phrase.start,
+            bpm=selected.piece.bpm, continuous=compact)
+        require_lesson_alignment(envelope.phrase, complete.layout, "both")
+        layout = project_performance_layout(complete.layout, envelope)
+        require_lesson_alignment(selected.phrase, layout, selected.hand)
+        self.preprocessing.write_json("engraving", key, {"pages": list(complete.pages), "layout": layout})
+        self.preprocessing.prune()
+        return EngravedScore(complete.pages, layout)
+
+    @cached_property
+    def layout(self) -> dict:
+        began = time.perf_counter()
+        selected = self.selected
+        phrase, piece = selected.phrase, selected.piece
         compact = phrase.last_bar-phrase.first_bar+1 <= 12 and phrase.end-phrase.start <= 48
         key = self.preprocessing.key(
             "engraving", "complete-display-atlas-v2",
-            hashlib.sha256(notation.musicxml.encode("utf-8")).hexdigest(),
+            hashlib.sha256(self.notation.musicxml.encode("utf-8")).hexdigest(),
             selected.fingerprint, selected.stage_key,
             phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
             selected.hand, piece.bpm, compact,
             tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes))
-        cached = self.preprocessing.read_json("engraving", key)
-        layout = None
-        if cached is not None:
-            try:
-                pages, geometry = cached["pages"], cached["layout"]
-                if (not isinstance(pages, list) or not pages
-                        or not all(isinstance(page, str) for page in pages)
-                        or not isinstance(geometry, dict)):
-                    raise ValueError("Invalid preprocessed score")
-                candidate = EngravedScore(tuple(pages), geometry)
-                require_lesson_alignment(phrase, candidate.layout, selected.hand)
-                layout = candidate
-                print("PREPROCESS_ENGRAVING_CACHE_HIT:", phrase.first_bar, phrase.last_bar, piece.bpm)
-            except (TypeError, ValueError, KeyError, AssertionError):
-                layout = None
-        if layout is None:
-            self.require_active()
-            complete = render_layout(
-                notation, "both", total_beats=display_phrase.end-display_phrase.start,
-                bpm=piece.bpm, continuous=compact)
-            self.require_active()
-            require_lesson_alignment(display_phrase, complete.layout, "both")
-            layout = EngravedScore(complete.pages, project_performance_layout(complete.layout, envelope))
-            require_lesson_alignment(phrase, layout.layout, selected.hand)
-            self.preprocessing.write_json("engraving", key,
-                {"pages": list(layout.pages), "layout": layout.layout})
-            self.preprocessing.prune()
-        self.require_active()
-        self._layout_entry = (selected.identity, layout, piece.bpm, key)
+        score = self._engrave(key, compact=compact)
+        engraved = time.perf_counter()
+        layout = assemble_layout(score, notation_model=self.notation_model,
+            notation_xml=self.notation.musicxml, cache=self.preprocessing,
+            cache_key=key, revision=selected.revision)
+        if os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+            print("SCORE_GEOMETRY_STAGE: engraving", round((engraved-began)*1000, 1),
+                  "ms asset extraction", round((time.perf_counter()-engraved)*1000, 1),
+                  "ms", flush=True)
         return layout
-
-    def geometry(self, selected: ScoreSelection) -> dict:
-        with self._engraving_lock:
-            return self._geometry(selected)
-
-    def _geometry(self, selected: ScoreSelection) -> dict:
-        self.require_active()
-        # A transient renderer retry or second layout request for the same
-        # source revision must not re-extract every Verovio beam/tie/tuplet
-        # fragment. Preserve an owned immutable snapshot; callers cannot
-        # mutate the layout subsequently served to another request.
-        if selected.identity == self._prepared_layout_identity and self._prepared_layout is not None:
-            return deepcopy(self._prepared_layout)
-        diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
-        began = time.perf_counter()
-        score = self._engraving(selected)
-        self.require_active()
-        if diagnostics:
-            print("SCORE_GEOMETRY_STAGE: engraving",
-                  round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
-        checkpoint = time.perf_counter()
-        notation = self._selected_notation(selected)
-        # Atlas extraction is structural correspondence with the COMPLETE
-        # original XML/pages, including support bars for carried ties. The
-        # bounded display projection is not a complete document inventory.
-        with self._model_lock:
-            self.source_model(selected)
-            notation_model = self._notation_model
-        if diagnostics:
-            print("SCORE_GEOMETRY_STAGE: semantic",
-                  round((time.perf_counter()-checkpoint)*1000, 1), "ms", flush=True)
-        checkpoint = time.perf_counter()
-        prepared = score_preparation.assemble_layout(score,
-            notation_model=notation_model, notation_xml=notation.musicxml,
-            cache=self.preprocessing, cache_key=self.engraving_cache_key or "",
-            revision=selected.revision, checkpoint=self.require_active)
-        self.require_active()
-        if diagnostics:
-            print("SCORE_GEOMETRY_STAGE: native-assets",
-                  round((time.perf_counter()-checkpoint)*1000, 1), "ms",
-                  "total", round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
-        self._prepared_layout_identity = selected.identity
-        self._prepared_layout = prepared
-        return deepcopy(prepared)

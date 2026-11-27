@@ -198,9 +198,9 @@ func ingest(event: Dictionary) -> String:
             changed = statuses.observe(take,id,{"pitch":"correct","release":release},false,false,
                 bool(event.get("release_advisory",false)))
         "assessment":
-            var id: String = str(event.get("note_id",""))
+            var id: String = _note_for_source(revision,str(event.get("source_id","")))
             var dimensions: Variant = event.get("dimensions")
-            if _note_for_source(revision,str(event.get("source_id",""))) != id or id.is_empty():
+            if id.is_empty():
                 ignored_events += 1
                 return "ignored"
             if str(event.get("status","")) == "pending" and dimensions == null:
@@ -235,9 +235,8 @@ func present(state: Dictionary) -> void:
         for mark in state.get("feedback_marks",[]):
             if not mark is Dictionary:
                 continue
-            var id: String = str(mark.get("id",""))
-            var source: String = str(mark.get("source_id",""))
-            if _note_for_source(score_revision,source) != id or id.is_empty():
+            var id: String = _note_for_source(score_revision,str(mark.get("source_id","")))
+            if id.is_empty():
                 continue
             var status: String = str(mark.get("status",""))
             if status in ["correct","assisted","wrong"]:

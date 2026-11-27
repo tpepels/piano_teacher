@@ -277,11 +277,6 @@ class RouteCommands:
             self.exposure_workflows.prepare_practice(exposure=selected,reason=action)
         elif route == "learn":
             self.course.begin_learn(exposure=selected,reason=action)
-        elif route == "reload_score":
-            self.lifecycle.stop(reason=action)
-            self.lesson.advance_revision()
-            self.transport.await_score(self.lesson.revision)
-            self.notices.feedback = "Preparing sheet music"
         else:
             raise ValueError(f"Route {route!r} is admitted physically, not entered")
 
@@ -303,22 +298,19 @@ class TransportCommands:
             self.routes.course.enter_selected_exposure(selected,reason=action)
         elif action == "section_repeat":
             self.transport_timing.update_placement_facts(kwargs)
-            transition = PlaybackTransition.from_effect(effect, action="start", source_changed=False)
+            transition = PlaybackTransition.from_effect(effect, action="start")
             self.transport_timing.request_playback(action="start", mode="practice",
                 from_beat=transition.exposure.from_beat, transition=transition)
         elif action == "practice":
             self.routes.practice(kwargs, effect=effect)
         elif action == "stop":
+            self.score.cancel_preparation()
             self.routes.stop()
         elif action in ("start", "restart"):
             self.transport_timing.update_placement_facts(kwargs)
             effect = effect or self.lesson.manual_effect(action)
-            transition = PlaybackTransition.from_effect(
-                effect,action=action,source_changed=(
-                    self.score.current_artifacts.source_bpm_changed(self.lesson.plan.piece.bpm)
-                    if self.transport.mode not in ("listen", "learn") else False))
-            if transition.route in ("listen", "prepare_practice",
-                                    "reload_score", "learn"):
+            transition = PlaybackTransition.from_effect(effect, action=action)
+            if transition.route in ("listen", "prepare_practice", "learn"):
                 # These routes change assets or enter untimed teaching.
                 # The resulting timed source, if any, is requested only
                 # after its exact selected score revision is prepared.

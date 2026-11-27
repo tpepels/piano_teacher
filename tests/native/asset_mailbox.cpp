@@ -10,21 +10,23 @@ int main() {
     Mailbox mailbox(3);
     assert(mailbox.submit({1}));
     assert(mailbox.submit({2}));
-    assert(mailbox.take()->id == 1);
+    assert(mailbox.take()->id == 2);
+    assert(!mailbox.cancelled(2));
     assert(mailbox.submit({3}));
     assert(!mailbox.submit({4}));
-    mailbox.cancel(2);
-    assert(mailbox.submit({4}));
     mailbox.cancel(1);
-    mailbox.complete({1});
-    assert(mailbox.drain().empty());
-    assert(mailbox.take()->id == 3);
-    mailbox.complete({3});
-    mailbox.cancel(3);
+    assert(mailbox.submit({4}));
+    mailbox.cancel(2);
+    assert(mailbox.cancelled(2));
+    mailbox.complete({2});
     assert(mailbox.drain().empty());
     assert(mailbox.take()->id == 4);
     mailbox.complete({4});
-    assert(mailbox.drain().front().id == 4);
+    mailbox.cancel(4);
+    assert(mailbox.drain().empty());
+    assert(mailbox.take()->id == 3);
+    mailbox.complete({3});
+    assert(mailbox.drain().front().id == 3);
 
     // Real cross-thread cancellation while a job is in flight.
     Mailbox concurrent;

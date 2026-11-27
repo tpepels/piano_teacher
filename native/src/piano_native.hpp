@@ -12,7 +12,6 @@
 #include <mutex>
 #include <string>
 #include <thread>
-#include <vector>
 #include "asset_mailbox.hpp"
 
 namespace godot {
@@ -25,11 +24,12 @@ class PianoNative : public RefCounted {
     struct Command {
         int64_t id;
         std::string operation, body;
+        int64_t enqueued_ms;
     };
     struct Reply {
         int64_t id;
         int status;
-        std::vector<uint8_t> bytes;
+        PackedByteArray bytes;
     };
 
     std::mutex mutex_;
@@ -52,7 +52,7 @@ class PianoNative : public RefCounted {
     void asset_loop();
     static bool is_asset_operation(const std::string &operation);
     int tick_engine();
-    Reply execute(const Command &command);
+    Reply execute(const Command &command, bool subprocess_score = false);
 protected:
     static void _bind_methods();
 

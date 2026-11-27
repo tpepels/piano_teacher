@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from bisect import bisect_left, bisect_right
 
 from ..music import Phrase, Piece, source_note_id
-from .practice_timeline import practice_timeline_descriptor
 
 
 @dataclass(frozen=True)
@@ -69,7 +68,7 @@ def display_envelope(piece: Piece, active: Phrase, *, transformed: bool) -> Disp
     return DisplayEnvelope(phrase, active, active_ids, display_start)
 
 
-def project_display_model(model: dict, envelope: DisplayEnvelope, hand: str) -> dict:
+def project_display_model(model: dict, envelope: DisplayEnvelope, hand: str, practice_timeline: dict) -> dict:
     """Translate one complete notation model; retain a strict active selection."""
     model = deepcopy(model)
     shift = envelope.offset
@@ -120,8 +119,7 @@ def project_display_model(model: dict, envelope: DisplayEnvelope, hand: str) -> 
         display_measures=display_measures,
         display_extent={'start_beat': round(envelope.display_offset, 8),
                         'end_beat': max(sounding, round(envelope.phrase.end-active.start, 8))},
-        practice_timeline=practice_timeline_descriptor(measures, duration, ('right', 'left'),
-            sounding_duration_beats=sounding))
+        practice_timeline=practice_timeline)
     return model
 
 
