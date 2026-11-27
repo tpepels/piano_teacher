@@ -3,6 +3,8 @@ extends SceneTree
 ## with a TEST-ONLY mido input port at the hardware boundary. No fake
 ## state machine, renderer, assessment, shortcut, or transport owner.
 const MAX_MS := 200000
+# Both fixtures use a quick pair of attacks to enter Tempo at the floor.
+const SECOND_BEAT := .5
 var app
 var begun_ms := 0
 var phase_ms := 0
@@ -29,11 +31,9 @@ var played_second := false
 # Continuity invariant (owner report 2026-11-24): the staff may never jump.
 var continuity_world := NAN
 var continuity_ms := -1
+var continuity_bpm := 0.0
 var continuity_violation := ""
 var ink_shown_since := -1
-# Beat of the fixture's second note: 3.0 in the 4/4 fixture, 1.0 in 2/4.
-var second_beat: float = float(OS.get_environment("PIANO_TEST_SECOND_BEAT")) \
-    if not OS.get_environment("PIANO_TEST_SECOND_BEAT").is_empty() else 3.0
 
 func _initialize() -> void:
     call_deferred("_boot")
@@ -100,6 +100,40 @@ func _press_primary() -> bool:
     return true
 
 
+func _free_target_held(state: Dictionary, rendered_world: float, now_ms: int) -> bool:
+    var segments: Array = state.get("musical_timeline",{}).get("segments",[])
+    if segments.is_empty() or segments[-1].get("kind") != "hold":
+        return false
+    var flow = app.presentation_session.score_flow
+    var held: float = flow.run_world(float(segments[-1]["world_start"]))
+    # The target index may update before the tick appends the next hold.
+    return held > free_hold_world+.02 and absf(rendered_world-held) <= .02 and \
+        absf(flow.project(now_ms)-held) <= .02
+
+
+func _play_failed_take(state: Dictionary) -> bool:
+    var beat: float = _current_take_beat(state)
+    if not is_finite(beat):
+        return false
+    if not played_first and beat >= 0.0:
+        _strike(73)
+        played_first = true
+    if not played_first or beat < SECOND_BEAT:
+        return false
+    # A correct second attack gives the resumed take evidence at the floor.
+    _strike(79)
+    played_first = false
+    return true
+
+
+func _current_take_beat(state: Dictionary) -> float:
+    var current: Variant = state.get("playback_timeline",{}).get("current")
+    if not current is Dictionary:
+        return NAN
+    return app.presentation_session.score_flow.take_beat(
+        str(current.get("segment_id","")), Time.get_ticks_usec()*.001)
+
+
 func _check_continuity(renderer, state: Dictionary, now_ms: int, step: String) -> String:
     # Between two painted frames the staff moves forward by at most what
     # the fastest current tempo covers in that time (plus frame slack).
@@ -107,9 +141,11 @@ func _check_continuity(renderer, state: Dictionary, now_ms: int, step: String) -
     var world: float = float(renderer.stream_world_beat)
     if not is_finite(world):
         return ""
+    var effective_bpm: float = app.presentation_session.score_flow.bpm
     if is_finite(continuity_world) and continuity_ms >= 0:
         var dt: float = maxf(0.0, float(now_ms-continuity_ms)/1000.0)
         var bpm: float = maxf(float(state.get("bpm",0.0)), float(state.get("target_bpm",0.0)))
+        bpm = maxf(bpm,maxf(continuity_bpm,effective_bpm))
         var allowed: float = maxf(bpm, 60.0)*1.25/60.0*dt + .06
         var moved: float = world-continuity_world
         if moved > allowed or moved < -.002:
@@ -117,6 +153,7 @@ func _check_continuity(renderer, state: Dictionary, now_ms: int, step: String) -
                 moved, dt*1000.0, allowed, phase, step, str(state.get("mode",""))])
     continuity_world = world
     continuity_ms = now_ms
+    continuity_bpm = effective_bpm
     return ""
 
 func _process(_delta: float) -> bool:
@@ -263,7 +300,8 @@ func _process(_delta: float) -> bool:
                 paused_at_ms = Time.get_ticks_msec()
                 paused_world = renderer.stream_world_beat
                 paused_target = int(state.get("teaching",{}).get("target_index",-1))
-                _strike(first_pitch)
+                # C is reserved for resuming while paused. Use a non-shortcut key.
+                _strike(61)
                 return false
             if Time.get_ticks_msec()-paused_at_ms < 380:
                 return false
@@ -279,7 +317,8 @@ func _process(_delta: float) -> bool:
             _strike(first_pitch)
             _advance("first_free")
         "first_free":
-            if int(state.get("teaching",{}).get("target_index",-1)) < 1:
+            if int(state.get("teaching",{}).get("target_index",-1)) < 1 or \
+                    not _free_target_held(state,renderer.stream_world_beat,now_ms):
                 return false
             var targets: Array = state.get("teaching",{}).get("expected_notes",[])
             if targets.is_empty():
@@ -372,11 +411,8 @@ func _process(_delta: float) -> bool:
             if int(state.get("transport_id",-1)) != initial_transport:
                 _fail("Tempo advanced before receiving a failed MIDI input")
                 return true
-            if str(state.get("phase","")) != "playing" or \
-                    float(state.get("clock_beat",-100.0)) < 0.2:
-                return false
-            _strike(61)
-            _advance("repeat")
+            if _play_failed_take(state):
+                _advance("repeat")
         "repeat":
             if int(state.get("transport_id",-1)) == initial_transport:
                 return false
@@ -389,11 +425,8 @@ func _process(_delta: float) -> bool:
             _advance("second_failure")
         "second_failure":
             # A second failed take in a row at 50% returns to Free.
-            if str(state.get("phase","")) != "playing" or \
-                    float(state.get("clock_beat",-100.0)) < 0.2:
-                return false
-            _strike(61)
-            _advance("free_again")
+            if _play_failed_take(state):
+                _advance("free_again")
         "free_again":
             if mode != "learn" or step != "free":
                 if int(state.get("transport_id",-1)) > initial_transport+1 and \
@@ -418,6 +451,7 @@ func _process(_delta: float) -> bool:
             if now_ms-free_hold_since_ms < 400:
                 return false
             print("FULL_SCENE_FREE_AFTER_TWO_FAILURES held=",held)
+            free_hold_world = held
             _strike(int(again[0]["pitch"]))
             _advance("free_again_last")
         "free_again_last":
@@ -428,6 +462,8 @@ func _process(_delta: float) -> bool:
             if targets.is_empty():
                 return false
             if int(state.get("teaching",{}).get("target_index",-1)) >= 1:
+                if not _free_target_held(state,renderer.stream_world_beat,now_ms):
+                    return false
                 _strike(int(targets[0]["pitch"]))
                 _advance("tempo_again")
             elif now_ms-phase_ms > 600:
@@ -445,14 +481,14 @@ func _process(_delta: float) -> bool:
             initial_transport = int(state.get("transport_id",-1))-1
             _advance("clean_repeat")
         "clean_repeat":
-            if int(state.get("transport_id",-1)) <= initial_transport or \
-                    str(state.get("phase","")) != "playing":
+            if int(state.get("transport_id",-1)) <= initial_transport:
                 return false
-            var beat: float = float(state.get("clock_beat",-100.0))
-            if not played_first and beat >= 0.0 and beat < 0.45:
+            var beat: float = _current_take_beat(state)
+            if not played_first and beat >= 0.0 and beat < .10:
                 _strike(72)
                 played_first = true
-            if played_first and not played_second and beat >= second_beat and beat < second_beat+.45:
+            if played_first and not played_second and beat >= SECOND_BEAT and \
+                    beat < SECOND_BEAT+.10:
                 _strike(79)
                 played_second = true
             if played_second:

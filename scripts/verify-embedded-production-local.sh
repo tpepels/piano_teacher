@@ -163,8 +163,8 @@ piece.save(target)
 print("CREATED_FIXTURE", target)
 
 # Small source for the full-scene synthetic physical MIDI journey.
-# First bar: two distinct right-hand attacks (0 and 3 beats), no hand
-# remapping, fake score or altered grading rules.
+# Two quickly spaced attacks start at the documented 50% floor so the
+# journey exercises the return to Free after two failures there.
 short = mido.MidiFile(type=1,ticks_per_beat=480)
 short_meta = mido.MidiTrack()
 short.tracks.append(short_meta)
@@ -174,8 +174,8 @@ notes = mido.MidiTrack()
 short.tracks.append(notes)
 notes.extend([
     mido.Message("note_on",channel=0,note=72,velocity=84,time=0),
-    mido.Message("note_off",channel=0,note=72,velocity=0,time=240),
-    mido.Message("note_on",channel=0,note=79,velocity=84,time=1200),
+    mido.Message("note_off",channel=0,note=72,velocity=0,time=120),
+    mido.Message("note_on",channel=0,note=79,velocity=84,time=120),
     mido.Message("note_off",channel=0,note=79,velocity=0,time=240),
 ])
 short_path = target.parent / "ci_state_journey.mid"
@@ -193,8 +193,8 @@ two_notes = mido.MidiTrack()
 two.tracks.append(two_notes)
 two_notes.extend([
     mido.Message("note_on",channel=0,note=72,velocity=84,time=0),
-    mido.Message("note_off",channel=0,note=72,velocity=0,time=240),
-    mido.Message("note_on",channel=0,note=79,velocity=84,time=240),
+    mido.Message("note_off",channel=0,note=72,velocity=0,time=120),
+    mido.Message("note_on",channel=0,note=79,velocity=84,time=120),
     mido.Message("note_off",channel=0,note=79,velocity=0,time=240),
 ])
 two.save(target.parent / "ci_state_journey_two_four.mid")
@@ -208,12 +208,11 @@ verify_fixture_ui() {
     --script res://production_ui_smoke.gd
 }
 verify_fake_midi_ui() {
-  # $1: fixture variant: "normal" (4/4, second note on beat 3) or
-  # "two-four" (2/4, second note on beat 1).
+  # $1: fixture meter, "normal" (4/4) or "two-four" (2/4).
   local variant="${1:-normal}"
-  local fixture="ci_state_journey.mid" second_beat="3.0"
+  local fixture="ci_state_journey.mid"
   if [[ "$variant" == "two-four" ]]; then
-    fixture="ci_state_journey_two_four.mid"; second_beat="1.0"
+    fixture="ci_state_journey_two_four.mid"
   fi
   set_case "fake-midi-$variant"
   seed "$fixture"
@@ -233,7 +232,6 @@ PY
   # A fresh physical Resume includes an entire authored count-in bar.
   # Bound the longer real-time journey consistently with its Godot budget.
   timeout 210s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
-    PIANO_TEST_SECOND_BEAT="$second_beat" \
     PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
     "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
       --script res://production_fake_midi_journey.gd | tee "$scenario_log"
@@ -325,20 +323,34 @@ audit_package() {
   # This child inherits neither the builder's venv nor any PYTHONPATH,
   # PIANO_TEACHER_PYTHON_HOME or compiled project import cache.
   local package_log="$WORK/clean-package-boot.log"
+  local fixture="$clean_home/Music/Piano Teacher/phase6_native_fixture.mid"
+  mkdir -p "$(dirname "$fixture")"
+  cp "$HOME/Music/Piano Teacher/phase6_native_fixture.mid" "$fixture"
+  "$PYTHON" - "$clean_home" "$fixture" <<'PY'
+from pathlib import Path
+import sys
+from piano_teacher.library import ScoreLibrary
+home, fixture = map(Path, sys.argv[1:])
+library = ScoreLibrary(config_dir=home / '.config/piano-teacher')
+library.update(music_dir=str(fixture.parent), fullscreen=False)
+library.mark_opened(fixture.name)
+PY
   timeout 45s env -i \
     HOME="$clean_home" USER="${USER:-runner}" PATH="/usr/bin:/bin" \
-    PIANO_TEACHER_HEADLESS_SMOKE=1 \
+    PIANO_TEACHER_HEADLESS_SMOKE=1 PIANO_TEACHER_TIMING_DIAGNOSTICS=1 \
     "$launcher" > "$package_log" 2>&1 || {
       tail -n 100 "$package_log" >&2
       return 1
     }
   if ! grep -Fq "PIANO_PACKAGE_NATIVE_READY" "$package_log" || \
+       ! grep -Eq 'SCORE_WORKER_GENERATION: [0-9]+ score\.bundle ' "$package_log" || \
+       ! grep -Fq "NATIVE_MODEL_READY:" "$package_log" || \
        grep -Eq 'Embedded Piano Teacher stopped|SCRIPT ERROR|ERROR:.*(extension|python|libpiano)' "$package_log"; then
-    echo "Relocated package did not boot its embedded Python/Godot runtime" >&2
+    echo "Relocated package did not generate and install its native score" >&2
     tail -n 100 "$package_log" >&2
     return 1
   fi
-  echo "Relocated standalone package boot passed"
+  echo "Relocated standalone package generated and installed native notation"
 }
 
 # Export only this runner's local case helpers. Each subprocess inherits

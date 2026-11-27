@@ -222,7 +222,9 @@ class MusicalTimeline:
         self.next_take = None
         last = self.segments[-1]
         if last.kind == "hold":
-            at = max(last.start_at, self.musical(now))
+            # Give the released Free hold the same publication lead as a
+            # move to the next target. A late receipt must not jump the staff.
+            at = max(last.start_at, self.musical(now)) + MOVE_LEAD_SECONDS
             self.segments[-1] = replace(last, hold_seconds=at-last.start_at)
             tempo = last.end_bpm
             self.append(TimelineSegment(

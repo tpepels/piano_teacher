@@ -48,11 +48,18 @@ The separate final examination uses the whole original piece.
 | S1 | Record a baseline under score load. Derive preparation timing from the selected musical source, and publish grading and Free feedback by source-note ID. Verify pickup, meter, sounding tails and note judgments in the existing journeys. | Implemented |
 | S2 | Run the single notation and asset pipeline in a persistent exec-launched CPython worker. Transfer a value snapshot of the selected source and authoritative timing in bounded frames. Keep the generation cache in the child. | Implemented |
 | S3 | Reuse the native mailbox to supervise one active request. Bind every exchange to request and selection identity, prioritize current work, cancel obsolete work, enforce deadlines, and reap and replace failed children. Validate before delivering bytes to detached Godot preparation. | Implemented |
-| S4 | Exercise source replacement, navigation, Retry, Stop, saturation, malformed and stale replies, crashes, timeouts, large bundles and shutdown. Run native journeys and the relocated standalone package with its bundled Python. | Final verification running |
+| S4 | Exercise source replacement, navigation, Retry, Stop, saturation, malformed and stale replies, crashes, timeouts, large bundles and shutdown. Run native journeys and the relocated standalone package with its bundled Python. | Automated verification passed. |
 | S5 | Compare MIDI callback, engine tick, frame and generation intervals, memory and IPC costs. Document source loading, fingering, Listen audio and main-thread installation costs. Record physical acceptance separately. | Local measurements recorded. Piano acceptance pending. |
 
 [Worker contract and measurements](docs/asset-worker.md) describe the live
 process, the publication boundaries and the remaining latency sources.
+The Python suite passed 382 tests on CPython 3.12 and 3.14. Godot syntax and
+player scenarios, real fingering inference, the native mailbox check and the
+code-quality gate passed. The embedded verifier passed both synthetic MIDI
+meters, Moonlight and the remaining 16 repertoire files. The relocated
+archive generated and installed native notation through its bundled
+interpreter. The optional original Pathétique II source and physical piano,
+audio and display acceptance are pending.
 
 ## Musical timeline rebuild (T1–T6, adopted 2026-11-24)
 
