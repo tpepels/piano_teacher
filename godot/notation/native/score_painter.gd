@@ -112,7 +112,7 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
         # The future overlay reuses the same fixed staff, brace and playhead
         # drawn by the current primary renderer. Only its notes scroll in.
         return
-    # The genuine Verovio brace belongs ABOVE scrolling source ink at the
+    # The fixed grand-staff brace belongs ABOVE scrolling source ink at the
     # fixed left-hand edge, not inside the translated source segments.
     var staff_top: float = layout.barline_top(gap)
     var staff_bottom: float = layout.barline_bottom(gap)

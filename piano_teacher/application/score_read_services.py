@@ -17,6 +17,7 @@ class ScoreReadServices:
         self.learner_progress = learner_progress
         self.lock = lock
         self._timing = None
+        self._encoded_source = None
         self._cancellation_generation = 0
 
     def selection(self) -> ScoreSelection:
@@ -66,6 +67,20 @@ class ScoreReadServices:
     def cancel_preparation(self) -> None:
         self._cancellation_generation += 1
 
+    def _source_document(self, selected, timing, checkpoint):
+        # Only the asset lane owns these transfer bytes. In particular the
+        # same-revision fingering correction replaces the immutable Piece.
+        cached = self._encoded_source
+        if cached is not None:
+            previous, body = cached
+            if (selected.piece is previous.piece and selected.identity == previous.identity
+                    and selected.phrase == previous.phrase):
+                return body
+        body = document_bytes(selected.document(timing), checkpoint)
+        checkpoint()
+        self._encoded_source = (selected, body)
+        return body
+
     def prepare(self, operation, expected, *, cancelled=None,
                 timeout=DEADLINE_SECONDS) -> tuple[int, bytearray]:
         deadline = monotonic() + timeout
@@ -85,7 +100,7 @@ class ScoreReadServices:
 
         status, body = self.process.request(
             operation, selected.binding,
-            lambda checkpoint: document_bytes(selected.document(timing), checkpoint),
+            lambda checkpoint: self._source_document(selected, timing, checkpoint),
             generation=expected.get("generation", generation), cancelled=obsolete,
             rejected_generation=expected.get("rejected_generation"),
             timeout=deadline-monotonic(), validate_json=cancelled is None)

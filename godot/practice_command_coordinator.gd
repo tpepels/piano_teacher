@@ -184,6 +184,8 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
             command_failure_presenter.present(
                 "Practice command returned no accepted state/outcome",
                 operation,false)
+            if stopped:
+                score_session.request_layout()
             _flush_transport_action()
             return
         # A successful command is not a license to run display or
@@ -195,6 +197,8 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
             command_failure_presenter.present(
                 "Practice command returned an invalid state: " +
                 "; ".join(violations),operation,false)
+            if stopped:
+                score_session.request_layout()
             _flush_transport_action()
             return
         accepted_outcome = envelope["outcome"]
@@ -213,6 +217,8 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
             command_failure_presenter.present(
                 "Practice command outcome contract is obsolete",
                 operation,false)
+            if stopped:
+                score_session.request_layout()
             _flush_transport_action()
             return
         presentation_body = JSON.stringify(command_state).to_utf8_buffer()

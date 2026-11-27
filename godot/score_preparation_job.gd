@@ -6,6 +6,7 @@ const Timeline := preload("res://notation/shared/timeline.gd")
 const Engraving := preload("res://notation/native/score_engraving.gd")
 const Geometry := preload("res://notation/native/geometry.gd")
 const Spacing := preload("res://notation/shared/spacing_policy.gd")
+const LivingScore := preload("res://living_score.gd")
 
 var body: PackedByteArray
 var request: Dictionary
@@ -61,7 +62,6 @@ func _validated_axis(bundle: Dictionary):
     return axis
 
 func _prepare_atlas(engraving, layout: Dictionary) -> bool:
-    engraving.glyphs.begin_cpu_preparation()
     if not NativeScoreAssets.prepare_engraving(engraving,layout):
         result = {"invalid_bundle":true,"error":engraving.failure_reason}
         return false
@@ -70,12 +70,34 @@ func _prepare_atlas(engraving, layout: Dictionary) -> bool:
     engraving.glyphs.prepare_head_interiors()
     return not _should_stop()
 
+func refit(viewport_size: Vector2, configured_density: float) -> void:
+    viewport = viewport_size
+    density = configured_density
+
+func _fit(engraving) -> bool:
+    if engraving.prepare(density,viewport,Spacing.PLAYHEAD_FRACTION):
+        return not _should_stop()
+    result = {"invalid_bundle":engraving.incomplete_assets,"error":engraving.failure_reason}
+    return false
+
 func run() -> void:
     if _should_stop():
         return
+    if result.has("engraving"):
+        # A superseded viewport can reuse the same CPU atlas. This only runs
+        # before the first upload, so no GPU texture crosses into the pool.
+        var started: int = Time.get_ticks_usec()
+        if _fit(result["engraving"]):
+            var elapsed: float = float(Time.get_ticks_usec()-started)*.001
+            result["timing"]["geometry_cpu_ms"] += elapsed
+            result["timing"]["total_ms"] += elapsed
+        return
+    # If a malformed nested value aborts a typed Godot loader, this request
+    # still rejects the bundle and the supervisor can issue one fresh replay.
+    result = {"invalid_bundle":true,"error":"Score bundle contains malformed notation data"}
     var started: int = Time.get_ticks_usec()
     var bundle: Dictionary = _decode_bundle()
-    if result.has("error") or _should_stop():
+    if bundle.is_empty() or _should_stop():
         return
     var decoded: int = Time.get_ticks_usec()
     var axis = _validated_axis(bundle)
@@ -86,13 +108,13 @@ func run() -> void:
     if not _prepare_atlas(engraving,bundle["layout"]):
         return
     var atlas_at: int = Time.get_ticks_usec()
-    if not engraving.prepare(density,viewport,Spacing.PLAYHEAD_FRACTION):
-        result = {"error":engraving.failure_reason}
-        return
-    if _should_stop():
+    if not _fit(engraving):
         return
     # The main thread receives the sole owner after the pool task joins.
-    result = {"engraving":engraving,"layout":NativeScoreAssets.compact_layout(bundle["layout"]),
+    engraving.glyphs.begin_upload()
+    var layout: Dictionary = bundle["layout"]
+    result = {"engraving":engraving,"attacks":layout["attack_map"],
+        "source_groups":LivingScore.prepare(layout),
         "timing":{"revision":request["revision"],"bytes":body.size(),
             "decode_ms":float(decoded-started)*.001,
             "validate_ms":float(validated-decoded)*.001,

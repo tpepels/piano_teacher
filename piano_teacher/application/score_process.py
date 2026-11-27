@@ -45,6 +45,7 @@ class ScoreProcess:
         self._active = Lock()
         self._serial = 0
         self._pid = None
+        self._pidfd = None
         self._connection = None
         self._reply_binding = None
 
@@ -64,6 +65,8 @@ class ScoreProcess:
                                   str(os.getpid()), str(self.cache)),
                 {**os.environ, "PYTHONPATH": search_path}, file_actions=actions,
                 setsigdef=(signal.SIGPIPE, signal.SIGTERM), setsigmask=())
+            with suppress(ProcessLookupError):
+                self._pidfd = os.pidfd_open(self._pid)
             parent.settimeout(.025)
             self._connection = parent
         finally:
@@ -74,33 +77,45 @@ class ScoreProcess:
     def _reap(self, *, interrupt: bool) -> None:
         self._reply_binding = None
         pid, self._pid = self._pid, None
+        pidfd, self._pidfd = self._pidfd, None
         connection, self._connection = self._connection, None
         if connection is not None:
             connection.close()
-        if pid is None:
-            return
-        if interrupt:
-            self._signal(pid, signal.SIGTERM)
-        until = time.monotonic() + .05
-        while time.monotonic() < until:
-            if os.waitpid(pid, os.WNOHANG)[0]:
+        try:
+            if pid is None:
                 return
-            time.sleep(.005)
-        self._signal(pid, signal.SIGKILL)
-        os.waitpid(pid, 0)
+            if interrupt:
+                self._signal(pidfd, signal.SIGTERM)
+            until = time.monotonic() + .05
+            while time.monotonic() < until:
+                if self._exited(pid):
+                    return
+                time.sleep(.005)
+            self._signal(pidfd, signal.SIGKILL)
+            with suppress(ChildProcessError):
+                os.waitpid(pid, 0)
+        finally:
+            if pidfd is not None:
+                os.close(pidfd)
 
     @staticmethod
-    def _signal(pid, signum) -> None:
-        # Exiting before the signal still leaves the process for this owner to reap.
-        with suppress(ProcessLookupError):
-            os.kill(pid, signum)
+    def _signal(pidfd, signum) -> None:
+        # A host can auto-reap children. Signal the open process handle so
+        # that a recycled numeric PID can never target an unrelated process.
+        if pidfd is not None:
+            with suppress(ProcessLookupError):
+                signal.pidfd_send_signal(pidfd, signum)
+
+    @staticmethod
+    def _exited(pid) -> bool:
+        try:
+            return bool(os.waitpid(pid, os.WNOHANG)[0])
+        except ChildProcessError:
+            return True
 
     def _check_child(self) -> None:
-        if self._pid is not None and os.waitpid(self._pid, os.WNOHANG)[0]:
-            self._pid = None
-            self._connection.close()
-            self._connection = None
-            self._reply_binding = None
+        if self._pid is not None and self._exited(self._pid):
+            self._reap(interrupt=False)
 
     def poll(self) -> None:
         with self._active:

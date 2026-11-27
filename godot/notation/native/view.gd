@@ -273,18 +273,9 @@ func install_prepared_score(prepared) -> bool:
     queue_redraw()
     return true
 
-func _install_retained_segments() -> bool:
-    if not _clear_retained_segments():
-        return false
-    _resize_retained_pool(true)
-    return true
-
-func _resize_retained_pool(install: bool = false) -> void:
+func _resize_retained_pool() -> void:
     var windows: Array[Vector2] = engraving.source_windows(maxf(0.0,play_from_beat))
-    if install:
-        _retained_pool.install(self,windows)
-    else:
-        _retained_pool.resize(self,windows,_stream_controller.online_size() == 0)
+    _retained_pool.resize(self,windows,_stream_controller.online_size() == 0)
 
 func retained_ready() -> bool:
     return _retained_pool.ready(native_ready,size)

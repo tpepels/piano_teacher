@@ -205,10 +205,11 @@ class PlaybackAuthorization:
             # The compiled native score has now supplied real printed rest
             # and header clearance. Install it before the score-ready ACK
             # can select a future fixed-deadline automatic continuation.
-            self.transport_timing.update_placement_facts(kwargs)
             revision = int(kwargs.get("revision",-1))
             decision = self.transport.score_acknowledged(revision,
                 current_revision=self.lesson.revision,teaching_bound=self.lesson.guided_controller is not None)
+            if decision != "ignore":
+                self.transport_timing.update_placement_facts(kwargs)
             if decision == "listen":
                 self.pause_resume.begin_listen_if_ready()
             elif decision == "learn":

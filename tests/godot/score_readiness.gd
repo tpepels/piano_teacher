@@ -110,7 +110,10 @@ func run() -> void:
     var replayed: Array = []
     session.request_requested.connect(func(_kind, _id, _path, _timeout, identity):
         replayed.append(identity))
-    session.complete_response("bundle",malformed_id,0,"{}".to_utf8_buffer(),Time.get_ticks_msec())
+    var incomplete: Dictionary = JSON.parse_string(bundle(4).get_string_from_utf8())
+    incomplete["layout"]["native_beams_complete"] = false
+    session.complete_response("bundle",malformed_id,0,JSON.stringify(incomplete).to_utf8_buffer(),
+        Time.get_ticks_msec())
     var deadline: int = Time.get_ticks_msec()+5000
     while replayed.is_empty() and Time.get_ticks_msec() < deadline:
         session.advance_preparation()
@@ -122,6 +125,15 @@ func run() -> void:
     await wait_until_finished(4)
     check(not session.is_ready() and not session.score_error.is_empty() and
         session.status().retry_visible and actions.is_empty(),"Malformed score fails visibly without authorizing playback")
+    view.size = Vector2(10,10)
+    session.update_context(state(7),Time.get_ticks_msec())
+    var received: int = Time.get_ticks_msec()
+    session.complete_response("bundle",session.pending_id("bundle"),0,bundle(7),received)
+    session.poll(received+45000)
+    check(not session.layout_pending and not session.is_ready() and
+        session.status().retry_visible and actions.is_empty(),
+        "A viewport that never becomes usable expires with Retry available")
+    view.size = Vector2(1200,650)
     session.update_context({"loaded":false,"revision":4},Time.get_ticks_msec())
     check(not session.is_ready() and session.status().browse_visible,"Closing music revokes readiness")
     var grid: Array = [{"start_beat":0.0,"end_beat":4.0}]

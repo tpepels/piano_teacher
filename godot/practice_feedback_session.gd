@@ -19,8 +19,8 @@ func configure(bus, stage, clock) -> void:
 func source_invalidated() -> void:
     _reactions.clear()
 
-func layout_published(values: Dictionary, revision: int) -> void:
-    _reactions.bind_layout(values,revision)
+func layout_published(attacks: Dictionary, revision: int) -> void:
+    _reactions.bind_attacks(attacks,revision)
 
 func poll(now_ms: int, matching_revision: int) -> void:
     if _bus == null or not _bus.is_ready():

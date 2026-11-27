@@ -1,7 +1,9 @@
 """Controllable IPC peer for cancellation and recovery tests."""
 
 import os
+import signal
 import socket
+import struct
 import sys
 import time
 from pathlib import Path
@@ -38,10 +40,14 @@ def serve(mode, work):
         while True:
             try:
                 request = decode(channel.receive(METADATA_LIMIT))
+                first = not (work / mode).exists()
+                if first and mode == "blocked-write":
+                    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                    (work / mode).write_text(str(os.getpid()))
+                    time.sleep(60)
                 payload = channel.receive(REQUEST_LIMIT)
             except EOFError:
                 return
-            first = not (work / mode).exists()
             (work / mode).write_text(str(os.getpid()))
             if first and mode == "crash":
                 os._exit(33)
@@ -52,6 +58,9 @@ def serve(mode, work):
                 return
             header, body = response(request, payload, mode if first else "", large=mode == "large")
             channel.send(header, METADATA_LIMIT)
+            if first and mode == "partial-body":
+                connection.sendall(struct.pack("!I", len(body)) + body[:4])
+                return
             channel.send(body, REPLY_LIMIT)
             if first and mode == "duplicate":
                 channel.send(header, METADATA_LIMIT)

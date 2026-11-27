@@ -6,20 +6,16 @@ signal request_requested(kind: String, request_id: int, path: String,
     timeout_seconds: float, identity: Dictionary)
 signal request_cancelled
 signal assets_invalidated(revision: int)
-signal layout_published(revision: int, values: Dictionary)
+signal layout_published(revision: int, attacks: Dictionary, groups: Array)
 signal score_published(revision: int)
 signal score_failed(message: String)
 signal status_changed(values: Dictionary)
 signal action_requested(command: Dictionary)
 
 const RETAINED_INK_TIMEOUT_MS := 45000
+const DETACHED_PREPARATION_TIMEOUT_MS := 45000
 const SLOW_PREPARATION_MS := 10000
-const NativeScoreAssets := preload("res://native_score_assets.gd")
 const ScorePreparationJob := preload("res://score_preparation_job.gd")
-const ASSET_KEYS := ["native_glyphs","native_note_templates","native_tie_templates",
-    "native_chord_templates","native_beam_fragments","native_tuplet_fragments",
-    "native_slur_fragments","native_required_slur_pairs","native_slurs_complete",
-    "native_required_beam_groups","native_beams_complete"]
 
 var revision := -1
 var layout_revision := -1
@@ -28,8 +24,6 @@ var native_score_piece_fingerprint := ""
 var score_error := ""
 var layout_pending: bool:
     get: return _requests.has("bundle")
-var score_layout: Dictionary:
-    get: return layout_snapshot()
 
 var _renderer
 var _feedback
@@ -39,7 +33,6 @@ var _stage_key := ""
 var _rendered_stage_key := ""
 var _rendered_hand := ""
 var _state: Dictionary = {}
-var _layout: Dictionary = {}
 var _generation := 0
 var _closed := false
 var _annotation_version := -1
@@ -63,6 +56,7 @@ var _requests: Dictionary = {}
 var _worker_id := -1
 var _worker
 var _queued: Dictionary = {}
+var _bundle_received_ms := -1
 var _uploading
 var _upload_started := 0
 var _upload_cpu_usec := 0
@@ -147,7 +141,8 @@ func update_context(state: Dictionary, now_ms: int) -> void:
     var changed: bool = next_revision != revision or loaded != _loaded or \
         fingerprint != _fingerprint or stage_key != _stage_key or \
         hand != str(_state.get("hand",""))
-    _state = state.duplicate(true)
+    # The accepted-state inbox publishes a fresh snapshot and its consumers read it.
+    _state = state
     _loaded = loaded
     _fingerprint = fingerprint
     _stage_key = stage_key
@@ -164,7 +159,8 @@ func update_context(state: Dictionary, now_ms: int) -> void:
         if _loaded:
             request_layout()
     _apply_fingering_annotations()
-    if str(_state.get("phase","")) == "loading" and is_ready():
+    if str(_state.get("phase","")) == "loading" and \
+            int(_state.get("awaiting_score_revision",-1)) == revision and is_ready():
         # A busy action port may drop an intent. The next backend loading poll
         # repeats it, just as the accepted snapshot presentation path does.
         action_requested.emit({"action":"score_ready","revision":revision})
@@ -185,8 +181,12 @@ func _apply_fingering_annotations() -> void:
         _renderer.retained_annotations.queue_redraw()
     _renderer.queue_redraw()
 
-func layout_snapshot() -> Dictionary:
-    return _layout.duplicate(true)
+func has_outgoing_ink(state: Dictionary) -> bool:
+    return rendered_revision >= 0 and is_instance_valid(_renderer) and _renderer.native_ready and (
+        rendered_revision != int(state.get("revision",-1)) or
+        native_score_piece_fingerprint != str(state.get("piece_fingerprint","")) or
+        _rendered_stage_key != str(state.get("stage_key","")) or
+        _rendered_hand != str(state.get("hand","")))
 
 func is_ready() -> bool:
     return not _closed and score_error.is_empty() and _loaded and is_instance_valid(_renderer) and bool(_renderer.native_ready) and \
@@ -204,7 +204,9 @@ func is_ready() -> bool:
 func continuation_geometry() -> Dictionary:
     if not is_ready() or not _renderer.has_method("placement_facts"):
         return {}
-    return _renderer.placement_facts()
+    var facts: Dictionary = _renderer.placement_facts()
+    facts["placement_revision"] = revision
+    return facts
 
 
 func status() -> Dictionary:
@@ -227,6 +229,9 @@ func status() -> Dictionary:
 
 func poll(now_ms: int) -> void:
     if not _loaded or not score_error.is_empty():
+        return
+    if _bundle_received_ms >= 0 and now_ms - _bundle_received_ms >= DETACHED_PREPARATION_TIMEOUT_MS:
+        _fail("The score could not be prepared for this viewport. Resize the window or retry the score.")
         return
     if layout_revision == revision and rendered_revision != revision and _retained_started_ms >= 0:
         # Godot does not deliver draw notifications to hidden controls.
@@ -300,6 +305,7 @@ func complete_response(kind: String, request_id: int, code: int,
         _fail(_command_failure(code,body))
         return
     _requests[kind] = request
+    _bundle_received_ms = now_ms
     _queued = {"request":request,"body":body}
     _start_worker_if_possible()
 
@@ -340,8 +346,12 @@ func _start_worker_if_possible() -> void:
         return
     if not is_instance_valid(_renderer) or _renderer.size.x < 100.0 or _renderer.size.y < 100.0:
         return
-    _worker = ScorePreparationJob.new(_queued["body"],_queued["request"],
-        _renderer.size,float(_renderer.configured_density))
+    _worker = _queued.get("prepared")
+    if _worker == null:
+        _worker = ScorePreparationJob.new(_queued["body"],_queued["request"],
+            _renderer.size,float(_renderer.configured_density))
+    else:
+        _worker.refit(_renderer.size,float(_renderer.configured_density))
     _queued.clear()
     _worker_id = WorkerThreadPool.add_task(_worker.run,false,"Prepare authentic score")
     if _worker_id < 0:
@@ -352,9 +362,10 @@ func _same_preparation_viewport(job) -> bool:
     return is_instance_valid(_renderer) and _renderer.size == job.viewport and \
         float(_renderer.configured_density) == job.density
 
-func _requeue(job) -> void:
-    # A resize may supersede the fit; redo on the worker, not on the view.
+func _requeue(job, before_upload: bool) -> void:
     _queued = {"request":job.request,"body":job.body}
+    if before_upload:
+        _queued["prepared"] = job
 
 func advance_preparation() -> void:
     if _closed:
@@ -369,18 +380,18 @@ func advance_preparation() -> void:
             if invalid and not _recovered_bundle:
                 _recovered_bundle = true
                 _generation += 1
+                _bundle_received_ms = -1
                 _begin_request("bundle","score.bundle",90.0,
                     int(completed.request["generation"]))
             elif joined != OK or not completed.result.has("engraving"):
                 _requests.erase("bundle")
                 _fail(str(completed.result.get("error","Score preparation did not produce an engraving")))
             elif not _same_preparation_viewport(completed):
-                _requeue(completed)
+                _requeue(completed,true)
             else:
                 _uploading = completed
                 _upload_started = Time.get_ticks_usec()
                 _upload_cpu_usec = 0
-                _uploading.result["engraving"].glyphs.begin_upload()
                 if _timing_diagnostics:
                     print("SCORE_BUNDLE_WORKER:",JSON.stringify(completed.result["timing"]))
     if _uploading != null:
@@ -389,13 +400,14 @@ func advance_preparation() -> void:
             _uploading = null
         elif not _same_preparation_viewport(job):
             _uploading = null
-            _requeue(job)
+            _requeue(job,false)
         else:
             var started: int = Time.get_ticks_usec()
             var finished: bool = job.result["engraving"].glyphs.upload_step(2000)
             _upload_cpu_usec += Time.get_ticks_usec()-started
             if finished:
                 _uploading = null
+                _bundle_received_ms = -1
                 _requests.erase("bundle")
                 _install_prepared(job)
     _start_worker_if_possible()
@@ -419,7 +431,6 @@ func _install_prepared(job) -> void:
     if not _renderer.install_prepared_score(job.result["engraving"]):
         _fail(str(_renderer.failure_reason))
         return
-    _layout = job.result["layout"]
     layout_revision = revision
     _rendered_stage_key = _stage_key
     _rendered_hand = str(_state.get("hand",""))
@@ -430,8 +441,8 @@ func _install_prepared(job) -> void:
     _renderer.visible = true
     if is_instance_valid(_feedback):
         _feedback.bind_score(_renderer,revision)
-        _feedback.present(_state.duplicate(true))
-    layout_published.emit(revision,layout_snapshot())
+        _feedback.present(_state)
+    layout_published.emit(revision,job.result["attacks"],job.result["source_groups"])
     _publish_status()
     if _timing_diagnostics:
         print("SCORE_BUNDLE_MAIN_THREAD:",JSON.stringify({
@@ -490,7 +501,6 @@ func _reset_assets() -> bool:
         _fail(str(_renderer.failure_reason),false)
         return false
     _retained_started_ms = -1
-    _layout.clear()
     layout_revision = -1
     rendered_revision = -1
     _rendered_stage_key = ""
@@ -506,6 +516,7 @@ func _cancel_preparation() -> void:
     # Main-thread owner invalidates every publication path. The CPU worker
     # checks its mutex-protected cancellation flag between preparation phases.
     _requests.clear()
+    _bundle_received_ms = -1
     request_cancelled.emit()
     _queued.clear()
     _uploading = null

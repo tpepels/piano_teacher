@@ -50,6 +50,7 @@ var beam_extraction_complete := true
 var source_ink_intervals: Array[Vector2] = []
 var cursor_engraved_events: Array = []
 var failure_reason := ""
+var incomplete_assets := false
 var _committed_gap := 0.0
 
 func _init(axis) -> void:
@@ -176,6 +177,7 @@ func first_header_spaces() -> float:
 
 func prepare(configured_density: float, viewport: Vector2,
         playhead_fraction: float) -> bool:
+    incomplete_assets = false
     # The actual native glyph solver below is the only authority for
     # readable note spacing. A separate rhythm-only estimate used to be
     # computed and then discarded, while its extreme-density failure gate
@@ -198,6 +200,7 @@ func prepare(configured_density: float, viewport: Vector2,
     layout.set_focused_staff("")
     failure_reason = missing_engraving()
     if not failure_reason.is_empty():
+        incomplete_assets = true
         return false
     # Genuine adjacent 32nd-triplet notes before a printed accidental can
     # force very wide beat spacing. A full 22px staff previously won the

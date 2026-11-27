@@ -4,7 +4,6 @@ extends RefCounted
 ## admission in ONE transaction-like order before any stage is painted.
 ## Main owns the scene tree and event requests, not this domain sequence.
 const TempoTimeline := preload("res://tempo_timeline.gd")
-const LivingScore := preload("res://living_score.gd")
 const StatusHeadPreloader := preload("res://status_head_preloader.gd")
 
 var visual_clock
@@ -65,9 +64,9 @@ func _source_invalidated(_revision: int) -> void:
     feedback.source_invalidated()
     source_groups.clear()
 
-func _layout_published(revision: int, values: Dictionary) -> void:
-    source_groups = LivingScore.prepare(values)
-    feedback.layout_published(values,revision)
+func _layout_published(revision: int, attacks: Dictionary, groups: Array) -> void:
+    source_groups = groups
+    feedback.layout_published(attacks,revision)
 
 func _score_published(revision: int) -> void:
     if runway != null:

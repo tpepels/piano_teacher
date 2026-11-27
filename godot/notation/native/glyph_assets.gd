@@ -82,7 +82,6 @@ static var _font_raster_cache: Dictionary = {}
 # Worker jobs share immutable CPU font images, never GPU resources.
 static var _font_images: Dictionary = {}
 static var _font_image_lock := Mutex.new()
-var _cpu_only := false
 var _font_keys: Dictionary = {}
 var _upload_queue: Array = []
 var _upload_index := 0
@@ -112,16 +111,6 @@ func prepare_head_interiors() -> void:
             _interior_image_lock.unlock()
         _prepared_interiors[head] = interior
 
-func begin_cpu_preparation() -> void:
-    _cpu_only = true
-
-func _make_texture(image: Image):
-    if _cpu_only:
-        return image
-    var texture := ImageTexture.create_from_image(image)
-    _remember_source(texture,image)
-    return texture
-
 func _remember_source(texture: Texture2D, image: Image) -> void:
     # No GPU readback is needed to resize or inspect authentic pixels.
     texture.set_meta("verovio_cpu_image",image)
@@ -131,10 +120,10 @@ func source_image(art) -> Image:
     if art is Image:
         return art
     var image: Image = _source_images.get(art.get_instance_id())
-    return image if image != null else art.get_image()
+    return image
 
 func begin_upload() -> void:
-    # Called only on the main thread, after the worker has finished.
+    # Collect CPU upload descriptors before giving ownership to the main thread.
     _upload_queue.clear()
     _upload_index = 0
     _uploaded_images.clear()
@@ -184,7 +173,6 @@ func upload_step(budget_usec: int = 2000) -> bool:
     for head in _prepared_interiors:
         _head_masks.install_interior(str(head),_prepared_interiors[head])
     _prepared_interiors.clear()
-    _cpu_only = false
     return true
 const BRACE_SIZE := Vector2i(96,1024)
 const BRACE_OVERSAMPLE := 4
@@ -228,35 +216,26 @@ func load_font(items: Dictionary) -> bool:
         # thread there (F1 round 4, handoff stalls).
         var cache_key: String = "%s|%d|%s" % [name,hash(svg),str(RASTER_SCALE)]
         _font_keys[name] = cache_key
-        var cached: Array = [] if _cpu_only else _font_raster_cache.get(cache_key,[])
-        var image: Image
-        if cached.size() == 2:
-            image = cached[0]
-            loaded_textures[name] = cached[1]
-            _remember_source(loaded_textures[name],image)
-        else:
+        _font_image_lock.lock()
+        var image: Image = _font_images.get(cache_key)
+        _font_image_lock.unlock()
+        if image == null:
+            image = Image.new()
+            if image.load_svg_from_buffer(svg.to_utf8_buffer(), RASTER_SCALE) != OK:
+                error = "Godot cannot rasterize Verovio symbol " + name
+                return false
+            if image.is_empty():
+                error = "Empty Verovio symbol " + name
+                return false
+            if name == "brace":
+                image = brace_image()
             _font_image_lock.lock()
-            image = _font_images.get(cache_key)
+            if _font_images.has(cache_key):
+                image = _font_images[cache_key]
+            else:
+                _font_images[cache_key] = image
             _font_image_lock.unlock()
-            if image == null:
-                image = Image.new()
-                if image.load_svg_from_buffer(svg.to_utf8_buffer(), RASTER_SCALE) != OK:
-                    error = "Godot cannot rasterize Verovio symbol " + name
-                    return false
-                if image.is_empty():
-                    error = "Empty Verovio symbol " + name
-                    return false
-                if name == "brace":
-                    image = brace_image()
-                _font_image_lock.lock()
-                if _font_images.has(cache_key):
-                    image = _font_images[cache_key]
-                else:
-                    _font_images[cache_key] = image
-                _font_image_lock.unlock()
-            loaded_textures[name] = _make_texture(image)
-            if not _cpu_only:
-                _font_raster_cache[cache_key] = [image,loaded_textures[name]]
+        loaded_textures[name] = image
         loaded_bounds[name] = geometry.duplicate()
         if name.begins_with("head_"):
             head_images[name] = image
@@ -329,7 +308,7 @@ func load_note_templates(items: Dictionary) -> bool:
         if note.load_png_from_buffer(bytes) != OK or note.is_empty():
             error = "Invalid authentic Verovio note image: " + name
             return false
-        new_textures[name] = _make_texture(note)
+        new_textures[name] = note
         new_bounds[name] = coordinates.duplicate()
         template_images["note:"+name] = note
         if name != "whole":
@@ -347,7 +326,7 @@ func load_note_templates(items: Dictionary) -> bool:
                     stem_image.is_empty():
                 error = "Invalid original Verovio stem for "+name
                 return false
-            stems[name] = _make_texture(stem_image)
+            stems[name] = stem_image
             stem_boxes[name] = box.duplicate()
     note_textures = new_textures
     note_bounds = new_bounds
@@ -380,7 +359,7 @@ func load_tie_templates(items: Dictionary) -> bool:
                 str(item.get("png_base64","")))) != OK or img.is_empty():
             error = "Invalid genuine Verovio tie image: " + direction
             return false
-        atlas[direction] = _make_texture(img)
+        atlas[direction] = img
         metrics[direction] = {"bounds":dimensions.duplicate(),
             "span":float(item["span"])}
         for field in ["head_centers","head_widths"]:
@@ -433,7 +412,7 @@ func load_chord_templates(items: Dictionary) -> bool:
                 str(item.get("png_base64","")))) != OK or img.is_empty():
             error = "Unreadable Verovio chord sprite: " + str(key)
             return false
-        loaded[str(key)] = _make_texture(img)
+        loaded[str(key)] = img
         template_images["chord:"+str(key)] = img
         metrics[str(key)] = {
             "bounds":bounds.duplicate(), "head_positions":positions.duplicate(true)}
@@ -446,7 +425,7 @@ func load_chord_templates(items: Dictionary) -> bool:
                     heads_image.is_empty():
                 error = "Invalid Verovio compound heads: "+str(key)
                 return false
-            loaded_heads[str(key)] = _make_texture(heads_image)
+            loaded_heads[str(key)] = heads_image
             heads_dimensions[str(key)] = heads["bounds"]
             template_images["chord_heads:"+str(key)] = heads_image
         var stem: Dictionary = item.get("stem_only",{})
@@ -458,7 +437,7 @@ func load_chord_templates(items: Dictionary) -> bool:
                     stem_image.is_empty():
                 error = "Invalid original Verovio compound stem: "+str(key)
                 return false
-            loaded_stems[str(key)] = _make_texture(stem_image)
+            loaded_stems[str(key)] = stem_image
             stem_dimensions[str(key)] = stem["bounds"]
     for key in items:
         var positions: Array = metrics[str(key)]["head_positions"]
@@ -533,7 +512,7 @@ func load_beam_fragments(items: Dictionary) -> bool:
                 str(item.get("png_base64","")))) != OK or image.is_empty():
             error = "Unreadable extracted Verovio beam: "+str(name)
             return false
-        loaded[str(name)] = _make_texture(image)
+        loaded[str(name)] = image
         metrics[str(name)] = {
             "bounds":box.duplicate(), "span":float(item["span"]),
             "note_ids":anchors.duplicate(),
@@ -562,7 +541,7 @@ func load_tuplet_fragments(items: Dictionary) -> bool:
             error = "Missing original Verovio tuplet numeral "+str(key)
             return false
         var artwork: Dictionary = {
-            "number":_make_texture(number_img)}
+            "number":number_img}
         var bracket: Variant = data.get("bracket")
         if bracket is Dictionary and not bracket.is_empty():
             var bracket_image := Image.new()
@@ -572,7 +551,7 @@ func load_tuplet_fragments(items: Dictionary) -> bool:
                         str(bracket.get("png_base64","")))) != OK:
                 error = "Invalid original Verovio tuplet bracket "+str(key)
                 return false
-            artwork["bracket"] = _make_texture(bracket_image)
+            artwork["bracket"] = bracket_image
         prepared[str(key)] = artwork
         descriptions[str(key)] = data
     tuplet_textures = prepared
@@ -597,7 +576,7 @@ func load_slur_fragments(items: Dictionary) -> bool:
                 str(item.get("png_base64","")))) != OK or img.is_empty():
             error = "Unreadable original Verovio slur "+str(name)
             return false
-        loaded[str(name)] = _make_texture(img)
+        loaded[str(name)] = img
         metrics[str(name)] = item.duplicate(true)
     slur_textures = loaded
     slur_metadata = metrics

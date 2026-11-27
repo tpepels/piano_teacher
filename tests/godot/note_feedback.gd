@@ -187,7 +187,7 @@ func _run() -> void:
     var stage := PracticeStage.new()
     root.add_child(stage)
     var reactions := LiveReactions.new()
-    reactions.bind_layout({"attack_map":{"a":"head-a"}},7)
+    reactions.bind_attacks({"a":"head-a"},7)
     var physical_hit := event("attack")
     physical_hit.status = "on_time"
     var accepted: bool = reactions.react(physical_hit,stage,7,0.0)

@@ -7,13 +7,12 @@ var attack_map: Dictionary = {}
 var revision := -1
 
 func clear() -> void:
-    attack_map.clear()
+    attack_map = {}
     revision = -1
 
-func bind_layout(source_layout: Dictionary, source_revision: int) -> void:
-    clear()
+func bind_attacks(attacks: Dictionary, source_revision: int) -> void:
     revision = source_revision
-    attack_map = source_layout.get("attack_map", {}).duplicate()
+    attack_map = attacks
 
 ## Stage reaction for one backend attack event from the acknowledged feedback
 ## channel. Delivered exactly once, so no sequence bookkeeping lives here.

@@ -57,9 +57,6 @@ var head_images: Dictionary:
 var template_images: Dictionary:
     get: return _assets.template_images
 
-func begin_cpu_preparation() -> void:
-    _assets.begin_cpu_preparation()
-
 func prepare_head_interiors() -> void:
     _assets.prepare_head_interiors()
 

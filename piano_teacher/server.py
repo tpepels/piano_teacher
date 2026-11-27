@@ -171,7 +171,7 @@ class PracticeEngine:
 
     def report_placement(self, facts: dict) -> None:
         """Godot's current score placement facts, sent with each poll."""
-        unknown = set(facts) - {"ink_ahead_beats", "free_travel_beats"}
+        unknown = set(facts) - {"ink_ahead_beats", "free_travel_beats", "placement_revision"}
         if unknown:
             raise ValueError("Unknown placement facts: " + ", ".join(sorted(unknown)))
         with self.lock:

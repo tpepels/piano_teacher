@@ -163,6 +163,8 @@ class TransportTiming:
     def update_placement_facts(self, kwargs: dict) -> None:
         """Godot's measurement sent with a command: the beats of printed ink
         still ahead of its playhead, which a new run's count-in follows."""
+        if kwargs.get("placement_revision") != self.lesson.revision:
+            return
         ahead = kwargs.get("ink_ahead_beats")
         if ahead is not None:
             self.transport.report_ink_ahead(ahead)

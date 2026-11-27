@@ -175,8 +175,13 @@ def test_free_holds_where_godot_can_draw_its_first_target(practice_session, trav
     report 2026-11-25: it stopped short of the line)."""
     session = practice_session(bars=2)
     command = session.command
-    session.command = lambda action, **values: command(action, **(
-        {**values, "free_travel_beats": travel} if action == "score_ready" else values))
+
+    def with_geometry(action, **values):
+        if action == "score_ready":
+            values.update(placement_revision=values["revision"], free_travel_beats=travel)
+        return command(action, **values)
+
+    session.command = with_geometry
     session.finish_listen()
     state = session.snapshot()
     assert state["mode"] == "learn"
@@ -202,10 +207,14 @@ def test_a_return_to_free_uses_the_placement_facts_of_the_latest_poll(practice_s
     session = practice_session(bars=2, chords=True)
     state = tempo(session)
     state = play(session, state, missing=(1,2))
-    session.ask("state.snapshot", free_travel_beats=9.5, ink_ahead_beats=0.0)
+    session.ask("state.snapshot", placement_revision=state["revision"],
+                free_travel_beats=9.5, ink_ahead_beats=0.0)
     free = play(session, state, missing=(1,2))
     assert (free["mode"], free["flow"]["step"]) == ("learn", "free")
-    session.ask("state.snapshot", free_travel_beats=9.5, ink_ahead_beats=0.0)
+    session.ask("state.snapshot", placement_revision=free["revision"],
+                free_travel_beats=9.5, ink_ahead_beats=0.0)
+    session.ask("state.snapshot", placement_revision=free["revision"]-1,
+                free_travel_beats=18.0, ink_ahead_beats=18.0)
     session.ready_score()
     movement, hold = session.snapshot()["musical_timeline"]["segments"][-2:]
     assert hold["kind"] == "hold" and movement["kind"] == "rest"

@@ -207,6 +207,22 @@ verify_fixture_ui() {
   timeout 105s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
     --script res://production_ui_smoke.gd
 }
+verify_score_recovery() {
+  set_case score-recovery
+  export PIANO_TEST_REAL_NODE
+  PIANO_TEST_REAL_NODE="$(command -v node)"
+  # Hold the real production inference call on the command lane for several
+  # musical tick intervals, then run the provider and return its real result.
+  cat > "$WORK/delayed-fingering-node" <<'SH'
+#!/bin/sh
+sleep 1
+exec "$PIANO_TEST_REAL_NODE" "$@"
+SH
+  chmod +x "$WORK/delayed-fingering-node"
+  timeout 150s env PIANO_FINGERING_NODE="$WORK/delayed-fingering-node" \
+    "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
+    --script "$ROOT/tests/godot/score_worker_recovery.gd"
+}
 verify_fake_midi_ui() {
   # $1: fixture meter, "normal" (4/4) or "two-four" (2/4).
   local variant="${1:-normal}"
@@ -357,7 +373,7 @@ PY
 # the isolated HOME and native ABI configuration; no case can leave the
 # following scenarios unrun after a nonfatal failure.
 export ROOT WORK PYTHON GODOT_BIN PY_SITE PY_LIB
-export -f set_case seed verify_bridge make_fixture verify_fixture_ui
+export -f set_case seed verify_bridge make_fixture verify_fixture_ui verify_score_recovery
 export -f verify_fake_midi_ui verify_moonlight verify_real_source audit_package
 
 printf 'Revision: %s\n' "$(git rev-parse --short HEAD)"
@@ -371,6 +387,7 @@ if ! "$PYTHON" scripts/dev_runtime_state.py check-native >> "$LOG" 2>&1; then
 fi
 check "Create isolated two-hand MIDI fixture" make_fixture || :
 check "Embedded Godot + Python registration and real score" verify_bridge || :
+check "Native score cancellation, backpressure, crash recovery and restart" verify_score_recovery || :
 check "Production UI / Play / Pause / Resume" verify_fixture_ui || :
 check "Real Godot practice transitions with synthetic physical MIDI" verify_fake_midi_ui normal || :
 check "Same journey in 2/4 (short bars, short rests)" verify_fake_midi_ui two-four || :

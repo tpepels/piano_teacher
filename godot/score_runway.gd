@@ -109,9 +109,7 @@ func preserve_unprepared_revision(state: Dictionary) -> bool:
         # Closing a piece must not keep its staff/glow as a permanent tail.
         active_revision_published(-1)
         return false
-    if not score_session.is_ready():
-        return false
-    if score_session.matches_ready_state(state):
+    if not score_session.has_outgoing_ink(state):
         return false
     var outgoing = stage.renderer
     var incoming = NativeView.new()

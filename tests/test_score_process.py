@@ -38,7 +38,7 @@ def running_peer(work, mode):
 
 
 @pytest.mark.parametrize("fault", ["crash", "malformed", "invalid-json", "checksum", "wrong-id",
-                                   "wrong-source", "future-id"])
+                                   "wrong-source", "future-id", "partial-body"])
 def test_worker_restarts_and_returns_the_original_requested_result(tmp_path, fault):
     process = peer(tmp_path, fault)
     try:
@@ -87,18 +87,20 @@ def test_hung_worker_reaps_on_deadline_and_next_retry_recovers(tmp_path):
         process.close()
 
 
-def test_cancellation_before_and_during_generation_with_backpressure(tmp_path):
-    process = peer(tmp_path, "hang")
+@pytest.mark.parametrize("mode", ["hang", "blocked-write"])
+def test_cancellation_before_and_during_generation_with_backpressure(tmp_path, mode):
+    process = peer(tmp_path, mode)
     stop = Event()
     stop.set()
     try:
         with pytest.raises(ScoreCancelled):
             request(process, cancelled=stop.is_set)
-        assert not (tmp_path / "hang").exists()
+        assert not (tmp_path / mode).exists()
         stop.clear()
+        payload = b" " * (6 * 1024 * 1024) if mode == "blocked-write" else b"{}"
         with ThreadPoolExecutor(1) as executor:
-            active = executor.submit(request, process, cancelled=stop.is_set)
-            old = running_peer(tmp_path, "hang")
+            active = executor.submit(request, process, payload, cancelled=stop.is_set)
+            old = running_peer(tmp_path, mode)
             try:
                 with pytest.raises(RuntimeError, match="busy"):
                     request(process)
@@ -106,6 +108,8 @@ def test_cancellation_before_and_during_generation_with_backpressure(tmp_path):
                 stop.set()
             with pytest.raises(ScoreCancelled):
                 active.result(timeout=2)
+        with pytest.raises(ProcessLookupError):
+            os.kill(old, 0)
         assert request(process, generation=2)["pid"] != old
     finally:
         process.close()
