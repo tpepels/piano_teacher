@@ -347,7 +347,7 @@ def test_real_state_rejects_missing_control_and_timeline(practice_session):
     del missing["playback_timeline"]
     assert any("playback_timeline" in issue for issue in problems(missing))
 
-@pytest.mark.parametrize("grade_holds,next_bpm", [
+@pytest.mark.parametrize("grade_holds,accepted", [
     (False,True), (True,False),
 ], ids=["pedal-friendly-default","strict-held-release"])
 def test_real_midi_release_setting_changes_tempo_credit(
