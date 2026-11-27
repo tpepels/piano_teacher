@@ -93,16 +93,17 @@ class ScorePresentation:
     """Score projection facts and the Free target's presentation plan."""
 
     def __init__(self, *, lesson, transport, timing, score,
-                 capture, clock):
+                 phase, clock):
         self.lesson = lesson
         self.transport = transport
         self.timing = timing
         self.score = score
-        self.capture = capture
+        self.phase = phase
         self.clock = clock
 
     def score_facts(self, pending, timeline) -> ScoreProjectionFacts:
         plan = self.lesson.plan
+        phrase = self.lesson.display_phrase(learning=self.transport.mode == "learn") if plan is not None else None
         return ScoreProjectionFacts(
             fingerprint=self.lesson.fingerprint,
             stage_key=plan.identity if plan is not None else "",
@@ -117,8 +118,7 @@ class ScorePresentation:
             next_count_in_beats=self.timing.next_count_in_beats(),
             free_travel_beats=self.transport.free_travel_beats,
             next_count_in_meter=tuple(self.timing.next_count_in_meter()),
-            duration_beats=(self.lesson.display_phrase(learning=self.transport.mode == "learn").end-self.lesson.display_phrase(learning=self.transport.mode == "learn").start
-                            if plan is not None else 0.0),
+            duration_beats=phrase.end-phrase.start if phrase is not None else 0.0,
             has_source=plan is not None,
         )
 
@@ -126,10 +126,8 @@ class ScorePresentation:
         if self.lesson.plan is None or self.transport.mode != "learn":
             return
         now = self.clock()
-        state = project_session_state(self.capture.capture_snapshot(sampled_at=now))
-        pending, timeline = self.transport.snapshot(self.timing.playback_facts())
         self.score.prepare_guided_score(
-            state,self.score_facts(pending,timeline),now=now)
+            {"phase":self.phase(now)},self.score_facts(None,None),now=now)
 
 
 class SnapshotExtras:

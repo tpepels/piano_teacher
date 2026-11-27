@@ -139,13 +139,14 @@ def test_late_cancelled_render_cannot_replace_the_current_passage(tmp_path, fall
     entered, release = Event(), Event()
     original_render = cache.render
 
-    def delayed_write(variant, bpm):
+    def delayed_write(variant, bpm, **options):
         if bpm == 120:
             entered.set()
             assert release.wait(5), "Controlled old audio write was not released"
             if old_fails:
                 raise OSError("old passage write failed")
-        return original_render(variant, bpm)
+        assert bpm != 90, "A superseded pending passage was rendered"
+        return original_render(variant, bpm, **options)
 
     cache.render = delayed_write
     selected = ListenSelection(source([(0,1,60)]),120,"old",1,(0,4),((0,4,4),))
@@ -155,11 +156,11 @@ def test_late_cancelled_render_cannot_replace_the_current_passage(tmp_path, fall
     try:
         assert entered.wait(5)
         session.cancel()
+        session.prepare(replace(selected,bpm=90,stage_key="retired",revision=2))
         current_token = session.prepare(replace(selected,bpm=60,stage_key="current",revision=2))
-        wait_render(session)
+        assert session.thread is old_worker
         release.set()
-        old_worker.join(5)
-        assert not old_worker.is_alive()
+        wait_render(session)
         assert session.snapshot()["token"] == current_token
         assert session.snapshot()["audio_available"]
         assert session.take_failure() is None

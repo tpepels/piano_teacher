@@ -87,7 +87,7 @@ def _prepare(variant: ExerciseVariant, bpm: Real, sample_rate: int, chunk_frames
 
 
 def _pcm_chunks(voices: tuple[_Voice, ...], frames: int, sample_rate: int,
-                chunk_frames: int) -> Iterator[bytes]:
+                chunk_frames: int, checkpoint) -> Iterator[bytes]:
     concurrency = peak = 0
     for _, change in sorted((at, change) for voice in voices
                             for at, change in ((voice.first, 1), (voice.last, -1))):
@@ -106,6 +106,8 @@ def _pcm_chunks(voices: tuple[_Voice, ...], frames: int, sample_rate: int,
     active = []
     next_voice = 0
     for first in range(0, frames, chunk_frames):
+        if checkpoint is not None:
+            checkpoint()
         last = min(frames, first+chunk_frames)
         active = [voice for voice in active if voice.last > first]
         while next_voice < len(voices) and voices[next_voice].first < last:
@@ -218,7 +220,7 @@ class DemoAudioCache:
                 total -= length
                 count -= 1
 
-    def render(self, variant: ExerciseVariant, bpm: Real) -> DemoAudio:
+    def render(self, variant: ExerciseVariant, bpm: Real, *, checkpoint=None) -> DemoAudio:
         """Return a reproducible WAV for this exact source variant and BPM."""
         duration, frames, voices = _prepare(variant, bpm, self.sample_rate, self.chunk_frames)
         phrase = variant.phrase
@@ -257,16 +259,20 @@ class DemoAudioCache:
                                 wav.setframerate(self.sample_rate)
                                 wav.setnframes(frames)
                                 for chunk in _pcm_chunks(voices, frames,
-                                                        self.sample_rate, self.chunk_frames):
+                                                        self.sample_rate, self.chunk_frames,
+                                                        checkpoint):
                                     wav.writeframesraw(chunk)
                     if soundfont is not None:
                         render_wav(Path(temporary), variant, bpm=float(bpm), frames=frames,
                                    sample_rate=self.sample_rate,
-                                   chunk_frames=self.chunk_frames, soundfont=soundfont)
+                                   chunk_frames=self.chunk_frames, soundfont=soundfont,
+                                   checkpoint=checkpoint)
+                    if checkpoint is not None:
+                        checkpoint()
                     os.replace(temporary, path)
                 finally:
-                    if os.path.exists(temporary):
-                        os.unlink(temporary)
+                    Path(temporary).unlink(missing_ok=True)
+                    Path(temporary + ".scaled").unlink(missing_ok=True)
             return result
         finally:
             with self._lock:

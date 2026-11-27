@@ -36,7 +36,7 @@ class EngineCommands:
         self.owned = engine is None
 
     def tick(self) -> int:
-        """The same native worker advances all musical deadlines."""
+        """The native timing driver advances all musical deadlines."""
         return self.engine.advance_clock()
 
     @staticmethod

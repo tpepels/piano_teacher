@@ -6,11 +6,13 @@ MIDI input, or giant in-memory waveform is required.
 """
 from __future__ import annotations
 
+from array import array
 import ctypes as ct
 import ctypes.util
 from dataclasses import dataclass
 import os
 from pathlib import Path
+import sys
 import wave
 
 from .application.musical_scheduler import SCHEDULER
@@ -127,7 +129,8 @@ class _Synth:
 
 
 def render_wav(path: Path, variant, *, bpm: float, frames: int,
-               sample_rate: int, chunk_frames: int, soundfont: SampleBank) -> None:
+               sample_rate: int, chunk_frames: int, soundfont: SampleBank,
+               checkpoint=None) -> None:
     """Render actual recorded grand-piano samples in source clock order."""
     phrase = variant.phrase
     events = []
@@ -139,6 +142,8 @@ def render_wav(path: Path, variant, *, bpm: float, frames: int,
         events.append((attack, 1, note.pitch, int(getattr(note, "velocity", 85))))
         events.append((release, 0, note.pitch, 0))
     events.sort()  # Releases before new attacks at the same tick.
+    if checkpoint is not None:
+        checkpoint()
     synth = _Synth(soundfont.path, sample_rate)
     try:
         with wave.open(str(path), "wb") as wav:
@@ -148,6 +153,8 @@ def render_wav(path: Path, variant, *, bpm: float, frames: int,
             wav.setnframes(frames)
             at = index = 0
             while at < frames:
+                if checkpoint is not None:
+                    checkpoint()
                 next_event = events[index][0] if index < len(events) else frames
                 if next_event <= at:
                     while index < len(events) and events[index][0] <= at:
@@ -160,7 +167,7 @@ def render_wav(path: Path, variant, *, bpm: float, frames: int,
                 at += count
     finally:
         synth.close()
-    normalize_wav(path, chunk_frames=chunk_frames)
+    normalize_wav(path, chunk_frames=chunk_frames, checkpoint=checkpoint)
 
 
 # Listen must sound about as loud as a real piano. The Salamander samples are
@@ -170,22 +177,24 @@ TARGET_PEAK = round(32767 * 10 ** (-1 / 20))  # -1 dBFS
 MAX_MAKEUP_GAIN = 64.0  # +36 dB; a near-silent render is not amplified noise
 
 
-def normalize_wav(path: Path, *, chunk_frames: int = 4096) -> None:
+def _wav_samples(source, chunk_frames, checkpoint):
+    while data := source.readframes(chunk_frames):
+        if checkpoint is not None:
+            checkpoint()
+        samples = array("h", data)
+        if sys.byteorder != "little":
+            samples.byteswap()
+        yield samples
+
+
+def normalize_wav(path: Path, *, chunk_frames: int = 4096, checkpoint=None) -> None:
     """Rescale a 16-bit PCM WAV in place to TARGET_PEAK, in bounded chunks."""
-    from array import array
-    import sys
     peak = 0
     with wave.open(str(path), "rb") as wav:
         params = wav.getparams()
         if params.sampwidth != 2:
             return
-        while True:
-            data = wav.readframes(chunk_frames)
-            if not data:
-                break
-            samples = array("h", data)
-            if sys.byteorder != "little":
-                samples.byteswap()
+        for samples in _wav_samples(wav, chunk_frames, checkpoint):
             peak = max(peak, max(samples, default=0), -min(samples, default=0))
     if peak <= 0:
         return
@@ -195,13 +204,7 @@ def normalize_wav(path: Path, *, chunk_frames: int = 4096) -> None:
     scaled = path.with_suffix(path.suffix + ".scaled")
     with wave.open(str(path), "rb") as source, wave.open(str(scaled), "wb") as target:
         target.setparams(source.getparams())
-        while True:
-            data = source.readframes(chunk_frames)
-            if not data:
-                break
-            samples = array("h", data)
-            if sys.byteorder != "little":
-                samples.byteswap()
+        for samples in _wav_samples(source, chunk_frames, checkpoint):
             out = array("h", (max(-32768, min(32767, round(v * gain))) for v in samples))
             if sys.byteorder != "little":
                 out.byteswap()

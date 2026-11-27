@@ -93,6 +93,7 @@ PianoNative::~PianoNative() {
     }
     assets_.stop();
     available_.notify_all();
+    timing_changed_.notify_one();
     if (worker_.joinable()) worker_.join();
     // Do not Py_Finalize(): rtmidi and native extensions may still have
     // background callbacks. There is exactly one runtime per application.
@@ -192,57 +193,43 @@ void PianoNative::worker_loop() {
     // the engine is closed, so no asset request can outlive the engine.
     if (!engine_) return;
     std::thread assets([this] { asset_loop(); });
+    std::thread timing([this] { timing_loop(); });
     {
         std::lock_guard<std::mutex> guard(mutex_);
         if (!stopping_) ready_ = true;
     }
-    // Command responses and musical deadlines share this one worker.
-    // An idle UI or slow state snapshots must never be the engine's timer.
-    // Waiting releases the queue mutex and the CPython GIL.
-    using Clock = std::chrono::steady_clock;
-    auto next_tick = Clock::now();
     while (!stopping_) {
         Command next;
-        bool has_command = false;
         {
             std::unique_lock<std::mutex> guard(mutex_);
-            available_.wait_until(guard, next_tick, [this] {
+            available_.wait(guard, [this] {
                 return stopping_ || !pending_.empty();
             });
             if (stopping_) break;
-            if (!pending_.empty()) {
-                next = std::move(pending_.front());
-                pending_.pop_front();
-                has_command = true;
-            }
+            next = std::move(pending_.front());
+            pending_.pop_front();
         }
-        if (has_command) {
-            Reply output = execute(next);
-            {
-                std::lock_guard<std::mutex> guard(mutex_);
-                if (!stopping_) completed_.push_back(std::move(output));
-            }
-        }
+        Reply output = execute(next);
         // Only state-changing commands re-evaluate transport deadlines.
         // Snapshot and UI reads never re-anchor the musical clock.
-        if (has_command && (next.operation == "practice.command" ||
+        const bool wake_timing = next.operation == "practice.command" ||
                 next.operation == "library.open" ||
                 next.operation == "settings.update" ||
                 next.operation == "midi.device.select" ||
                 next.operation == "fingering.correct" ||
                 next.operation == "library.health.start" ||
-                next.operation == "hardware.action"))
-            next_tick = Clock::now();
-        // Always check after handling a command: sustained state polls may
-        // not starve the native transport tick.
-        if (Clock::now() >= next_tick) {
-            const int interval_ms = tick_engine();
-            next_tick = Clock::now() +
-                std::chrono::milliseconds(std::clamp(interval_ms, 10, 500));
+                next.operation == "hardware.action";
+        {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if (stopping_) break;
+            completed_.push_back(std::move(output));
+            tick_requested_ |= wake_timing;
         }
+        if (wake_timing) timing_changed_.notify_one();
     }
     assets_.stop();
-    if (assets.joinable()) assets.join();
+    timing.join();
+    assets.join();
     if (engine_) {
         PyGILState_STATE gil = PyGILState_Ensure();
         PyObject *response = PyObject_CallMethod(
@@ -252,6 +239,25 @@ void PianoNative::worker_loop() {
         Py_DECREF(static_cast<PyObject *>(engine_));
         engine_ = nullptr;
         PyGILState_Release(gil);
+    }
+}
+
+void PianoNative::timing_loop() {
+    using Clock = std::chrono::steady_clock;
+    auto next_tick = Clock::now();
+    while (!stopping_) {
+        {
+            std::unique_lock<std::mutex> guard(mutex_);
+            timing_changed_.wait_until(guard, next_tick, [this] {
+                return stopping_ || tick_requested_;
+            });
+            if (stopping_) break;
+            tick_requested_ = false;
+        }
+        // The one clock driver stays runnable during library, WAV and
+        // fingering I/O. Python still serializes musical state mutations.
+        const int interval_ms = tick_engine();
+        next_tick = Clock::now() + std::chrono::milliseconds(interval_ms);
     }
 }
 

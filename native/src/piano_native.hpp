@@ -34,6 +34,8 @@ class PianoNative : public RefCounted {
 
     std::mutex mutex_;
     std::condition_variable available_;
+    std::condition_variable timing_changed_;
+    bool tick_requested_ = false;
     std::deque<Command> pending_;
     // Independent, bounded read-only work lane. It never holds the musical
     // command queue lock while preparing or cancelling a score.
@@ -49,6 +51,7 @@ class PianoNative : public RefCounted {
     void *engine_ = nullptr;
     void initialize_python();
     void worker_loop();
+    void timing_loop();
     void asset_loop();
     static bool is_asset_operation(const std::string &operation);
     int tick_engine();

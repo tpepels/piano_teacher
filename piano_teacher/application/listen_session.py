@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
-from threading import RLock, Thread
+from threading import Event, RLock, Thread
 import uuid
 
 from ..demo import DemoAudioCache
@@ -46,11 +46,16 @@ class ListenSession:
         self.cache_dir = Path(cache_dir)
         self.cache = cache
         self.thread: Thread | None = None
+        self._rendering = False
+        self._pending = None
+        self._cancel_render = Event()
         self._lock = lock if lock is not None else RLock()
         self.cancel()
 
     def cancel(self) -> None:
         with self._lock:
+            self._cancel_render.set()
+            self._pending = None
             self._selection: ListenSelection | None = None
             self._info: dict | None = None
             self._audio = None
@@ -81,12 +86,28 @@ class ListenSession:
                 "canonical_source_ids": [source_note_id(note, index)
                     for index, note in enumerate(variant.notes)],
             }
-            self.thread = Thread(target=self._render, args=(self.cache, selected, token),
-                                 name="piano-demo-render", daemon=True)
-            self.thread.start()
+            self._cancel_render = Event()
+            self._pending = (selected, token, self._cancel_render)
+            if not self._rendering:
+                self._rendering = True
+                self.thread = Thread(target=self._run, name="piano-demo-render", daemon=True)
+                self.thread.start()
             return token
 
-    def _render(self, cache, selected: ListenSelection, token: str) -> None:
+    def _run(self) -> None:
+        while True:
+            with self._lock:
+                pending, self._pending = self._pending, None
+                if pending is None:
+                    self._rendering = False
+                    return
+            self._render(*pending)
+
+    def _render(self, selected: ListenSelection, token: str, cancelled: Event) -> None:
+        def checkpoint():
+            if cancelled.is_set():
+                raise InterruptedError("Listen audio was superseded")
+
         try:
             variant = selected.variant
             if selected.tempo_map is not None:
@@ -106,7 +127,8 @@ class ListenSession:
             elif selected.from_beat:
                 variant = replace(variant,phrase=replace(variant.phrase,
                     start=variant.phrase.start+selected.from_beat))
-            audio = cache.render(variant, selected.bpm)
+            checkpoint()
+            audio = self.cache.render(variant, selected.bpm, checkpoint=checkpoint)
         except Exception as exc:
             with self._lock:
                 if self._info is not None and self._info["token"] == token:

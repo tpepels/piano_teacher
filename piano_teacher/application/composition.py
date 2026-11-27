@@ -373,7 +373,7 @@ def _transport_and_completion(r) -> None:
         clock=r.now)
     r.score_presentation = ScorePresentation(
         lesson=r.lesson, transport=r.transport, timing=r.transport_timing, score=r.score,
-        capture=r.session_capture, clock=r.now)
+        phase=r.session_phase.at, clock=r.now)
     r.read_models = SessionReadModels(
         lesson=r.lesson, transport=r.transport, timing=r.transport_timing,
         score=r.score, course=r.course,
