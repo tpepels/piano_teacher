@@ -24,7 +24,9 @@ own old instance until it finishes; no old layout can overwrite the new
 generation. A new selection gets a new artifact instance on its first
 locked read, including ordinary lesson navigation. Retired instances stop
 at checkpoints between Verovio engraving, layout and atlas extraction
-phases. Durable source-keyed caches remain reusable.
+phases. Durable source-keyed caches remain reusable. A warm state snapshot
+reads the atomically published source model without acquiring the model
+lock held by the background semantic/fingering projection.
 
 The Godot asset session cancels the request on replacement, Retry, close,
 failure and shutdown. Its separate CPU engraving/texture-upload path

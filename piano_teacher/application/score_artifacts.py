@@ -5,8 +5,8 @@ or renderer callback. It serializes its own work under two locks of its own,
 so the application calls it OUTSIDE the engine lock: a cold Verovio engraving
 must not stall the musical tick or the MIDI callback.
 
-- ``_model_lock`` guards the selected notation and semantic model (fast once
-  built). The state snapshot needs only this lock.
+- ``_model_lock`` guards cold model preparation. Once the immutable source
+  model is published, a session snapshot reads its entry without that lock.
 - ``_engraving_lock`` guards engraving and native asset preparation (seconds
   when cold). Lock order is always engraving -> model, never the reverse.
 
@@ -83,6 +83,7 @@ class ScoreArtifacts:
             self._notation: LessonScore | None = None
             self._notation_model: dict | None = None
             self._model: dict | None = None
+            self._source_model_entry: tuple | None = None
             self._projected_model: dict | None = None
             self._projected_fingering = None
             self._prepared_layout_identity: tuple | None = None
@@ -111,13 +112,23 @@ class ScoreArtifacts:
             self._notation_identity = selected.identity
             self._notation_model = None
             self._model = None
+            self._source_model_entry = None
             self._projected_model = None
         return self._notation
 
     def source_model(self, selected: ScoreSelection) -> dict:
-        """Internal source contract; the command queue publishes a semantic snapshot."""
+        """Read the immutable source contract, never waiting on warm projection.
+
+        The model and identity publish together. Only cold preparation takes
+        the model lock; a worker's fingering projection or serialization
+        cannot delay the musical owner's usual snapshot.
+        """
+        identity = selected.identity
+        entry = self._source_model_entry
+        if entry is not None and entry[0] == identity:
+            return entry[1]
         with self._model_lock:
-            notation = self._selected_notation(selected)
+            notation = self._selected_notation_locked(selected)
             if self._model is None:
                 envelope = display_envelope(selected.piece, selected.phrase,
                     transformed=selected.transformed_rhythm)
@@ -126,6 +137,7 @@ class ScoreArtifacts:
                     hand=selected.hand, revision=selected.revision)
                 self._model = project_display_model(
                     self._notation_model, envelope, selected.hand)
+                self._source_model_entry = (identity, self._model)
             return self._model
 
     def semantic_score(self, selected: ScoreSelection) -> dict:
