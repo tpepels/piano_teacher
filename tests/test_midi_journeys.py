@@ -80,7 +80,7 @@ def test_missing_note_and_extra_key_fail_and_two_failures_above_the_floor_slow_d
     assert faster["bpm"] == 80 and faster["flow"]["message_kind"] == "faster"
     missing = next_take(faster, play(session, faster, missing=(1,2)))
     assert missing["bpm"] == 80 and missing["streak"] == 0
-    slower = next_take(missing, play(session, missing, missing=(1,), extra=((.05, 60),)))
+    slower = next_take(missing, play(session, missing, missing=(1,2), extra=((.05, 60),)))
     # 10% of the 80 BPM target, never below 50%.
     assert slower["bpm"] == 72 and slower["flow"]["message_kind"] == "slower"
     assert slower["lesson_steps_mastered"] == 0

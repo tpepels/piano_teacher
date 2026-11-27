@@ -40,6 +40,9 @@ def emit_at_beats(session, start, bpm, events):
 def failed_take(session, *, fault="missed"):
     session.ready_score()
     state = state_at(session, step="tempo", mode="practice", running=True)
+    # The real player obtains its engraving before rendering feedback.
+    # Exercise that same path so final assessments can map source note IDs.
+    session.ask("score.native_layout")
     source = session.ask("score.semantic")
     assert take(state)["transport_id"] == state["transport_id"]
     start = take(state)["deadline_ms"] / 1000
@@ -64,7 +67,8 @@ def failed_take(session, *, fault="missed"):
         emit_at_beats(session, start, bpm, events)
     before_transport = state["transport_id"]
     result = session.play_take(correct=False)
-    events = session.ask("feedback.events")["events"]
+    events = [event for event in session.ask("feedback.events")["events"]
+              if event.get("transport_id") == before_transport]
     assert result["mastered"] == 0 and result["flow"]["step"] in ("tempo","free")
     assert result["bpm"] == bpm or result["flow"]["step"] == "free"
     after_inputs = session.snapshot()["midi_input_count"]

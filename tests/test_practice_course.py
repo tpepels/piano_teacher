@@ -120,10 +120,23 @@ def test_half_speed_retains_the_original_slow_midi_target(practice_session):
     state = session.ready_score()
     assert (state["original_bpm"], state["target_bpm"], state["bpm"]) == (20,20,10)
     assert state["count_in_beats"] == 4
+    # Free travel may end at a different tempo. The complete count-in
+    # eases during its first half, then gives two beats at the target pulse.
+    import pytest
+    from piano_teacher.application.tempo_curve import TempoSpan, spans_seconds
+    movement, count_in, incoming = state["musical_timeline"]["segments"][-3:]
+    assert count_in["kind"] == "count_in" and incoming["kind"] == "take"
+    assert count_in["meter"] == [4, 4] and count_in["beats"] == 4
+    spans = tuple(TempoSpan(*span) for span in count_in["spans"])
+    assert sum(span.beats for span in spans) == 4
+    assert spans[0].start_bpm == movement["spans"][-1][2]
+    assert spans[-1].start_bpm == spans[-1].end_bpm == 10
+    assert spans[-1].beats >= 2
     deadline = take(state)["deadline_ms"]/1000
-    assert deadline-session.clock() >= 24
-    session.clock.at = deadline-24
-    assert session.snapshot()["countdown"] == 24
+    assert deadline == pytest.approx(incoming["start_ms"]/1000, abs=.001)
+    assert deadline == pytest.approx(
+        count_in["start_ms"]/1000 + spans_seconds(spans), abs=.001)
+    assert count_in["start_ms"]/1000 >= session.clock() - .001
 
 
 def test_failure_breaks_the_target_streak_before_the_hand_can_complete(practice_session):

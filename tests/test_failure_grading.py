@@ -134,7 +134,7 @@ def test_notes_released_far_too_soon_fail_only_when_holds_are_graded(
 @pytest.mark.parametrize("first,second", [
     ({"missing": (1,2)}, {"wrong": (0,1)}),
     ({"missing": (1,), "shift": (LAST, .6)}, {"missing": (1,), "shift": (LAST, -.6)}),
-    ({"extra": ((.05, 60),), "missing": (1,)}, {"missing": CHORD}),
+    ({"extra": ((.05, 60),), "missing": (1,2)}, {"missing": CHORD}),
 ], ids=["missing-then-wrong", "late-then-early", "extra-then-missing"])
 def test_any_two_failures_in_a_row_at_the_floor_return_to_free(practice_session, first, second):
     session = practice_session(bars=2, chords=True)
