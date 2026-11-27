@@ -76,7 +76,8 @@ def test_a_piano_lost_in_tempo_stops_says_so_and_play_continues(practice_session
     again = session.ready_score()
     assert again["running"] and again["mode"] == "practice"
     after = play(session, again)
-    assert after["running"] and after["bpm"] > again["bpm"]
+    assert after["running"] and after["bpm"] == again["bpm"] == 80
+    assert after["streak"] == 1
 
 
 def test_no_message_ever_asks_for_a_start_button(practice_session, unplug):

@@ -28,39 +28,42 @@ def test_statistics_keep_signed_timing_and_distinguish_misses_from_unknowns(prac
     session = practice_session(bars=1)
     state = tempo(session)
     start = take(state)["deadline_ms"]/1000
-    for at, pitch in ((start+.1, 72), (start+4.3, 79)):
+    for at, pitch in ((start+.01, 72), (start+2.25-.02, 79)):
         session.clock.at = at
         session.key(pitch, after=0)
         session.key(pitch, False, after=.1)
-    assert session.play_take(correct=False)["bpm"] > 40  # accepted: faster
-    session.play_take(correct=False)  # A complete, genuinely missed attempt.
+    from test_midi_journeys import play
+    state = session.play_take(correct=False)
+    assert state["bpm"] == 80 and state["streak"] == 1
+    play(session,state,missing=(1,))  # Recorded partial failure, not AFK silence.
     session.command("stop")
     report = session.ask("learning.statistics", scope="full")
     assert report["assessments"]["accepted"] == 1
     assert report["assessments"]["rejected"] == 1
     assert report["assessments"]["acceptance_rate"] == .5
-    assert report["pitch"]["correct_required_pitches"] == 2
-    assert report["pitch"]["omitted"] == 2
-    assert report["pitch"]["accuracy"] == .5
-    assert report["timing"]["onset"]["sample_count"] == 2
-    assert report["timing"]["onset"]["mean_seconds"] == pytest.approx(-.05)
-    assert report["timing"]["onset"]["mean_absolute_seconds"] == pytest.approx(.15)
-    assert report["timing"]["onset"]["minimum_seconds"] == pytest.approx(-.2)
-    assert report["timing"]["onset"]["maximum_seconds"] == pytest.approx(.1)
+    assert report["pitch"]["correct_required_pitches"] == 3
+    assert report["pitch"]["omitted"] == 1
+    assert report["pitch"]["accuracy"] == .75
+    assert report["timing"]["onset"]["sample_count"] == 3
+    assert report["timing"]["onset"]["mean_seconds"] == pytest.approx(-.01/3)
+    assert report["timing"]["onset"]["mean_absolute_seconds"] == pytest.approx(.01)
+    assert report["timing"]["onset"]["minimum_seconds"] == pytest.approx(-.02)
+    assert report["timing"]["onset"]["maximum_seconds"] == pytest.approx(.01)
     assert report["pitch"]["unobserved_suffix_obligations"] is None
     assert all(not episode["mastered"] for episode in report["mastery"]["episodes"])
     assert session.ask("learning.statistics", hand="left")["attempts"]["count"] == 0
-    slow = session.ask("learning.statistics", scope="full", bpm_min=40, bpm_max=40)
-    assert slow["assessments"]["accepted"] == 1
-    assert slow["assessments"]["rejected"] == 0
-    assert all(row["performed_bpm"] == 40 for row in slow["assessment_strata"])
+    target = session.ask("learning.statistics", scope="full", bpm_min=80, bpm_max=80)
+    assert target["assessments"]["accepted"] == 1
+    assert target["assessments"]["rejected"] == 1
+    assert all(row["performed_bpm"] == 80 for row in target["assessment_strata"])
 
 
 def test_history_paging_is_stable_while_new_takes_arrive(practice_session):
     session = practice_session(bars=1)
     tempo(session)
+    from test_midi_journeys import play
     session.play_take()
-    session.play_take(correct=False)
+    play(session,session.snapshot(),missing=(1,))
     original = session.ask("learning.statistics", scope="full")["query"]["attempt_ids"]
     page = session.ask("learning.statistics", scope="full", limit=1)
     assert page["query"]["has_more"]
@@ -78,8 +81,9 @@ def test_history_paging_is_stable_while_new_takes_arrive(practice_session):
 def test_bounded_detail_preserves_counts_without_fabricating_zero_errors(practice_session):
     session = practice_session(bars=1)
     tempo(session)
+    from test_midi_journeys import play
     session.play_take()
-    session.play_take(correct=False)
+    play(session,session.snapshot(),missing=(1,))
     full = session.ask("learning.statistics", scope="full")
     bounded = session.ask("learning.statistics", scope="full", detail_budget_bytes=1)
     assert bounded["assessments"]["accepted"] == full["assessments"]["accepted"]
@@ -167,8 +171,7 @@ def test_mastery_statistics_report_the_actual_two_target_success_rule(practice_s
     session = practice_session(bars=1)
     assert session.snapshot()["clean_runs_required"] == 2
     tempo(session)
-    for _ in range(2):  # a short window reaches the target in one take
-        session.play_take()
+    session.play_take()  # a sparse window already begins at target
     before = session.ask("learning.statistics")
     assert not any(episode["mastered"] for episode in before["mastery"]["episodes"])
     session.play_take()

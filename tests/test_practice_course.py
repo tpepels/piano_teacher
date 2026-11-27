@@ -75,12 +75,10 @@ def test_clean_ladder_and_two_target_successes_advance_only_the_current_hand(pra
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
-    # A short, precisely timed window climbs from 50% to target in one take.
-    assert session.ready_score()["bpm"] == 40
-    session.play_take()
-    assert session.snapshot()["mastered"] == 0
+    # A sparse two-attack window begins at target.
     assert session.ready_score()["bpm"] == 80
     session.play_take()
+    assert session.snapshot()["mastered"] == 0
     assert session.snapshot()["hand"] == "right"
     assert session.snapshot()["mastered"] == 0
     session.play_take()
@@ -95,27 +93,28 @@ def test_clean_ladder_and_two_target_successes_advance_only_the_current_hand(pra
 
 
 def test_failures_repeat_then_slow_and_two_at_floor_return_to_original_free(practice_session):
+    from test_midi_journeys import play
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
-    session.play_take()
-    assert session.snapshot()["bpm"] == 80
-    # Each pair of failures slows by 10% of target, down to 50%.
+    state = session.ready_score()
+    assert state["bpm"] == 80
+    # Each pair of recorded 50%-accuracy failures slows by 10% of target.
     for bpm in (80, 72, 64, 56, 48):
-        session.play_take(correct=False)
-        assert session.snapshot()["bpm"] == bpm
-        session.play_take(correct=False)
-        assert session.snapshot()["bpm"] == bpm-8
-    session.play_take(correct=False)
-    assert session.snapshot()["bpm"] == 40
-    state = session.play_take(correct=False)
+        state = play(session,state,missing=(1,))
+        assert state["bpm"] == bpm
+        state = play(session,state,missing=(1,))
+        assert state["bpm"] == bpm-8
+    state = play(session,state,missing=(1,))
+    assert state["bpm"] == 40
+    state = play(session,state,missing=(1,))
     assert state["flow"]["step"] == "free"
     assert state["lesson_level"] == "original"
     assert state["mastered"] == 0
 
 
 def test_half_speed_retains_the_original_slow_midi_target(practice_session):
-    session = practice_session(bars=1, bpm=20)
+    session = practice_session(bars=1, bpm=20, chords=True)
     session.finish_listen()
     session.finish_free()
     state = session.ready_score()
@@ -131,9 +130,9 @@ def test_failure_breaks_the_target_streak_before_the_hand_can_complete(practice_
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
-    session.play_take()  # 50% -> target
+    from test_midi_journeys import play
     session.play_take()  # first clean at target
-    session.play_take(correct=False)
+    play(session,session.snapshot(),missing=(1,))
     session.play_take()
     assert session.snapshot()["hand"] == "right"
     assert session.snapshot()["mastered"] == 0
@@ -162,8 +161,11 @@ def test_finishing_the_only_hand_starts_the_final_at_half_speed(practice_session
     session = practice_session(bars=1, left=False)
     session.finish_listen()
     session.finish_free()
-    for _ in range(3):  # to target, then two clean at target
+    for _ in range(2):  # sparse hand begins at target
         session.play_take()
+    choice = session.snapshot()
+    assert choice["flow"]["step"] == "section_choice"
+    session.command("section_next")
     final = session.ready_score()
     assert final["kind"] == "perform" and final["hand"] == "both"
     assert final["mode"] == "practice" and final["flow"]["step"] == "tempo"

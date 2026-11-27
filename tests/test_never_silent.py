@@ -149,4 +149,4 @@ def test_a_score_that_cannot_be_drawn_says_so(watched):
         take = session.snapshot()["playback_timeline"]["current"]
         session.ask("playback.failure", take_id=take["take_id"],
                     segment_id=take["segment_id"], reason="timeline_take_not_drawn")
-    assert session.snapshot()["screen"]["notice"] == "The score stopped displaying correctly"
+    assert session.snapshot()["screen"]["notice"] == "The score stopped displaying correctly. Press Play to try again."

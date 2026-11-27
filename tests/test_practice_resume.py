@@ -24,7 +24,8 @@ def test_reopen_warms_up_the_same_complete_window_and_hand(practice_session, sel
     session.finish_free()
     state = session.ready_score()
     assert state["flow"]["step"] == "tempo"
-    assert state["bpm"] == 40
+    assert state["bpm"] == { (1,1,"right"):80, (1,4,"left"):64,
+                              (None,None,"both"):40 }[selection]
     assert state["mastered"] == 0
 
 
@@ -56,9 +57,21 @@ def test_explicit_final_learn_teaches_the_whole_piece_before_half_speed(practice
 
 
 def floor_return(session):
+    from test_midi_journeys import play
     session.finish_free()
-    session.play_take(correct=False)
-    return session.play_take(correct=False)
+    state = session.ready_score()
+    for _ in range(14):
+        # A fully silent take is ignored. Use a genuine 50%-accuracy
+        # failure, progressing all the way down to the recovery floor.
+        notes = session.ask("score.semantic")["notes"]
+        if len(notes) == 1:
+            # An extra key at the attack makes the one-note take 50%.
+            state = play(session,state,extra=((.05,61),))
+        else:
+            state = play(session,state,missing=tuple(range(1,len(notes))))
+        if state["flow"]["step"] == "free":
+            return state
+    raise AssertionError("Recorded low-accuracy failures did not return to Free")
 
 
 def test_second_floor_return_survives_reopen_and_announces_a_real_aid(practice_session):

@@ -46,7 +46,8 @@ def tempo(session):
     session.finish_free()
     state = session.ready_score()
     assert state["mode"] == "practice" and state["running"], state
-    assert (state["bpm"], state["flow"]["step"]) == (40, "tempo")
+    assert state["flow"]["step"] == "tempo"
+    assert 40 <= state["bpm"] <= 80
     return state
 
 
@@ -56,12 +57,13 @@ def next_take(before, after):
 
 
 def test_wrong_note_repeats_and_a_second_failure_at_the_floor_returns_to_free(practice_session):
-    session = practice_session(bars=2)
+    session = practice_session(bars=2, chords=True)
     first = tempo(session)
-    again = next_take(first, play(session, first, wrong=(0,)))
-    assert again["bpm"] == 40 and again["flow"]["message"] == "Again at the same tempo"
+    assert first["bpm"] == 40
+    again = next_take(first, play(session, first, wrong=(0,1)))
+    assert again["bpm"] == 40 and again["flow"]["message_kind"] == "again"
     assert again["take_result"] is None or not again["take_result"]["clean"]
-    free = play(session, again, wrong=(0,))
+    free = play(session, again, wrong=(0,1))
     assert free["mode"] == "learn" and free["flow"]["step"] == "free"
     assert not free["running"] and free["lesson_steps_mastered"] == 0
     # Free asks for the complete window again before Tempo restarts at 50%.
@@ -72,15 +74,15 @@ def test_wrong_note_repeats_and_a_second_failure_at_the_floor_returns_to_free(pr
 
 
 def test_missing_note_and_extra_key_fail_and_two_failures_above_the_floor_slow_down(practice_session):
-    session = practice_session(bars=2)
+    session = practice_session(bars=2, chords=True)
     first = tempo(session)
     faster = next_take(first, play(session, first))
-    assert faster["bpm"] == 80 and faster["flow"]["message"] == "Faster: 80 BPM"
-    missing = next_take(faster, play(session, faster, missing=(1,)))
+    assert faster["bpm"] == 80 and faster["flow"]["message_kind"] == "faster"
+    missing = next_take(faster, play(session, faster, missing=(1,2)))
     assert missing["bpm"] == 80 and missing["streak"] == 0
-    slower = next_take(missing, play(session, missing, extra=((.05, 60),)))
+    slower = next_take(missing, play(session, missing, missing=(1,), extra=((.05, 60),)))
     # 10% of the 80 BPM target, never below 50%.
-    assert slower["bpm"] == 72 and slower["flow"]["message"] == "Slower: 72 BPM"
+    assert slower["bpm"] == 72 and slower["flow"]["message_kind"] == "slower"
     assert slower["lesson_steps_mastered"] == 0
 
 
@@ -89,23 +91,20 @@ def test_missing_note_and_extra_key_fail_and_two_failures_above_the_floor_slow_d
 def test_a_late_attack_is_graded_against_the_onset_tolerance(practice_session, late, clean):
     # Tolerance: the larger of 150 ms and one sixteenth at the local tempo
     # (at 40 BPM a sixteenth is 375 ms).
-    session = practice_session(bars=2)
+    session = practice_session(bars=2, chords=True)
     first = tempo(session)
     after = next_take(first, play(session, first, late=late))
     assert (after["bpm"] > 40) is clean
     if clean:
-        # A clean but off-centre attack climbs less than a centred one
-        # (10% x (1 + timing quality) x length factor).
         assert 40 < after["bpm"] < 80
-        assert after["flow"]["message"] == f"Faster: {after['bpm']} BPM"
+        assert after["flow"]["message_kind"] == "faster"
     else:
-        assert after["flow"]["message"] == "Again at the same tempo"
+        assert after["flow"]["message_kind"] == "again"
 
 
 def test_two_clean_takes_at_target_master_the_window_and_move_to_the_left_hand(practice_session):
     session = practice_session(bars=2)
     state = tempo(session)
-    state = next_take(state, play(session, state))
     assert state["bpm"] == 80
     state = next_take(state, play(session, state))
     assert state["streak"] == 1 and state["lesson_steps_mastered"] == 0
@@ -118,7 +117,7 @@ def test_two_clean_takes_at_target_master_the_window_and_move_to_the_left_hand(p
 def test_a_failed_take_breaks_the_clean_streak_at_target(practice_session):
     session = practice_session(bars=2)
     state = tempo(session)
-    state = next_take(state, play(session, state))
+    assert state["bpm"] == 80
     state = next_take(state, play(session, state))
     assert state["streak"] == 1
     state = next_take(state, play(session, state, wrong=(1,)))
@@ -179,6 +178,9 @@ def test_long_seeded_journeys_never_fail_or_jam(practice_session, seed):
             continue
         if state["mode"] == "listen":
             session.finish_listen()
+            continue
+        if state["flow"]["step"] == "section_choice":
+            session.command("section_next")
             continue
         if not state["running"]:
             state = session.ready_score()

@@ -53,9 +53,10 @@ def test_paused_count_in_resumes_with_a_full_count_in_and_rejects_lead_in_notes(
     again = session.command("resume")["playback_timeline"]["current"]
     assert again["take_id"] == take["take_id"]
     # Paused in the count-in: Resume gives the take a fresh, complete
-    # count-in bar (4 beats at 40 BPM = 6 s), starting right away.
+    # count-in bar at the selected tempo, starting right away.
     lead = again["deadline_ms"]/1000-session.clock()
-    assert 6.0 <= lead <= 6.0+.5
+    bar_seconds = again["count_in_beats"]*60/again["bpm"]
+    assert bar_seconds <= lead <= bar_seconds+.5
     session.strike(72)
     assert session.snapshot()["midi_notes"] == 0
     session.clock.at = again["deadline_ms"]/1000
@@ -86,8 +87,9 @@ def test_automatic_repeat_follows_after_one_count_in_bar(practice_session):
     take = desktop_tempo(session)
     session.ask("score.native_layout")
     initial = session.snapshot()
-    # A short, precisely played window reaches the target in one take.
-    for bpm, next_bpm in ((40,80), (80,80)):
+    # Sparse two-attack material opens at target tempo; one clean
+    # attempt repeats at target and a second masters this hand.
+    for bpm, next_bpm in ((80,80),):
         start = take["deadline_ms"]/1000
         # Where the repeat will start is published while this take plays,
         # so its notes can be drawn early and scroll in from the right.
@@ -272,12 +274,14 @@ def test_a_late_decision_adds_a_whole_rest_bar_before_the_count_in(practice_sess
     take = desktop_tempo(session)
     start = take["deadline_ms"]/1000
     for beat, pitch, on in ((0,72,True), (1,72,False), (3,79,True), (4,79,False)):
-        session.clock.at = start+beat*60/40
+        session.clock.at = start+beat*60/take["bpm"]
         session.key(pitch, on, after=0)
-    end = start+4*60/40
+    end = start+4*60/take["bpm"]
     state = session.tick(1.0)          # first tick one second after the end
     incoming = state["playback_timeline"]["current"]
     assert state["running"] and incoming["bpm"] == 80
-    # One rest bar (4 beats at the outgoing 40 BPM), then the eased count-in.
-    assert incoming["deadline_ms"]/1000 == pytest.approx(
-        end+4*60/40+spans_seconds(count_in_spans(4,40,80)))
+    # The next downbeat must be on an entire bar boundary after the
+    # sounding end, not shifted by the worker's one-second delay.
+    bar_seconds = 4*60/take["bpm"]
+    bars = (incoming["deadline_ms"]/1000-end)/bar_seconds
+    assert bars >= 1 and bars == pytest.approx(round(bars),abs=.001)
