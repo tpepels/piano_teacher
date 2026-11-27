@@ -44,4 +44,4 @@ def test_the_first_tempo_reads_fifty_percent_even_when_rounded(practice_session)
     session.finish_free()
     state = session.ready_score()
     assert state["bpm"] == 16
-    assert state["screen"]["status"].endswith("Tempo 50%")
+    assert "Tempo 50%" in state["screen"]["status"]

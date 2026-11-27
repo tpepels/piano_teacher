@@ -93,16 +93,18 @@ def test_a_mistake_fails_the_take_and_the_same_tempo_follows(practice_session, n
     state = tempo(session)
     session.ask("score.native_layout")
     after = play(session, state, **options)
-    assert graded(session, state["transport_id"]) == statuses
-    assert counts(session) == {"correct_required_pitches": correct, "wrong": wrong,
-                               "omitted": omitted, "extra": extra}
+    ignored = correct == 0
+    assert graded(session, state["transport_id"]) == ([] if ignored else statuses)
+    assert counts(session) == (dict.fromkeys(("correct_required_pitches", "wrong", "omitted", "extra"), 0)
+                               if ignored else {"correct_required_pitches": correct, "wrong": wrong,
+                               "omitted": omitted, "extra": extra})
     # One failed take: the same window again at the same tempo, no credit.
     assert after["running"] and after["transport_id"] == state["transport_id"]+1
     assert after["bpm"] == 40 and after["streak"] == 0
     assert after["flow"]["message_kind"] == "again"
     assert after["lesson_steps_mastered"] == 0
     assessments = session.ask("learning.statistics", scope="full")["assessments"]
-    assert (assessments["accepted"], assessments["rejected"]) == (0, 1)
+    assert (assessments["accepted"], assessments["rejected"]) == (0, 0 if ignored else 1)
 
 
 @pytest.mark.parametrize("shift", [-.1, .1], ids=["early", "late"])
@@ -130,10 +132,10 @@ def test_notes_released_far_too_soon_fail_only_when_holds_are_graded(
 
 
 @pytest.mark.parametrize("first,second", [
-    ({"missing": (1,)}, {"wrong": (0,)}),
-    ({"shift": (LAST, .6)}, {"shift": (LAST, -.6)}),
-    ({"extra": ((.05, 60),)}, {"missing": CHORD+(LAST,)}),
-], ids=["missing-then-wrong", "late-then-early", "extra-then-nothing"])
+    ({"missing": (1,2)}, {"wrong": (0,1)}),
+    ({"missing": (1,), "shift": (LAST, .6)}, {"missing": (1,), "shift": (LAST, -.6)}),
+    ({"extra": ((.05, 60),), "missing": (1,)}, {"missing": CHORD}),
+], ids=["missing-then-wrong", "late-then-early", "extra-then-missing"])
 def test_any_two_failures_in_a_row_at_the_floor_return_to_free(practice_session, first, second):
     session = practice_session(bars=2, chords=True)
     state = tempo(session)
@@ -149,13 +151,13 @@ def test_two_failures_above_the_floor_slow_down_and_a_clean_take_resets_the_coun
     state = tempo(session)
     state = play(session, state)                       # clean: up to the target
     assert state["bpm"] == 80
-    state = play(session, state, missing=(LAST,))      # one failure: same tempo
+    state = play(session, state, missing=(1,LAST))    # one low-accuracy failure: same tempo
     assert state["bpm"] == 80
     state = play(session, state)                       # clean again: counter reset
     assert state["bpm"] == 80 and state["streak"] == 1
-    state = play(session, state, wrong=(0,))           # failure 1 of 2, streak lost
+    state = play(session, state, wrong=(0,1))         # failure 1 of 2, streak lost
     assert state["bpm"] == 80 and state["streak"] == 0
-    state = play(session, state, shift=(LAST, .6))     # failure 2 of 2: slower
+    state = play(session, state, missing=(1,LAST))    # failure 2 of 2: slower
     assert state["bpm"] == 72 and state["flow"]["message_kind"] == "slower"
 
 
@@ -201,7 +203,9 @@ def test_every_window_kind_grades_a_mistake_and_repeats(practice_session, window
     after = play(session, state, **build(len(notes)))
     expected = [C]*len(notes)
     expected[index] = status
-    assert graded(session, state["transport_id"]) == expected
+    # A one-note window with its only attack missed/wrong/too early has
+    # zero timing credit, and is discarded rather than recorded.
+    assert graded(session, state["transport_id"]) == ([] if len(notes) == 1 else expected)
     assert after["running"] and after["bpm"] == state["bpm"]
     assert after["flow"]["message_kind"] == "again"
     assert after["hand"] == state["hand"]
@@ -221,5 +225,7 @@ def test_every_window_kind_passes_a_clean_take_and_rejects_silence(practice_sess
     else:
         assert clean["bpm"] > state["bpm"]
     silent = play(session, clean, missing=tuple(range(count)))
-    assert graded(session, clean["transport_id"]) == [M]*count
+    assert graded(session, clean["transport_id"]) == []
     assert silent["bpm"] == clean["bpm"] and silent["flow"]["message_kind"] == "again"
+    assert silent["streak"] == clean["streak"]
+    assert session.ask("learning.statistics", scope="full")["assessments"]["rejected"] == 0

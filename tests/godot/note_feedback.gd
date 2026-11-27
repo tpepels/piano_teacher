@@ -99,8 +99,11 @@ func _run() -> void:
     feedback.ingest(assessment("b","head-b",{"pitch":"wrong"}))
     check(color(feedback,take,"head-b") == red and color(feedback,take,"head-a") == green,
         "Wrong-pitch assessment colors the intended target without changing a correct earlier note")
-    check(feedback.ghosts_for_take(take) == [{"beat":1.25,"pitch":61,"staff":"right"}]
-        and feedback.ghosts_for_take(next_take).is_empty(),"Wrong key keeps the actual played pitch, beat and take for its red ghost")
+    var ghosts: Array = feedback.ghosts_for_take(take)
+    check(ghosts.size() == 1 and ghosts[0].get("beat") == 1.25 and
+        ghosts[0].get("pitch") == 61 and ghosts[0].get("staff") == "right" and
+        int(ghosts[0].get("lifetime_ms",0)) > 0 and
+        feedback.ghosts_for_take(next_take).is_empty(),"Wrong key keeps its actual pitch, beat, take and fading lifetime")
     var forged := assessment("a","head-b",{"pitch":"correct"})
     check(feedback.ingest(forged) == "ignored" and color(feedback,take,"head-b") == red,
         "A mismatched source/head pair cannot color another note")

@@ -16,7 +16,8 @@ def notice(s: Mapping, moving: bool) -> str:
     """One problem line, only while the flow cannot continue by itself."""
     timeline = s.get("playback_timeline")
     if isinstance(timeline, Mapping) and timeline.get("state") == "failed":
-        return "The music could not start. Press Play to try again."
+        reason = str(timeline.get("failure") or "").strip()
+        return f"{reason}. Press Play to try again." if reason else "The music could not start. Press Play to try again."
     teaching = s.get("teaching") if isinstance(s.get("teaching"), Mapping) else {}
     if s.get("mode") == "learn" and teaching.get("phase") == "disconnected" and not s.get("paused"):
         # Free waits for a piano: say so, or it looks as if it just stopped.

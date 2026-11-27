@@ -98,7 +98,9 @@ func run() -> void:
         "A projected problem notice is shown on the score banner")
     free.screen.notice = ""
     view.present(free,true)
-    check(not view.stage.practice_playback_banner.visible,"No notice, no banner")
+    # The notice fades out over .22 seconds rather than vanishing abruptly.
+    await create_timer(.30).timeout
+    check(not view.stage.practice_playback_banner.visible,"No notice, no banner after fade")
     for mode in ["practice","listen"]:
         var playing := state(mode,"playing")
         view.present(playing,true)
