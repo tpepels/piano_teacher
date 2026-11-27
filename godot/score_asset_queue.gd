@@ -15,23 +15,29 @@ func attach(host: Node, owner, bus: Node) -> void:
         func(code: int, body: PackedByteArray):
             deliver(code, body))
     owner.request_requested.connect(start)
+    owner.request_cancelled.connect(cancel)
 
 func start(kind: String, request_id: int, path: String,
-        timeout_seconds: float) -> void:
+        timeout_seconds: float, identity: Dictionary) -> void:
     if kind != "bundle" or path != "score.bundle" or bundle_request == null:
         _owner.request_start_result(kind, request_id, ERR_UNAVAILABLE,
             Time.get_ticks_msec())
         return
     # An obsolete reply cannot install a model for a newer stage revision.
-    if _request_id >= 0:
-        bundle_request.cancel_request()
+    cancel()
     _request_id = request_id
     bundle_request.timeout = timeout_seconds
-    var error: Error = bundle_request.request(path)
+    var error: Error = bundle_request.request(path,identity)
     if error != OK:
         _request_id = -1
         _owner.request_start_result(kind, request_id, error,
             Time.get_ticks_msec())
+
+func cancel() -> void:
+    _request_id = -1
+    if is_instance_valid(bundle_request):
+        bundle_request.cancel_request()
+
 
 func deliver(code: int, body: PackedByteArray) -> void:
     var request_id: int = _request_id

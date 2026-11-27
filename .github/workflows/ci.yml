@@ -48,6 +48,11 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: Test quality gate
         run: python -m pytest --noconftest -q tests/test_quality_gate.py
+      - name: Test native asset mailbox
+        run: |
+          g++ -std=c++17 -pthread -Wall -Wextra -Werror -I native/src \
+            tests/native/asset_mailbox.cpp -o "$RUNNER_TEMP/asset-mailbox-test"
+          "$RUNNER_TEMP/asset-mailbox-test"
       - name: Enforce code quality
         run: python scripts/quality_gate.py
 

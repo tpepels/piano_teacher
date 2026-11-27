@@ -13,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "asset_mailbox.hpp"
 
 namespace godot {
 
@@ -34,10 +35,9 @@ class PianoNative : public RefCounted {
     std::mutex mutex_;
     std::condition_variable available_;
     std::deque<Command> pending_;
-    // Read-only score asset preparation (seconds of Verovio engraving) runs
-    // on its own thread so it can never delay the musical tick on worker_.
-    std::condition_variable assets_available_;
-    std::deque<Command> asset_pending_;
+    // Independent, bounded read-only work lane. It never holds the musical
+    // command queue lock while preparing or cancelling a score.
+    piano::AssetMailbox<Command, Reply> assets_;
     std::deque<Reply> completed_;
     std::thread worker_;
     std::atomic<bool> stopping_{false};
@@ -64,6 +64,7 @@ public:
     int64_t monotonic_milliseconds() const;
     String failure_message();
     int64_t submit(const String &operation, const String &body);
+    void cancel_asset(int64_t id);
     Array take_responses();
 };
 

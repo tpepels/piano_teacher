@@ -16,4 +16,10 @@ class ScoreArtifactRegistry:
         self.current = prepared
 
     def invalidate(self) -> None:
-        self.current.invalidate()
+        """Retire an entire generation without joining its engraving lock.
+
+        The session lock owns this pointer. An in-flight reader retains its
+        old artifact instance and may finish, but can never write into the
+        new generation. Durable source-keyed cache entries remain reusable.
+        """
+        self.current = ScoreArtifacts(self.current.preprocessing)

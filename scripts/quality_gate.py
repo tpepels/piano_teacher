@@ -88,7 +88,8 @@ def gdscript(root, path):
     if result.returncode and not findings:
         # The third-party grammar may lag Godot. Record recognized parser
         # diagnostics, but never treat an unexpected tool crash as clean.
-        if "Unexpected token" not in output and "Unexpected input" not in output:
+        parser_errors = ("Unexpected token", "Unexpected input", "No terminal matches")
+        if not any(error in output for error in parser_errors):
             raise RuntimeError(f"gdlint failed for {path}:\n{output}")
         findings.append(Finding(path, 1, "gd/parser", output.strip()))
     return findings

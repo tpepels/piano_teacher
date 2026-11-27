@@ -48,6 +48,7 @@ void PianoNative::_bind_methods() {
     ClassDB::bind_method(D_METHOD("failure_message"), &PianoNative::failure_message);
     ClassDB::bind_method(D_METHOD("submit", "operation", "payload"),
                          &PianoNative::submit);
+    ClassDB::bind_method(D_METHOD("cancel_asset", "id"), &PianoNative::cancel_asset);
     ClassDB::bind_method(D_METHOD("take_responses"), &PianoNative::take_responses);
 }
 
@@ -63,9 +64,16 @@ PianoNative::PianoNative() {
 }
 
 PianoNative::~PianoNative() {
-    stopping_ = true;
+    {
+        // Change the predicate under the same lock used by wait_until.
+        std::lock_guard<std::mutex> guard(mutex_);
+        stopping_ = true;
+        ready_ = false;
+        pending_.clear();
+        completed_.clear();
+    }
+    assets_.stop();
     available_.notify_all();
-    assets_available_.notify_all();
     if (worker_.joinable()) worker_.join();
     // Do not Py_Finalize(): rtmidi and native extensions may still have
     // background callbacks. There is exactly one runtime per application.
@@ -124,7 +132,6 @@ void PianoNative::initialize_python() {
         failure_ = python_error();
     } else {
         engine_ = instance;
-        ready_ = true;
     }
     Py_XDECREF(klass);
     Py_XDECREF(module);
@@ -140,20 +147,8 @@ bool PianoNative::is_asset_operation(const std::string &operation) {
 }
 
 void PianoNative::asset_loop() {
-    while (true) {
-        Command next;
-        {
-            std::unique_lock<std::mutex> guard(mutex_);
-            assets_available_.wait(guard, [this] {
-                return stopping_ || !asset_pending_.empty();
-            });
-            if (stopping_) return;
-            next = std::move(asset_pending_.front());
-            asset_pending_.pop_front();
-        }
-        Reply output = execute(next);
-        std::lock_guard<std::mutex> guard(mutex_);
-        completed_.push_back(std::move(output));
+    while (auto next = assets_.take()) {
+        assets_.complete(execute(*next));
     }
 }
 
@@ -161,7 +156,12 @@ void PianoNative::worker_loop() {
     initialize_python();
     // Started only after CPython and the engine exist; joined below before
     // the engine is closed, so no asset request can outlive the engine.
+    if (!engine_) return;
     std::thread assets([this] { asset_loop(); });
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        if (!stopping_) ready_ = true;
+    }
     // Command responses and musical deadlines share this one worker.
     // An idle UI or slow state snapshots must never be the engine's timer.
     // Waiting releases the queue mutex and the CPython GIL.
@@ -186,7 +186,7 @@ void PianoNative::worker_loop() {
             Reply output = execute(next);
             {
                 std::lock_guard<std::mutex> guard(mutex_);
-                completed_.push_back(std::move(output));
+                if (!stopping_) completed_.push_back(std::move(output));
             }
         }
         // Only state-changing commands re-evaluate transport deadlines.
@@ -207,7 +207,7 @@ void PianoNative::worker_loop() {
                 std::chrono::milliseconds(std::clamp(interval_ms, 10, 500));
         }
     }
-    assets_available_.notify_all();
+    assets_.stop();
     if (assets.joinable()) assets.join();
     if (engine_) {
         PyGILState_STATE gil = PyGILState_Ensure();
@@ -255,35 +255,48 @@ PianoNative::Reply PianoNative::execute(const Command &command) {
         static_cast<PyObject *>(engine_), "request", "ss",
         command.operation.c_str(), command.body.c_str());
     if (response && PyTuple_Check(response) && PyTuple_Size(response) == 2) {
-        output.status = static_cast<int>(PyLong_AsLong(PyTuple_GetItem(response, 0)));
+        PyObject *status = PyTuple_GetItem(response, 0);
         PyObject *payload = PyTuple_GetItem(response, 1);
+        const long code = PyLong_Check(status) ? PyLong_AsLong(status) : -1;
         char *ptr = nullptr;
         Py_ssize_t count = 0;
-        if (PyBytes_AsStringAndSize(payload, &ptr, &count) == 0 && count >= 0)
+        if (!PyErr_Occurred() && code >= 0 && code <= 3 &&
+                PyBytes_AsStringAndSize(payload, &ptr, &count) == 0 && count >= 0) {
+            output.status = static_cast<int>(code);
             output.bytes.assign(ptr, ptr + count);
-        else PyErr_Clear();
+        } else {
+            PyErr_Clear();
+            const std::string error = "Invalid Python bridge response";
+            output.bytes.assign(error.begin(), error.end());
+        }
     } else {
         std::string error = python_error();
         output.bytes.assign(error.begin(), error.end());
     }
     Py_XDECREF(response);
+    PyErr_Clear();
     PyGILState_Release(gil);
     return output;
 }
 
 int64_t PianoNative::submit(const String &operation, const String &body) {
-    if (stopping_ || !ready_) return -1;
     int64_t id;
     Command command{0, utf8(operation), utf8(body)};
     const bool asset = is_asset_operation(command.operation);
     {
         std::lock_guard<std::mutex> guard(mutex_);
+        if (stopping_ || !ready_) return -1;
         id = ++next_id_;
         command.id = id;
-        (asset ? asset_pending_ : pending_).push_back(std::move(command));
+        if (!asset) pending_.push_back(std::move(command));
     }
-    (asset ? assets_available_ : available_).notify_one();
+    if (asset) return assets_.submit(std::move(command)) ? id : -1;
+    available_.notify_one();
     return id;
+}
+
+void PianoNative::cancel_asset(int64_t id) {
+    assets_.cancel(id);
 }
 
 Array PianoNative::take_responses() {
@@ -292,6 +305,8 @@ Array PianoNative::take_responses() {
         std::lock_guard<std::mutex> guard(mutex_);
         collected.swap(completed_);
     }
+    auto asset_replies = assets_.drain();
+    for (auto &reply : asset_replies) collected.push_back(std::move(reply));
     Array result;
     for (const Reply &reply : collected) {
         Dictionary message;

@@ -188,8 +188,8 @@ class PracticeEngine:
     def geometry(self) -> dict:
         return self.score.geometry()
 
-    def score_bundle(self) -> dict:
-        return self.score.bundle()
+    def score_bundle(self, expected: dict | None = None) -> dict:
+        return self.score.bundle(expected)
 
     def lesson_overview(self) -> dict:
         with self.lock:

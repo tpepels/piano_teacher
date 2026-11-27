@@ -71,10 +71,26 @@ class ScoreReadServices:
         artifacts, selection = self.selected_artifacts()
         return artifacts.geometry(selection)
 
-    def bundle(self) -> dict:
-        """One snapshot and one compilation path for the active score."""
+    def bundle(self, expected: dict | None = None) -> dict:
+        """Compile an exact selection; never substitute a later source."""
         artifacts, selection = self.selected_artifacts()
-        return artifacts.bundle(selection)
+        identity = {
+            "fingerprint": selection.fingerprint,
+            "revision": selection.revision,
+            "stage_key": selection.stage_key,
+            "hand": selection.hand,
+        }
+        if expected is not None and expected != identity:
+            raise ValueError("Score request was superseded before preparation")
+        result = artifacts.bundle(selection)
+        # Only the short selection check takes the session lock. A retired
+        # artifact may populate its own cache but cannot publish live ink.
+        with self.lock:
+            if self.score_artifact_registry.current is not artifacts:
+                raise ValueError("Score request was superseded during preparation")
+            if self.selection().identity != selection.identity:
+                raise ValueError("Score request was superseded during preparation")
+        return result
 
     def completed_take_layout(self) -> dict:
         cached = self.score_artifact_registry.current.cached_layout(self.selection())

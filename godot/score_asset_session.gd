@@ -2,7 +2,9 @@ extends RefCounted
 ## Owns one revision's native layout/atlas/model in-process request lifecycle.
 ## Borrows renderer and feedback components but no application root, widgets
 ## or transport resources. An obsolete worker response never publishes data.
-signal request_requested(kind: String, request_id: int, path: String, timeout_seconds: float)
+signal request_requested(kind: String, request_id: int, path: String,
+    timeout_seconds: float, identity: Dictionary)
+signal request_cancelled
 signal assets_invalidated(revision: int)
 signal layout_published(revision: int, values: Dictionary)
 signal score_published(revision: int)
@@ -39,6 +41,7 @@ var _rendered_hand := ""
 var _state: Dictionary = {}
 var _layout: Dictionary = {}
 var _generation := 0
+var _closed := false
 var _annotation_version := -1
 # Retry is a genuine replay of the same source/layout request. If a
 # deterministic native failure repeats unchanged, surface that fact and
@@ -133,6 +136,8 @@ func matches_ready_state(state: Dictionary) -> bool:
 
 
 func update_context(state: Dictionary, now_ms: int) -> void:
+    if _closed:
+        return
     var loaded: bool = bool(state.get("loaded",false))
     var next_revision: int = int(state.get("revision",0))
     var fingerprint: String = str(state.get("piece_fingerprint",""))
@@ -182,7 +187,7 @@ func layout_snapshot() -> Dictionary:
     return _layout.duplicate(true)
 
 func is_ready() -> bool:
-    return score_error.is_empty() and _loaded and is_instance_valid(_renderer) and bool(_renderer.native_ready) and \
+    return not _closed and score_error.is_empty() and _loaded and is_instance_valid(_renderer) and bool(_renderer.native_ready) and \
         (not _renderer.has_method("retained_ready") or _renderer.retained_ready()) and \
         layout_revision == revision and \
         rendered_revision == revision and \
@@ -241,13 +246,13 @@ func fail(message: String) -> void:
     _fail(message)
 
 func request_layout() -> bool:
-    if layout_pending or not _loaded or not score_error.is_empty():
+    if _closed or layout_pending or not _loaded or not score_error.is_empty():
         return false
     _begin_request("bundle","score.bundle",90.0)
     return true
 
 func retry(now_ms: int) -> bool:
-    if not _loaded:
+    if _closed or not _loaded:
         return false
     # Explicit Retry cancels a pending layout as well as failed attempts.
     # Persist the prior raw error across _reset_assets() for exact failure
@@ -293,7 +298,10 @@ func _begin_request(kind: String, path: String, timeout: float) -> void:
     _requests[kind] = {"id":_next_request_id,"generation":_generation,
         "revision":revision,"fingerprint":_fingerprint,
         "stage_key":_stage_key,"hand":str(_state.get("hand",""))}
-    request_requested.emit(kind,_next_request_id,path,timeout)
+    var identity := {
+        "fingerprint":_fingerprint,"revision":revision,
+        "stage_key":_stage_key,"hand":str(_state.get("hand",""))}
+    request_requested.emit(kind,_next_request_id,path,timeout,identity)
 
 func _take_request(kind: String, request_id: int) -> Dictionary:
     var request: Dictionary = _requests.get(kind,{})
@@ -303,7 +311,7 @@ func _take_request(kind: String, request_id: int) -> Dictionary:
     return request
 
 func _request_is_current(request: Dictionary) -> bool:
-    return _loaded and int(request["generation"]) == _generation and \
+    return not _closed and _loaded and int(request["generation"]) == _generation and \
         int(request["revision"]) == revision and str(request["fingerprint"]) == _fingerprint and \
         str(request["stage_key"]) == _stage_key and \
         str(request["hand"]) == str(_state.get("hand",""))
@@ -336,6 +344,8 @@ func _requeue(job) -> void:
     _queued = {"request":job.request,"body":job.body}
 
 func advance_preparation() -> void:
+    if _closed:
+        return
     if _worker_id >= 0 and WorkerThreadPool.is_task_completed(_worker_id):
         var joined: Error = WorkerThreadPool.wait_for_task_completion(_worker_id)
         _worker_id = -1
@@ -373,6 +383,10 @@ func advance_preparation() -> void:
 
 func shutdown_preparation() -> void:
     # Only shutdown may block on a worker; navigation/retry invalidates it.
+    _closed = true
+    _generation += 1
+    _requests.clear()
+    request_cancelled.emit()
     _queued.clear()
     _uploading = null
     if _worker_id >= 0:
@@ -410,7 +424,7 @@ func _install_prepared(job) -> void:
     _finish_native_score()
 
 func _finish_native_score() -> void:
-    if layout_revision != revision or \
+    if _closed or layout_revision != revision or \
             not is_instance_valid(_renderer) or not bool(_renderer.native_ready):
         return
     # Publishing now would let the engine start while a future source copy
@@ -448,8 +462,9 @@ func _finish_native_score() -> void:
 
 func _reset_assets() -> bool:
     # Supersede both in-flight operations immediately on score change or Retry.
-    # The queue cancels the old adapter when its replacement is dispatched.
+    # Cancel the adapter even when closing without a replacement.
     _requests.clear()
+    request_cancelled.emit()
     _queued.clear()
     _uploading = null
     _slow_status_published = false
@@ -483,8 +498,11 @@ func _hide_renderer() -> bool:
     return true
 
 func _fail(message: String, release_renderer: bool = true) -> void:
+    if _closed:
+        return
     _generation += 1
     _requests.clear()
+    request_cancelled.emit()
     _queued.clear()
     _uploading = null
     push_error("SCORE_ASSET_FAILURE: " + message)

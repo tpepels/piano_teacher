@@ -53,6 +53,10 @@ func forget(identifier: int, requester: Node) -> void:
     var handle: WeakRef = pending.get(identifier)
     if handle != null and handle.get_ref() == requester:
         pending.erase(identifier)
+        # Only the native asset lane accepts cancellation. Mutations still
+        # finish and commit even when their UI requester has gone away.
+        if native != null:
+            native.call("cancel_asset", identifier)
 
 
 ## The completed feedback-log reply, if one arrived since the last call.
