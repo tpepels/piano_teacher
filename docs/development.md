@@ -65,11 +65,12 @@ bash scripts/verify-native-bridge.sh
 bash scripts/verify-embedded-production-local.sh
 ~~~
 
-The common command runs Python, production Godot parsing and four executed
-Godot behaviour groups. Arguments after runner options go to pytest.
-Coverage produces ignored XML/JSON reports, uploaded by GitHub; line and branch
-percentages are reported separately, without a minimum percentage gate.
-They measure Python execution, not Godot or physical acceptance.
+The common command runs Python, production Godot parsing and five Godot
+player-behavior checks. Arguments after runner options go to pytest.
+Coverage produces ignored XML/JSON reports for GitHub. The coverage run
+combines traces from the embedded engine tests and the real score subprocess.
+Line and branch rates are reported separately and are informational. Godot
+behavior and physical acceptance have their own checks.
 
 The owner approved rebuilding the suite on 2026-11-20 around player behaviour.
 The previous 35 Python modules/336 collected cases and 26 native scenario

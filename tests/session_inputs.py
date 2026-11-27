@@ -291,6 +291,7 @@ class PracticeSession:
         for _ in range(300):
             result = self.admit(self.tick(.025))
             if (result["transport_id"] != transport or result["mode"] != "practice"
+                    or result["flow"]["step"] == "section_choice"
                     or result["lesson_steps_mastered"] > state["lesson_steps_mastered"]):
                 return result
             time.sleep(.001)

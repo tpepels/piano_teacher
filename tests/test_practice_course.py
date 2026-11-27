@@ -170,7 +170,7 @@ def test_whole_original_final_requires_two_clean_target_takes(practice_session):
     assert session.ask("lesson.overview")["steps"][-1]["completed"]
 
 
-def test_finishing_the_only_hand_starts_the_final_at_half_speed(practice_session):
+def test_midi_section_choice_repeats_at_target_or_enters_the_final_at_half_speed(practice_session):
     session = practice_session(bars=1, left=False)
     session.finish_listen()
     session.finish_free()
@@ -178,11 +178,26 @@ def test_finishing_the_only_hand_starts_the_final_at_half_speed(practice_session
         session.play_take()
     choice = session.snapshot()
     assert choice["flow"]["step"] == "section_choice"
-    session.command("section_next")
+    assert "100.0% accuracy" in choice["screen"]["notice"]
+    assert "C to repeat" in choice["screen"]["notice"] and "F for next section" in choice["screen"]["notice"]
+    assert choice["mastered"] == 1
+
+    session.strike(60)
+    repeat = session.ready_score()
+    assert repeat["running"] and repeat["flow"]["step"] == "tempo"
+    assert (repeat["stage_key"], repeat["hand"], repeat["bpm"]) == (choice["stage_key"], "right", 80)
+    assert repeat["midi_notes"] == 0 and repeat["mastered"] == 1
+    session.play_take()
+    assert session.snapshot()["flow"]["step"] == "tempo"
+    session.play_take()
+    assert session.snapshot()["flow"]["step"] == "section_choice"
+
+    session.strike(65)
     final = session.ready_score()
     assert final["kind"] == "perform" and final["hand"] == "both"
     assert final["mode"] == "practice" and final["flow"]["step"] == "tempo"
     assert final["bpm"] == 40
+    assert final["midi_notes"] == 0 and final["mastered"] == 1
 
 
 def test_dim_neighbours_and_other_hand_are_not_active_performance_notes(practice_session):

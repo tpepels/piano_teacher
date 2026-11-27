@@ -139,6 +139,41 @@ def test_unplug_cancels_take_and_reconnect_requires_a_fresh_start(connected):
     backend.ports[-1].press()
     assert engine.state()["midi_input_note"] == 60
     assert engine.state()["midi_input_count"] == attacks + 1
+    old.release()
+    old.press(64)
+    assert engine.state()["midi_held_pitches"] == [60]
+    assert engine.state()["midi_input_count"] == attacks + 1
+    backend.ports[-1].release()
+    assert engine.state()["midi_held_pitches"] == []
+
+
+def test_reselecting_a_live_piano_keeps_the_take_and_replacement_ignores_old_keys(connected):
+    engine, backend, now = connected
+    session = PracticeSession.attach(engine, ListClock(now))
+    before = session.tempo()
+    old = backend.ports[-1]
+    now[0] = take(before)["deadline_ms"] / 1000 + .25
+    old.press(64)
+    assert session.snapshot()["midi_held_pitches"] == [64]
+
+    same = session.ask("midi.device.select", name="USB Piano")
+    assert same["running"] and same["transport_id"] == before["transport_id"]
+    assert same["midi_held_pitches"] == [64]
+    assert backend.attempts == ["USB Piano"] and not old.closed
+
+    backend.names.append("Other Piano")
+    switched = session.ask("midi.device.select", name="Other Piano")
+    assert switched["device"] == "Other Piano" and not switched["running"]
+    assert switched["midi_held_pitches"] == [] and old.closed
+    current = backend.ports[-1]
+    current.press(64)
+    attacks = session.snapshot()["midi_input_count"]
+    old.release(64)
+    old.press(60)
+    state = session.snapshot()
+    assert state["midi_held_pitches"] == [64] and state["midi_input_count"] == attacks
+    current.release(64)
+    assert session.snapshot()["midi_held_pitches"] == []
 
 
 def test_failed_reconnect_is_bounded_then_recovers_without_resuming(connected):
