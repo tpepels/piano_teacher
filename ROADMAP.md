@@ -4707,3 +4707,7 @@ The production fake-MIDI journey now verifies both required successful recovery-
 - Timed replacement now releases an entirely unseen source/trailing-rest suffix behind an already-exposed leading rest, preserving the latter at the original world coordinates and archiving the source only once. Physical clearance uses the matching preview; unrelated rollback transactions remain full-batch.
 - Prefer exact precompiled source windows during admission. Track delayed first visibility without exempting reappearance of previously exposed ink. Section acceptance observes the retained staff and the actual bound successor before ending.
 - Fresh application, native queue, and rendered acceptance still required.
+
+
+### Rendered timing acceptance
+The four visual journeys now additionally record command/MIDI injection markers, frame pacing, capture overhead, stable tempo motion windows, and physical-ink clearance for Retry/Resume. The intentional 14-second recovery hitch is separately marked, not used to exempt ordinary frame stalls. Timing budgets are test policy, not inferred from engine scheduling. Optional PIANO_VISUAL_FPS=60 or 120 uses the same real capture path with per-rate pacing limits; local hardware/software renderer qualification is required. MIDI receipt and visible feedback are measured for selected wrong-Free and correct-Tempo probes. These are synthetic device-to-rendered-frame measurements, not physical USB or display-panel latency. Fresh native acceptance and calibration are still required.

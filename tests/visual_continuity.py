@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageFilter
 from visual_motion import scroll_velocity, strip_witnesses
+from visual_timing import TimingReview
 
 MAX_EVIDENCE = 8
 
@@ -238,6 +239,7 @@ class Review:
                          "navigation_pairs":0,"staff_pairs":0,"ink_pairs":0,
                          "phases":{},"steps":{},"max_frame_gap_ms":0.0}
         self.armed = False
+        self.timing = TimingReview()
 
     def consume(self, meta, image):
         self.coverage["frames"] += 1
@@ -272,6 +274,9 @@ class Review:
         step = meta["step"]
         self.coverage["steps"][step] = self.coverage["steps"].get(step,0)+1
         reasons,metrics,residual = compare(previous,image,prior,meta)
+        timing_reasons,timing_metrics = self.timing.observe(prior,meta,previous,image)
+        reasons.extend(timing_reasons)
+        metrics.update(timing_metrics)
         if metrics.get("overlap_unavailable"):
             self.coverage["no_overlap_pairs"] += 1
         elif any(metrics.get("expected_scroll_pixels",[])):
@@ -294,7 +299,9 @@ class Review:
         missing = sorted(set(required_steps)-self.coverage["steps"].keys())
         if missing:
             self.failures.append({"reasons":["missing_journey_steps"],"steps":missing})
-        report = {"coverage":self.coverage,"failures":self.failures}
+        timing_report,timing_failures = self.timing.finish(required_steps)
+        self.failures.extend(timing_failures)
+        report = {"coverage":self.coverage,"timing":timing_report,"failures":self.failures}
         (self.output/"report.json").write_text(json.dumps(report,indent=2))
         print(f"VISUAL_CONTINUITY frames={self.coverage['frames']} pairs={self.coverage['score_pairs']} "
               f"moving={self.coverage['motion_pairs']} failures={len(self.failures)} "

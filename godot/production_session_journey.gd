@@ -111,6 +111,8 @@ func _press(button: Button, action: String) -> bool:
     if button.disabled:
         _fail(action+" button disabled despite ready score")
         return false
+    if action in ["Pause","Resume","Retry"]:
+        _visual_capture.mark("transition",action.to_lower() if action != "Pause" else "pause_control")
     button.pressed.emit()
     return true
 

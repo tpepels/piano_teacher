@@ -169,6 +169,7 @@ run_player() {
   fi
   mkdir -p "$capture" "$output"
   timeout "$budget" env PIANO_VISUAL_SECTION="$section" \
+    PIANO_VISUAL_FPS="${PIANO_VISUAL_FPS:-30}" \
     PIANO_VISUAL_CAPTURE_DIR="$capture" LIBGL_ALWAYS_SOFTWARE=1 \
     xvfb-run -a -s '-screen 0 1600x1000x24' "$GODOT_BIN" \
     --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy \

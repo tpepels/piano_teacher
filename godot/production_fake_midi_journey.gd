@@ -111,6 +111,10 @@ func _press_primary() -> bool:
     if app.practice_view.start_button.disabled:
         _fail("The main Pause/Resume button is disabled in a playable state")
         return false
+    var state: Dictionary = app.current_state()
+    if phase in ["wrong_free","pause_free","tempo","paused_tempo","hitch_pause","faster"]:
+        var label: String = "resume" if bool(state.get("paused",false)) else "pause"
+        _visual_capture.mark("transition",label if label == "resume" and str(state.get("mode","")) != "learn" else label+"_control")
     app.practice_view.start_button.pressed.emit()
     return true
 
@@ -312,6 +316,7 @@ func _process(_delta: float) -> bool:
             print("FULL_SCENE_FREE_TARGET_HELD world=",free_hold_world)
             first_pitch = int(targets[0]["pitch"])
             first_midi_input = int(state.get("midi_input_count",0))
+            _visual_capture.mark("midi","wrong",61)
             _strike(61)
             _advance("wrong_free")
         "wrong_free":
@@ -533,6 +538,7 @@ func _process(_delta: float) -> bool:
                 return false
             var beat: float = _current_take_beat(state)
             if not played_first and beat >= 0.0 and beat < .10:
+                _visual_capture.mark("midi","correct",72)
                 _strike(72)
                 played_first = true
             if played_first and not played_second and beat >= SECOND_BEAT and \
@@ -578,6 +584,7 @@ func _process(_delta: float) -> bool:
             if _press_primary():
                 hitch_transport = int(state.get("transport_id",-1))
                 hitch_mastered = int(state.get("lesson_steps_mastered",-1))
+                _visual_capture.mark("injected_hitch","resume_recovery")
                 OS.delay_msec(14000)
                 _advance("hitch_recover")
         "hitch_recover":

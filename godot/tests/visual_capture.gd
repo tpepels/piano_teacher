@@ -18,6 +18,26 @@ var _failed := false
 var _enabled := false
 var _max_capture_ms := 0.0
 var _directory := ""
+var _fps := 30
+var _events: Array = []
+var _previous_capture_ms := 0.0
+
+# Test-only markers taken BEFORE the real input is sent. They are attached
+# to the next completed viewport frame, not reconstructed from phase names.
+func mark(kind: String, label: String = "", pitch: int = -1) -> void:
+    if not _enabled or _failed:
+        return
+    var state: Dictionary = _app.current_state()
+    var flow = _app.score_flow
+    var stage = _app.practice_view.stage
+    var viewport_size: Vector2 = _window.get_visible_rect().size
+    _events.append({"kind":kind,"label":label,"pitch":pitch,
+        "at_ms":float(Time.get_ticks_usec())*.001,
+        "world":float(flow.beat),"bpm":float(state.get("bpm",0.0)),
+        "paused":bool(state.get("paused",false)),
+        "transport":int(state.get("transport_id",-1)),
+        "midi_count":int(state.get("midi_input_count",0)),
+        "layers":_layers(stage,viewport_size) if kind == "transition" else []})
 
 func start(app: Node, window: Window) -> void:
     var directory: String = OS.get_environment("PIANO_VISUAL_CAPTURE_DIR")
@@ -37,7 +57,10 @@ func start(app: Node, window: Window) -> void:
         return
     # Cap the actual rendered frame rate; capture every draw, not a timed
     # subset. Keep real monotonic time and the production transport intact.
-    Engine.max_fps = 30
+    var requested: String = OS.get_environment("PIANO_VISUAL_FPS")
+    if requested in ["30","60","120"]:
+        _fps = int(requested)
+    Engine.max_fps = _fps
     RenderingServer.frame_post_draw.connect(_capture)
 
 func _error(message: String) -> void:
@@ -85,12 +108,31 @@ func _strips(view, viewport_size: Vector2) -> Array:
         result.append({"id":str(item.get("slot_id",str(item["serial"])+":"+kind)),
             "left":(x+bounds.x)/viewport_size.x,"right":(x+bounds.y)/viewport_size.x,
             "gutter":(origin_x+29.0)/viewport_size.x,
+            "kind":kind,"world_end":origin+bounds.y/maxf(1.0,density),
+            "pitch_feedback":_feedback(item),
             "visible":is_instance_valid(clip) and clip.is_visible_in_tree(),
             "ever_visible":bool(item.get("ever_visible",false)),
             "authorized":authorized.has(owner),
             "admitted_inside":is_finite(admitted_world) and first_x <= admitted_width
                 and (kind == "rest" or bool(item.get("admitted_on_empty_strip",false))),
             "future":is_finite(admitted_world) and origin+float(item.get("source_floor",0.0)) > admitted_world})
+    return result
+
+func _feedback(item: Dictionary) -> Array:
+    var segment = item.get("segment")
+    var clip = item.get("clip")
+    if not is_instance_valid(segment) or not is_instance_valid(clip) or \
+            not clip.is_visible_in_tree() or not is_instance_valid(segment.get("status_layer")):
+        return []
+    var status = segment.status_layer
+    var result: Array = []
+    # Read the retained status painter's prepared entries after frame_post_draw.
+    # The offline checker also requires visible color change for its MIDI probes.
+    for entry in status.get("_colored"):
+        var instance: Dictionary = entry["instance"]
+        result.append([str(instance.get("event_id","")),str(entry["status"])])
+    for ghost in status.get("_ghosts"):
+        result.append([str(ghost.get("pitch","")),str(ghost.get("shown_ms",""))])
     return result
 
 func _layers(stage, viewport_size: Vector2) -> Array:
@@ -120,6 +162,13 @@ func _sample() -> Dictionary:
     return {"frame":_count,"engine_frame":Engine.get_frames_drawn(),
         "time_ms":float(Time.get_ticks_usec())*.001,
         "sample_ms":float(flow.last_ms),"world":world,"step":step,
+        "timing_version":1,"fps":_fps,"capture_cost_ms":_previous_capture_ms,
+        "run_offset":float(flow.run_offset),"following":bool(flow.following),
+        "events":_events.duplicate(true),
+        "midi_count":int(state.get("midi_input_count",0)),
+        "teaching":state.get("teaching"),
+        "button_text":str(_app.practice_view.start_button.text),
+        "button_disabled":bool(_app.practice_view.start_button.disabled),
         "screen":str(_app.current_screen),"piece":str(state.get("piece_fingerprint","")),
         "ready":_app.score_session.is_ready(),"score":_rect(stage.score_frame,size),
         "playhead":cursor,"staff_hand":str(staff.active_hand),
@@ -163,8 +212,10 @@ func _capture() -> void:
     _metadata.store_line(line)
     if _frames.get_error() != OK or _metadata.get_error() != OK:
         _error("Cannot write rendered frame")
+    _events.clear()
     _count += 1
-    _max_capture_ms = maxf(_max_capture_ms,float(Time.get_ticks_usec()-began)*.001)
+    _previous_capture_ms = float(Time.get_ticks_usec()-began)*.001
+    _max_capture_ms = maxf(_max_capture_ms,_previous_capture_ms)
 
 func finish() -> bool:
     if not _enabled:
