@@ -23,7 +23,10 @@ class PreAssessmentTransitions:
 
     def run(self, now: float) -> tuple[bool, bool]:
         """Apply a non-grading transition; return consumed and follow-up flags."""
-        if self.transport.intent is not None:
+        if (self.transport.intent is not None or
+                (self.transport.running and not self.transport.presentation_confirmed)):
+            # No empty take, checkpoint, Listen completion or successor
+            # may settle while the renderer has not attested its ink.
             return True, False
         context = TransitionContext(
             has_plan=self.lesson.plan is not None,

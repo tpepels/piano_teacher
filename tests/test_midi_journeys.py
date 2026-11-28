@@ -212,3 +212,35 @@ def test_long_seeded_journeys_never_fail_or_jam(practice_session, seed):
             play(session, state, **{
                 "clean": {}, "wrong": {"wrong": (0,)}, "missing": {"missing": (0,)},
                 "extra": {"extra": ((.05, 60),)}, "late": {"late": .6}}[action])
+
+
+def test_unpresented_segment_cannot_grade_or_advance(practice_session):
+    session = practice_session(bars=2)
+    state = tempo(session)
+    take = state["playback_timeline"]["current"]
+    session.engine.playback.require_presentation = True
+    session.clock.at = take["deadline_ms"]/1000 + .1
+    session.strike(72)
+    held = session.tick(30)
+    assert held["transport_id"] == state["transport_id"]
+    assert held["lesson_steps_mastered"] == state["lesson_steps_mastered"]
+    assert not held["playback_timeline"]["presentation_confirmed"]
+    assert not session.engine.take.recorder.presses
+    late = session.ask("state.snapshot", placement_revision=state["revision"],
+                       presented_segment=take["segment_id"])
+    assert not late["playback_timeline"]["presentation_confirmed"]
+    session.ask("playback.failure", take_id=take["take_id"],
+                segment_id=take["segment_id"], reason="timeline_take_not_drawn")
+    replacement = session.snapshot()
+    next_take = replacement["playback_timeline"]["current"]
+    assert next_take["segment_id"] != take["segment_id"]
+    stale = session.ask("state.snapshot", placement_revision=replacement["revision"],
+                        presented_segment=take["segment_id"])
+    assert not stale["playback_timeline"]["presentation_confirmed"]
+    confirmed = session.ask("state.snapshot", placement_revision=replacement["revision"],
+                            presented_segment=next_take["segment_id"])
+    assert confirmed["playback_timeline"]["presentation_confirmed"]
+    session.command("stop")
+    after = session.ask("state.snapshot", placement_revision=replacement["revision"],
+                        presented_segment=next_take["segment_id"])
+    assert not after["running"]

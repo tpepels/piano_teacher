@@ -38,6 +38,7 @@ class MidiInputFacts:
     timed_attack_allowed: bool | None = None
     section_choice: bool = False
     device_generation: int = 0
+    presentation_confirmed: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +118,10 @@ class MidiIngress:
                             if corrected_at is None else corrected_at)
                 self.publish_warmup(message, facts, adjusted, musical_seconds(adjusted),
                                     feedback_take())
+            return
+        # Keep hardware observation and shortcuts, but do not record,
+        # defer or grade input before this exact segment is confirmed.
+        if facts.running and facts.mode in ("practice", "perform") and not facts.presentation_confirmed:
             return
         # A trailing-rest or inter-take key is audible/visible, but never
         # enters the recorder, accuracy, or the authoritative note ledger.

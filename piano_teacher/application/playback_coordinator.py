@@ -101,6 +101,8 @@ class PlaybackCoordinator:
         self.active_segment_id = ""
         self.active_deadline_ms = 0.0
         self.active_segment: dict = {}
+        self.require_presentation = False
+        self.presented_segment_id = ""
         self.failure = ""
         # Terminal automatic admission failures are scoped to the exact
         # source/exposure. A repeated score_ready or completed Listen-audio
@@ -148,6 +150,25 @@ class PlaybackCoordinator:
         self.active_segment_id = ""
         self.active_deadline_ms = 0.0
         self.active_segment = {}
+        self.presented_segment_id = ""
+
+    @property
+    def presentation_confirmed(self) -> bool:
+        return (not self.require_presentation or
+                bool(self.active_segment_id and
+                     self.presented_segment_id == self.active_segment_id))
+
+    def confirm_presentation(self, segment_id: str, *, now: float) -> bool:
+        """Accept the exact bound segment before its authoritative downbeat."""
+        if (not segment_id or segment_id != self.active_segment_id
+                or self.state == PlaybackState.FAILED):
+            return False
+        if self.presented_segment_id == segment_id:
+            return True
+        if now * 1000.0 >= self.active_deadline_ms:
+            return False
+        self.presented_segment_id = segment_id
+        return True
 
     def _fail_terminally(self, intent, message: str) -> None:
         """No further admission attempt for this exact automatic source."""
@@ -379,6 +400,7 @@ class PlaybackCoordinator:
             raise
         self.active_take_id = receipt.take_id
         self.active_segment_id = receipt.segment_id
+        self.presented_segment_id = ""
         self.active_deadline_ms = receipt.deadline_ms
         self.active_segment = {
             "segment_id": receipt.segment_id,
@@ -541,5 +563,6 @@ class PlaybackCoordinator:
                     "segment_id": self.active_segment_id,
                     "deadline_ms": self.active_deadline_ms,
                     "current": dict(self.active_segment) if self.active_segment else None,
-                    "failure": self.failure}
+                    "failure": self.failure,
+                    "presentation_confirmed": self.presentation_confirmed}
         return request, timeline

@@ -121,24 +121,6 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
     var timeline: Variant = state.get("playback_timeline")
     var current: Variant = timeline.get("current") if timeline is Dictionary else null
     var running: bool = bool(state.get("running",false))
-    if timeline is Dictionary:
-        var segment: String = str(timeline.get("segment_id",""))
-        if segment != _missing_segment:
-            _missing_segment = segment
-            missing_score_frames = 0
-        if (running and str(state.get("phase","")) == "playing"
-                and not segment.is_empty()
-                and (stage.renderer == null or not is_instance_valid(stage.renderer)
-                    or stage.renderer.bound_segment_id() != segment)):
-            # A take sounding without its own notes on the staff is a
-            # display failure, never an empty staff shown silently.
-            missing_score_frames += 1
-            if missing_score_frames >= 4:
-                _report_authorized_failure(
-                    str(timeline.get("take_id","")),segment,
-                    "running_take_without_admitted_source")
-        else:
-            missing_score_frames = 0
     if not running or bool(state.get("paused",false)) or not current is Dictionary:
         unplaced_frames = 0
         _keep_prediction(state)
@@ -147,7 +129,11 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
     if segment_id != _unplaced_segment:
         _unplaced_segment = segment_id
         unplaced_frames = 0
-    if segment_id.is_empty() or segment_id == placed_segment:
+    if segment_id.is_empty():
+        _keep_prediction(state)
+        return
+    if segment_id == placed_segment:
+        _check_bound_segment(state,timeline,current,segment_id)
         _keep_prediction(state)
         return
     var outcome: String = _place(state,current,segment_id)
@@ -160,11 +146,38 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
     # A take first seen after its opening note passed can never be drawn:
     # Python places it again at once. Otherwise give the renderer time.
     if outcome == "passed" or unplaced_frames >= MAX_UNPLACED_FRAMES:
-        if outcome == "passed" and reported_failure_segment != segment_id:
-            late_takes_reported += 1
-        _report_problem("The score for this take could not be drawn")
-        _report_authorized_failure(str(current.get("take_id","")),segment_id,
-            "timeline_take_not_drawn")
+        _late_or_missing(current,segment_id,outcome == "passed")
+
+func _late_or_missing(current: Dictionary, segment_id: String, late: bool) -> void:
+    if reported_failure_segment == segment_id or failure_request.is_pending():
+        return
+    _report_problem("The score for this take could not be drawn")
+    _report_authorized_failure(str(current.get("take_id","")),segment_id,
+        "timeline_take_not_drawn")
+    if late and reported_failure_segment == segment_id:
+        late_takes_reported += 1
+        print("LATE_SCORE_REPLACEMENT_REQUESTED segment=",segment_id)
+
+func _check_bound_segment(state: Dictionary, timeline: Dictionary,
+        current: Dictionary, segment_id: String) -> void:
+    if segment_id != _missing_segment:
+        _missing_segment = segment_id
+        missing_score_frames = 0
+    var confirmed: bool = bool(timeline.get("presentation_confirmed",true))
+    # Judge expiry using the sampled backend clock, not a stale count-in poll.
+    if not confirmed and float(state.get("clock_sampled_at_ms",0.0)) >= \
+            float(current.get("deadline_ms",INF)):
+        _late_or_missing(current,segment_id,true)
+        return
+    var view = stage.renderer
+    if confirmed and str(state.get("phase","")) == "playing" and \
+            (not is_instance_valid(view) or view.bound_segment_id() != segment_id):
+        missing_score_frames += 1
+        if missing_score_frames >= 4:
+            _report_authorized_failure(str(current.get("take_id","")),segment_id,
+                "running_take_without_admitted_source")
+    else:
+        missing_score_frames = 0
 
 func _place(state: Dictionary, current: Dictionary, segment_id: String) -> String:
     var take: Dictionary = _timeline_take(state,segment_id)

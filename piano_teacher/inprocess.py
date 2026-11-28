@@ -47,6 +47,10 @@ class EngineCommands:
         self.engine = engine if engine is not None else PracticeEngine(
             shutdown_requested=shutdown_requested)
         self.owned = engine is None
+        # The embedded application must attest actual bound score ink.
+        # Injected engines are explicit headless test/analysis adapters.
+        if self.owned:
+            self.engine.playback.require_presentation = True
         self._wake_command_lane = source_ready
         self._source_ready = Condition(self.engine.lock)
         self._active_source = None

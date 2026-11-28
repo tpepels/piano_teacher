@@ -207,6 +207,8 @@ func continuation_geometry() -> Dictionary:
         return {}
     var facts: Dictionary = _renderer.placement_facts()
     facts["placement_revision"] = revision
+    if _renderer.has_method("bound_segment_id"):
+        facts["presented_segment"] = str(_renderer.bound_segment_id())
     return facts
 
 

@@ -179,11 +179,17 @@ class PracticeEngine:
 
     def report_placement(self, facts: dict) -> None:
         """Godot's current score placement facts, sent with each poll."""
-        unknown = set(facts) - {"ink_ahead_beats", "free_travel_beats", "placement_revision"}
+        unknown = set(facts) - {"ink_ahead_beats", "free_travel_beats",
+                                "placement_revision", "presented_segment"}
         if unknown:
             raise ValueError("Unknown placement facts: " + ", ".join(sorted(unknown)))
+        presented = facts.get("presented_segment", "")
+        if type(presented) is not str:
+            raise ValueError("Presented segment must be a string")
         with self.lock:
             self.transport_timing.update_placement_facts(facts)
+            if presented and facts.get("placement_revision") == self.lesson.revision:
+                self.transport.confirm_presentation(presented, now=self.now())
 
     def poll_state(self) -> dict:
         """The per-frame snapshot: the full state minus static values."""

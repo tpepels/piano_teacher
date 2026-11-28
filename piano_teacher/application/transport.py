@@ -247,6 +247,13 @@ class Transport:
     def clear_failure(self, *args, **kwargs):
         return self._admission.clear_failure(*args, **kwargs)
 
+    @property
+    def presentation_confirmed(self) -> bool:
+        return self._admission.presentation_confirmed
+
+    def confirm_presentation(self, segment_id: str, *, now: float) -> bool:
+        return self._admission.confirm_presentation(segment_id, now=now)
+
     def authorize(self, *args, **kwargs):
         return self._admission.authorize(*args, **kwargs)
 

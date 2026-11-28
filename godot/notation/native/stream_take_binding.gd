@@ -30,6 +30,7 @@ func reset() -> void:
     live_segment_id = ""
     arm_rollback.clear()
     arm_acknowledged = false
+    unscored_take = ""
 
 func reconcile() -> void:
     if live_serial >= 0 and not queue.has_take(live_serial):
@@ -244,7 +245,7 @@ func admitted(owner: int) -> void:
     live_serial = owner
 
 func bound_segment() -> String:
-    return live_segment_id
+    return live_segment_id if live_serial >= 0 and queue.has_take(live_serial) else ""
 
 func status(generation: int) -> Dictionary:
     return {"generation":generation,"live_serial":live_serial,
@@ -277,10 +278,14 @@ func observe_state(facts: StreamGeometry, state: Dictionary, graded_beat: float,
     # Invariant: a graded or audible take that is playing has its own source
     # bound on the staff. A take without one is a defect, never a state to
     # show silently as an empty staff (practice flow, 2026-11-18).
+    var confirmed: bool = bool(published_timeline.get("presentation_confirmed",true)) \
+        if published_timeline is Dictionary else true
     if running_now and phase == "playing" and mode in ["practice","perform","listen"] \
-            and (expected_segment.is_empty() or \
-                 bound_segment() != expected_segment):
-        if unscored_take != key:
-            unscored_take = key
-            push_error("TAKE_WITHOUT_SCORE: %s expected_segment=%s bound_segment=%s" % [
-                key, expected_segment, bound_segment()])
+            and (expected_segment.is_empty() or bound_segment() != expected_segment):
+        if unscored_take != expected_segment:
+            unscored_take = expected_segment
+            if confirmed:
+                push_error("TAKE_WITHOUT_SCORE: %s expected_segment=%s bound_segment=%s" % [
+                    key, expected_segment, bound_segment()])
+    else:
+        unscored_take = ""
