@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import replace
 import fcntl
 from hashlib import sha256
 import json
@@ -76,7 +76,7 @@ class FingeringService:
 
     def prepare(self, piece: Piece, fingerprint: str) -> FingeringPlan:
         with self._locked(fingerprint) as directory:
-            return self._prepare(piece, fingerprint, directory)
+            return self._prepare_saved(piece, fingerprint, directory)
 
     def correct(self, piece: Piece, fingerprint: str, source_id: str, finger: int | None) -> FingeringPlan:
         if finger is not None and (type(finger) is not int or not 1 <= finger <= 5):
@@ -90,7 +90,7 @@ class FingeringService:
             else:
                 overrides[source_id] = finger
             _write(directory/'overrides.json', overrides)
-            return self._prepare(piece, fingerprint, directory)
+            return self._prepare_saved(piece, fingerprint, directory)
 
     @staticmethod
     def _overrides(directory):
@@ -105,9 +105,20 @@ class FingeringService:
             raise ValueError('Invalid saved fingering corrections')
         return value
 
-    def _prepare(self, piece, fingerprint, directory):
+    def _prepare_saved(self, piece, fingerprint, directory):
         sources = self._sources(piece)
-        overrides = {sid: finger for sid, finger in self._overrides(directory).items() if sid in sources}
+        saved = self._overrides(directory)
+        overrides = {sid: finger for sid, finger in saved.items() if sid in sources}
+        plan = self._prepare(piece, fingerprint, directory, sources, overrides)
+        unmatched = len(saved) - len(overrides)
+        if unmatched:
+            message = (f"{unmatched} saved fingering correction(s) could not be matched "
+                       "to this score. Your original corrections have been preserved.")
+            return replace(plan, status="partial" if plan.status == "ready" else plan.status,
+                           error=" ".join(filter(None, (plan.error, message))))
+        return plan
+
+    def _prepare(self, piece, fingerprint, directory, sources, overrides):
         # Fingers written in an imported MusicXML score are kept as authored;
         # the learner's corrections still win, the model fills the rest.
         authored = {sid: finger for sid, finger in getattr(piece, 'authored_fingerings', ())
@@ -115,7 +126,7 @@ class FingeringService:
         authored_text = {sid: (str(finger),) for sid, finger in authored.items()}
         fixed = {**authored, **overrides}
         config = {'input_digest': _digest({'bpm': piece.bpm,
-                    'notes': [asdict(n) for n in piece.notes], 'authored': authored_text}),
+                    'notes': [n.performance_document() for n in piece.notes], 'authored': authored_text}),
                   'manual': overrides, 'scope': 'complete-original-piece', 'schema': 1}
         provider = self.provider.identity
         cache = directory / f'plan-{_digest([provider,config])}.json'

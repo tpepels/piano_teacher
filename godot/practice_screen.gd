@@ -318,6 +318,13 @@ func show_source_picker(state: Dictionary) -> void:
     _dismiss_resume_hint()
     open_picker.show_piece(state)
 
+func present_import_warnings(message: String) -> void:
+    if is_source_picker_open():
+        open_picker.warning_label.text = message
+        open_picker.warning_label.show()
+    else:
+        present_message(message)
+
 func cancel_source_picker() -> void:
     open_picker.visible = false
     navigation_requested.emit("library")

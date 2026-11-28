@@ -15,6 +15,7 @@ var panel: PanelContainer
 var measure: SpinBox
 var measure_slider: HSlider
 var mode_choice: OptionButton
+var warning_label: Label
 var title_label: Label
 var intro: Tween
 var ui_scale := 1.0
@@ -92,6 +93,8 @@ func _ready() -> void:
     title_label = _label("", 24, INK, true)
     title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     content.add_child(title_label)
+    warning_label = _label("", 14, INK)
+    content.add_child(warning_label)
     content.add_child(_label("Start at any measure of this piece.", 16, MUTED))
     content.add_child(_label("SOURCE MEASURE", 14, ACCENT, true))
     measure = SpinBox.new()
@@ -169,6 +172,7 @@ func resize_panel(view_size: Vector2) -> void:
 
 func show_piece(state: Dictionary) -> void:
     var last_bar: int = maxi(1, int(state.get("piece_last_bar", 1)))
+    warning_label.hide()
     title_label.text = str(state.get("title", "Untitled piece")).replace("_", " ")
     measure.max_value = last_bar
     measure.min_value = 1

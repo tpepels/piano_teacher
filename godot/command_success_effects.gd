@@ -43,6 +43,7 @@ func apply(decision: Dictionary, opened: Variant,
                         publish_state.emit(code, body, started_ms)
                     refresh_score.emit()
                     presenter.present_resume_choice(opened, not bool(decision.get("resume_saved",false)))
+            presenter.present_import_warnings(opened)
         "settings":
             if bool(decision["refresh_settings"]):
                 request_settings.emit()

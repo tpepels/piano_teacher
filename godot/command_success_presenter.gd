@@ -23,3 +23,13 @@ func present_source_picker(opened: Dictionary) -> void:
 
 func present_resume_choice(opened: Dictionary, allow_measure: bool) -> void:
     practice_view.show_resume_prompt(opened, allow_measure)
+
+func present_import_warnings(opened: Variant) -> void:
+    if not opened is Dictionary:
+        return
+    var messages := PackedStringArray(opened.get("import_warnings", []))
+    var fingering: Variant = opened.get("fingering")
+    if fingering is Dictionary and not str(fingering.get("error", "")).is_empty():
+        messages.append(str(fingering["error"]))
+    if not messages.is_empty():
+        practice_view.present_import_warnings("\n".join(messages))
