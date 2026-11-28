@@ -19,6 +19,7 @@ var _enabled := false
 var _max_capture_ms := 0.0
 var _directory := ""
 var _fps := 30
+var _pacing_only := false
 var _events: Array = []
 var _previous_capture_ms := 0.0
 
@@ -26,6 +27,10 @@ var _previous_capture_ms := 0.0
 # to the next completed viewport frame, not reconstructed from phase names.
 func mark(kind: String, label: String = "", pitch: int = -1) -> void:
     if not _enabled or _failed:
+        return
+    if _pacing_only:
+        if kind == "injected_hitch":
+            _events.append({"kind":kind,"label":label})
         return
     var state: Dictionary = _app.current_state()
     var flow = _app.score_flow
@@ -51,9 +56,11 @@ func start(app: Node, window: Window) -> void:
     if DisplayServer.get_name() == "headless":
         _error("Visual acceptance requires a real rendering backend")
         return
-    _frames = FileAccess.open(directory.path_join("frames.bin"),FileAccess.WRITE)
+    _pacing_only = OS.get_environment("PIANO_VISUAL_PACING_ONLY") == "1"
+    if not _pacing_only:
+        _frames = FileAccess.open(directory.path_join("frames.bin"),FileAccess.WRITE)
     _metadata = FileAccess.open(directory.path_join("frames.jsonl"),FileAccess.WRITE)
-    if _frames == null or _metadata == null:
+    if (not _pacing_only and _frames == null) or _metadata == null:
         _error("Cannot open rendered-frame capture")
         return
     # Cap the actual rendered frame rate; capture every draw, not a timed
@@ -192,6 +199,23 @@ func _capture() -> void:
         _error("Rendered-frame capture exceeded its bound")
         return
     var began: int = Time.get_ticks_usec()
+    if _pacing_only:
+        # No screenshot/readback, resize, PNG encoding or full queue/state
+        # snapshot. A second real-rendered run measures pacing independently.
+        _metadata.store_line(JSON.stringify({
+            "frame":_count,"engine_frame":Engine.get_frames_drawn(),
+            "time_ms":float(began)*.001,"fps":_fps,
+            "capture_cost_ms":_previous_capture_ms,"step":step,
+            "screen":str(_app.current_screen),"ready":_app.score_session.is_ready(),
+            "events":_events}))
+        if _metadata.get_error() != OK:
+            _error("Cannot write lightweight pacing record")
+            return
+        _events.clear()
+        _count += 1
+        _previous_capture_ms = float(Time.get_ticks_usec()-began)*.001
+        _max_capture_ms = maxf(_max_capture_ms,_previous_capture_ms)
+        return
     var meta: Dictionary = _sample()
     var image: Image = _window.get_texture().get_image()
     if image == null or image.is_empty():
@@ -238,7 +262,7 @@ func finish() -> bool:
     if manifest == null:
         return false
     manifest.store_string(JSON.stringify({"frames":_count,"success":success,
-        "max_capture_ms":_max_capture_ms}))
+        "max_capture_ms":_max_capture_ms,"pacing_only":_pacing_only,"fps":_fps}))
     manifest.close()
     print("VISUAL_CAPTURE_COMPLETE frames=",_count," max_capture_ms=",_max_capture_ms)
     return success
