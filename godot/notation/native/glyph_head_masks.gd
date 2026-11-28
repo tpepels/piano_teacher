@@ -15,10 +15,25 @@ func clear_templates() -> void:
 func cutout(source: String, key: String, index: int, head: String,
         template: Image, glyph: Image, box: Array, glyph_box: Array,
         positions: Array) -> Texture2D:
-    var cache_key: String = "%s|%s|%d|%s" % [source,key,index,head]
+    var cache_key: String = cutout_key(source,key,index,head)
     if _head_cutouts.has(cache_key):
         return _head_cutouts[cache_key]
-    var cutout: Texture2D = null
+    var image: Image = cutout_image(source,index,template,glyph,box,glyph_box,positions)
+    var texture: Texture2D = ImageTexture.create_from_image(image) if image != null else null
+    if texture != null:
+        texture.set_meta("verovio_cpu_image",image)
+    _head_cutouts[cache_key] = texture
+    return texture
+
+func install_cutouts(catalog: Dictionary) -> void:
+    _head_cutouts.merge(catalog,true)
+
+static func cutout_key(source: String, key: String, index: int, head: String) -> String:
+    return "%s|%s|%d|%s" % [source,key,index,head]
+
+static func cutout_image(source: String, index: int,
+        template: Image, glyph: Image, box: Array, glyph_box: Array,
+        positions: Array) -> Image:
     var offset := Vector2.ZERO
     if source != "note":
         if index >= 0 and index < positions.size():
@@ -75,10 +90,8 @@ func cutout(source: String, key: String, index: int, head: String,
             template.get_height(),false,template.get_format())
         head_only.blit_rect_mask(template,mask,
             Rect2i(Vector2i.ZERO,template.get_size()),Vector2i.ZERO)
-        cutout = ImageTexture.create_from_image(head_only)
-        cutout.set_meta("verovio_cpu_image",head_only)
-    _head_cutouts[cache_key] = cutout
-    return cutout
+        return head_only
+    return null
 
 func install_interior(head: String, texture: Texture2D) -> bool:
     # Null is the valid computed result for a solid head.

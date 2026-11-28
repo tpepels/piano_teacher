@@ -87,8 +87,10 @@ func run() -> void:
             "Published glyphs have completed their texture upload")
         check(view.engraving.stream_source_key == StreamQueue.source_identity(view.timeline.model),
             "Worker source identity must match the installed model after refit")
-        check(view.glyphs._prepared_head_sizes.is_empty(),
+        check(view.glyphs._prepared_head_sizes.is_empty() and view.glyphs._assets._prepared_cutouts.is_empty(),
             "Prepared status upload work must be finished before publication")
+        check(not view.glyphs._assets._head_masks._head_cutouts.is_empty(),
+            "Authentic source masks must be prepared before the first graded draw")
         var original = view.engraving
         var selected: Dictionary = state(2)
         var target: Dictionary = {}

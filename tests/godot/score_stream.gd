@@ -235,6 +235,11 @@ func run() -> void:
     var plan: Dictionary = trim_queue.preview_tail_withdrawal(0.0,100.0,20.0,4.0,1000.0,330.0,-1,false,-1,null,true)
     check(plan["remaining"] == preview and plan["operations"].size() == 1,
         "The shared withdrawal planner describes exactly the measured retained prefix")
+    trim_queue.online[-1]["ever_visible"] = true
+    var refused: Dictionary = trim_queue.apply_withdrawal(trim_canvas,plan,"stale_exposure")
+    check(not bool(refused["complete"]) and refused["removed"].is_empty(),
+        "A strip exposed after preview cannot be withdrawn")
+    trim_queue.online[-1]["ever_visible"] = false
     var result: Dictionary = trim_queue.apply_withdrawal(trim_canvas,plan,"resume")
     var removed: Array = result["removed"]
     check(bool(result["complete"]) and trim_queue.online == preview,

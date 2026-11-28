@@ -88,6 +88,7 @@ func _fit() -> void:
         result["error"] = engraving.failure_reason
     else:
         engraving.glyphs.prepare_status_sizes(engraving.gap(),screen_scale)
+        engraving.glyphs.prepare_source_cutouts(engraving.layout)
         engraving.glyphs.begin_upload()
     var elapsed: float = float(Time.get_ticks_usec()-started)*.001
     result["timing"]["geometry_cpu_ms"] += elapsed

@@ -93,6 +93,7 @@ var _upload_queue: Array = []
 var _upload_index := 0
 var _uploaded_images: Dictionary = {}
 var _prepared_interiors: Dictionary = {}
+var _prepared_cutouts: Dictionary = {}
 # Identical font images are shared across jobs and immutable.
 static var _interior_images: Dictionary = {}
 static var _interior_image_lock := Mutex.new()
@@ -146,6 +147,9 @@ func begin_upload() -> void:
     for head in _prepared_interiors:
         if _prepared_interiors[head] != null:
             _upload_queue.append([_prepared_interiors,head,"interior|"+str(_font_keys[head])])
+    for key in _prepared_cutouts:
+        if _prepared_cutouts[key] != null:
+            _upload_queue.append([_prepared_cutouts,key,""])
     for catalog in [note_textures,note_stem_textures,tie_textures,
             chord_textures,chord_heads_textures,chord_stem_textures,
             beam_textures,slur_textures,grace_textures]:
@@ -191,6 +195,8 @@ func upload_step(budget_usec: int = 2000) -> bool:
     for head in _prepared_interiors:
         _head_masks.install_interior(str(head),_prepared_interiors[head])
     _prepared_interiors.clear()
+    _head_masks.install_cutouts(_prepared_cutouts)
+    _prepared_cutouts.clear()
     return true
 const BRACE_SIZE := Vector2i(96,1024)
 const BRACE_OVERSAMPLE := 4
@@ -640,6 +646,16 @@ func _forget_template_images(prefix: String) -> void:
 
 func _chord_heads(key: String) -> Array:
     return chord_metadata.get(key,{}).get("head_positions",[])
+
+# Pure image preparation on the detached worker. Use the exact same
+# source template and partition as the fallback renderer.
+func prepare_cutout(source: String, key: String, index: int, head: String) -> void:
+    var identity: String = HeadMasks.cutout_key(source,key,index,head)
+    if _prepared_cutouts.has(identity):
+        return
+    _prepared_cutouts[identity] = HeadMasks.cutout_image(source,index,
+        template_images.get(source+":"+key),head_images.get(head),
+        template_box(source,key),bounds.get(head,[]),_chord_heads(key))
 
 func head_cutout(source: String, key: String, index: int, head: String) -> Texture2D:
     return _head_masks.cutout(source,key,index,head,

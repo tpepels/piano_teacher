@@ -71,6 +71,41 @@ var _prepared_head_sizes: Dictionary = {}
 func prepare_head_interiors() -> void:
     _assets.prepare_head_interiors()
 
+# Prepare only actual source note kinds and actual compound member indices.
+# Both full and heads-only variants are needed because hand focus can
+# choose a different representation of the same chord.
+func prepare_source_cutouts(layout) -> void:
+    var by_id: Dictionary = {}
+    var kinds: Dictionary = {}
+    for event in layout.ordered_events:
+        if str(event.get("kind","")) != "note":
+            continue
+        by_id[str(event["id"])] = event
+        kinds[str(event.get("note_type","quarter"))] = true
+    for kind in kinds:
+        if kind == "whole":
+            continue
+        var head: String = "head_half" if kind == "half" else "head_black"
+        for up in [true,false]:
+            var key: String = note_template_name(kind,up)
+            if note_textures.has(key):
+                _assets.prepare_cutout("note",key,0,head)
+    for leader in chord_instances:
+        var instance: Dictionary = chord_instances[leader]
+        var key: String = str(instance.get("key",""))
+        var members: Array = instance.get("heads",[])
+        for index in range(members.size()):
+            var event: Dictionary = by_id.get(str(members[index]),{})
+            if event.is_empty():
+                continue
+            var kind: String = str(event.get("note_type","quarter"))
+            var head: String = "head_whole" if kind == "whole" else ("head_half" if kind == "half" else "head_black")
+            if chord_textures.has(key):
+                _assets.prepare_cutout("chord",key,index,head)
+            if chord_heads_textures.has(key):
+                _assets.prepare_cutout("chord_heads",key,index,head)
+
+
 func begin_upload() -> void:
     _assets.begin_upload()
     # The worker's derived head sizes participate in the same bounded

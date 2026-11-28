@@ -365,19 +365,56 @@ func preview_tail_withdrawal(world: float, density: float,
             else:
                 break
         var slots: Array = []
+        var clips: Array = []
         for item in remaining.slice(cut):
             slots.append(str(item.get("slot_id","")))
-        operations.append({"owner":serial,"operation":operation,"slots":slots})
+            var clip = item.get("clip")
+            clips.append(clip.get_instance_id() if is_instance_valid(clip) else 0)
+        operations.append({"owner":serial,"operation":operation,"slots":slots,"clips":clips})
         owners.append(serial)
         remaining.resize(cut)
         if just_one_owner or operation != "whole":
             break
-    return {"remaining":remaining,"owners":owners,"operations":operations}
+    return {"remaining":remaining,"owners":owners,"operations":operations,
+        "geometry":[world,density,gap,duration,viewport_width,playhead_x]}
+
+# Verify the entire original suffix BEFORE the first journal mutation.
+# A stale slot ID alone is insufficient: a reused owner may have a new
+# physical clip, or an originally hidden strip may since have been exposed.
+func _valid_withdrawal(preview: Dictionary) -> bool:
+    var cursor: int = online.size()
+    var geometry: Array = preview.get("geometry",[])
+    for operation in preview.get("operations",[]):
+        var slots: Array = operation.get("slots",[])
+        var clips: Array = operation.get("clips",[])
+        var first: int = cursor-slots.size()
+        if first < 0 or slots.is_empty() or clips.size() != slots.size() or geometry.size() != 6:
+            return false
+        var kind: String = str(operation.get("operation",""))
+        if kind not in ["whole","retain_leading_rest","discard_trailing_rest"]:
+            return false
+        if kind == "retain_leading_rest" and (first <= 0 or
+                owner_id(online[first-1]) != int(operation["owner"]) or
+                str(online[first-1].get("rest_position","")) != "before"):
+            return false
+        for i in range(slots.size()):
+            var item: Dictionary = online[first+i]
+            var clip = item.get("clip")
+            if owner_id(item) != int(operation["owner"]) or str(item.get("slot_id","")) != slots[i] or \
+                    not is_instance_valid(clip) or clip.get_instance_id() != clips[i] or \
+                    not _unexposed(item,float(geometry[0])+(.25 if kind != "whole" else 0.0),
+                        float(geometry[1]),float(geometry[2]),float(geometry[3]),
+                        float(geometry[4]),float(geometry[5])):
+                return false
+        cursor = first
+    return true
 
 func apply_withdrawal(owner: Control, preview: Dictionary, reason: String) -> Dictionary:
     # Journal before removing source, and stop on the FIRST failed batch.
     # Never proceed with a second partial retraction after a failed write.
     var withdrawn: Array[int] = []
+    if not _valid_withdrawal(preview):
+        return {"complete":false,"removed":withdrawn}
     for operation in preview["operations"]:
         var slots: Array = operation["slots"]
         var first: int = online.size()-slots.size()
