@@ -293,3 +293,35 @@ def test_repeated_tempo_failure_history_survives_saved_reopening(practice_sessio
     clean = next_take(reopened, play(session, reopened))
     assert clean["bpm"] == 40
     assert next_take(clean, play(session, clean))["bpm"] > 40
+
+
+
+def test_stuck_both_hands_reviews_each_hand_twice_then_returns(practice_session):
+    session = practice_session(bars=1)
+    state = tempo(session)
+    for hand in ("right", "left"):
+        assert state["hand"] == hand
+        session.play_take()
+        session.play_take()
+        session.finish_listen()
+        session.finish_free()
+        state = session.ready_score()
+    assert state["hand"] == "both"
+    mastered = state["lesson_steps_mastered"]
+    for _ in range(4):
+        state = play(session, session.ready_score(), wrong=(0,))
+        if state["mode"] == "learn":
+            session.finish_free()
+            state = session.ready_score()
+    state = session.ready_score()
+    assert state["hand"] == "right", state
+    assert state["lesson_steps_mastered"] == mastered
+    review_bpm = state["bpm"]
+    for hand in ("right", "left"):
+        assert state["hand"] == hand and state["bpm"] == review_bpm
+        state = next_take(state, play(session, state))
+        assert state["hand"] == hand
+        state = play(session, state)
+        state = session.ready_score()
+        assert state["lesson_steps_mastered"] == mastered
+    assert state["hand"] == "both" and state["bpm"] == review_bpm

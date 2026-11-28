@@ -135,7 +135,7 @@ class PracticeFlowCourseSession:
                 message = f"{previous} · {message}"
             if kind in ("info", "listen", "free", "tempo") and self._message_kind in (
                     "faster", "clean_once", "stage_done", "section_ready", "piece_done",
-                    "again", "slower", "back_to_free"):
+                    "again", "slower", "back_to_free", "hand_review"):
                 kind = self._message_kind
         self._message = (sequence+1,message,now)
         self._message_kind = kind
@@ -261,6 +261,9 @@ class PracticeFlowCourseSession:
                  "tempo":f"Tempo {percent}%", "section_choice":"Section complete"}[step]
         hand_text = {"right":"Right hand","left":"Left hand"}.get(
             plan.hand,"Both hands")
+        review = plan.teaching_progress().hand_review
+        if review is not None and step == "tempo":
+            label += f" · Hand review {review[2]}/2"
         sequence, message, _ = self._message
         return {"step":step,"where":where,"hand":plan.hand,
                 "tempo_percent":percent,

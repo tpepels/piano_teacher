@@ -108,6 +108,10 @@ repeat comes from the right and never jumps back.
 The one-bar repeat takes priority over decorative context: neighbour bars may
 be limited during the repeat rather than delaying it or overlapping active ink.
 
+### Both-hand recovery
+
+After four recorded failures without tempo advancement in a routine both-hand window, temporarily review the same window with the right hand and then the left hand at the recovery BPM. Each hand must pass two consecutive complete graded attempts. Failed attempts reset that hand's review streak; ignored attempts do not count. After the left hand passes twice, return directly to both-hand Tempo at the recovery BPM. Existing mastery is retained; review passes grant no new mastery and never advance to another window. The normal whole-piece final examination and target-tempo mastery rules remain unchanged.
+
 ## Grow the window and finish
 
 After all required hands complete a window, save mastery and show the final

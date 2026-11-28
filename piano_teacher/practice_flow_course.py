@@ -26,7 +26,7 @@ from .lesson_generators import CodaAid, FukudaAid
 from .teaching_decisions import (
     TeachingDecision, TeachingExposure, full_target_take,
 )
-from .teaching_course import at_position, next_unmastered
+from .teaching_course import at_position, next_unmastered, position_of
 from .teaching_manual import choose_manual
 from .application.assessment_verdict import AssessmentVerdict
 from .application.practice_flow import (
@@ -80,6 +80,8 @@ def _at_tempo(decision, bpm: int, *, reset: bool = False):
 
 
 def _initial_tempo(course):
+    if course.progress.hand_review is not None:
+        return course.progress.hand_review[1]
     # Adaptive entry is for a new stage. After repeated failure at the
     # floor, returning from Free must not jump straight back to a tempo
     # the learner already failed.
@@ -110,12 +112,36 @@ def _entry_tempo(event, state, decision):
 
 # --- Decisions ---------------------------------------------------------
 
+BOTH_HAND_FAILURE_LIMIT = 4
+
+
+def _hand_review_result(course, accepted):
+    """Rehearse each hand twice at the recovery BPM without awarding mastery."""
+    p = course.progress
+    key, bpm, passes = p.hand_review
+    if p.bpm != bpm:
+        passes = 0
+        accepted = False
+    passes = passes + 1 if accepted else 0
+    if passes < 2:
+        message = "Hand review · 1/2 · once more" if passes else "Hand review · try again"
+        return course.with_progress(bpm=bpm, hand_review=(key, bpm, passes),
+            streak=0, failures=0, tempo_clean=0), message, Outcome.AGAIN
+    hand = "left" if course.hand == "right" else "both"
+    following = position_of(course, course.step.exercise_index, hand)
+    selected = at_position(course, following).with_progress(bpm=bpm)
+    if hand == "left":
+        return selected.with_progress(hand_review=(key, bpm, 0)), "Hand review · left hand", Outcome.HAND_REVIEW
+    return selected, "Hand review complete · both hands", Outcome.HAND_REVIEW
+
 
 def graded_progress(course, *, accepted, quality=0.0, attacks=8,
                     offer_section_choice=True, accuracy_percent=None):
     """One graded Tempo take, decided by the practice flow state machine
     (application/practice_py); this only maps it onto course progress."""
     p = course.progress
+    if p.hand_review is not None:
+        return _hand_review_result(course, accepted)
     state = FlowState(course.key, course.exercise.kind == "perform",
                            Step.TEMPO, int(p.bpm), int(p.target_bpm),
                            failures=p.failures, clean_at_target=p.streak,
@@ -134,15 +160,34 @@ def graded_progress(course, *, accepted, quality=0.0, attacks=8,
             returns[course.key] = t.state.free_returns
         history = {(key, tempo): count for key, tempo, count in p.tempo_failures}
         history.update({(course.key, tempo): count for tempo, count in t.state.tempo_failures})
-        return selected(course.with_progress(bpm=bpm, failures=t.state.failures,
+        both_failures = p.both_failures
+        if course.hand == "both" and course.exercise.kind != "perform":
+            if not accepted:
+                both_failures += 1
+            elif t.outcome is Outcome.FASTER:
+                both_failures = 0
+        else:
+            both_failures = 0
+        updated = course.with_progress(bpm=bpm, failures=t.state.failures,
                                     tempo_clean=t.state.tempo_clean,
                                     tempo_failures=tuple(sorted((key, tempo, count)
                                         for (key, tempo), count in history.items())),
                                     streak=t.state.clean_at_target,
-                                    free_returns=tuple(sorted(returns.items()))), t.message)
+                                    free_returns=tuple(sorted(returns.items())),
+                                    both_failures=both_failures)
+        if (offer_section_choice and both_failures >= BOTH_HAND_FAILURE_LIMIT
+                and not accepted and course.hand == "both" and course.exercise.kind != "perform"
+                and "right" in course.hands and "left" in course.hands):
+            review_bpm = bpm if t.outcome is not Outcome.BACK_TO_FREE else floor_bpm(int(p.target_bpm))
+            right = position_of(course, course.step.exercise_index, "right")
+            updated = updated.with_progress(free_returns=p.free_returns)
+            review = at_position(updated, right).with_progress(bpm=review_bpm,
+                hand_review=(course.key, review_bpm, 0))
+            return review, "Both hands need review · right hand", Outcome.HAND_REVIEW
+        return selected(updated, t.message)
     mastered = dict(p.mastered)
     mastered[course.key] = p.target_bpm
-    course = course.with_progress(streak=0, failures=0, tempo_clean=0,
+    course = course.with_progress(streak=0, failures=0, tempo_clean=0, both_failures=0,
                                   mastered=tuple(sorted(mastered.items())))
     if t.outcome is Outcome.PIECE_DONE:
         return selected(course, t.message)
@@ -222,7 +267,7 @@ def _base_decision(event, state):
     return TeachingDecision(1, event.event_id+":teaching", event.event_id, state.binding,
         c.progress, chosen.definition, chosen.progress, None, exposure, continuation,
         eligible and not passed and not ignored,
-        eligible and not ignored and route.performed_bpm >= c.progress.target_bpm,
+        eligible and not ignored and c.progress.hand_review is None and route.performed_bpm >= c.progress.target_bpm,
         "course_progression", message, flow_outcome, verdict)
 
 
@@ -281,6 +326,11 @@ def decide(event, state, *, aid) -> TeachingDecision:
                 remediation=simplified,
                 message=simplified.focus if simplified is not None else decision.message))
     after = replace(course, progress=decision.progress_after)
+    if exposure is not None and decision.flow_outcome is Outcome.HAND_REVIEW:
+        # These are known windows; return directly to timed review.
+        return replace(decision, next_exposure=replace(exposure, mode="practice",
+            from_beat=after.stage.variant.phrase.first_attack_beat, end_beat=None,
+            automatic=True, assisted=False, require_full_verification=False))
     if (exposure is not None and exposure.mode != "learn"
             and (exposure.stage_key, exposure.hand) != (course.key, course.hand)
             and after.step.kind != "perform"):

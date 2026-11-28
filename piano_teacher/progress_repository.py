@@ -58,6 +58,9 @@ class ProgressRepository:
         self.db.execute("""CREATE TABLE IF NOT EXISTS flow_tempo_failures (
             fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL, bpm INTEGER NOT NULL,
             count INTEGER NOT NULL, PRIMARY KEY (fingerprint,stage_key,bpm))""")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS flow_hand_recovery (
+            fingerprint TEXT PRIMARY KEY, step_key TEXT NOT NULL, failures INTEGER NOT NULL,
+            return_key TEXT, bpm INTEGER, passes INTEGER)""")
         # What the library shows per piece; rewritten with every save.
         self.db.execute("""CREATE TABLE IF NOT EXISTS piece_progress (
             fingerprint TEXT PRIMARY KEY, mastered INTEGER NOT NULL,
@@ -115,6 +118,19 @@ class ProgressRepository:
             # A restored streak can never already satisfy mastery.
             p.bpm = max(1, min(SETTINGS.maximum_bpm, int(row[3])))
             p.streak = min(p.course_state().clean_runs_required-1, max(0, int(row[4])))
+        p.both_failures, p.hand_review = 0, None
+        if exact:
+            recovery = self.db.execute(
+                "SELECT step_key,failures,return_key,bpm,passes FROM flow_hand_recovery WHERE fingerprint=?",
+                (fingerprint,)).fetchone()
+            if recovery and recovery[0] == p.identity:
+                p.both_failures = max(0, int(recovery[1]))
+                key, bpm, passes = recovery[2:]
+                if (p.hand in ("right", "left") and key in current and bpm is not None
+                        and 1 <= bpm <= p.target_bpm and passes in (0, 1)
+                        and any(step.key == key and step.hand == "both"
+                            and step.exercise_index == p.index for step in p.lesson_steps)):
+                    p.hand_review = (key, int(bpm), int(passes))
         if row and restore_session:
             # Pieces saved before the library showed progress get a summary
             # as soon as they are reopened.
@@ -145,6 +161,9 @@ class ProgressRepository:
             for (key, bpm), count in p.tempo_failures.items():
                 self.db.execute("INSERT OR REPLACE INTO flow_tempo_failures VALUES (?,?,?,?)",
                                 (fingerprint,key,bpm,count))
+            review = p.hand_review or (None, None, None)
+            self.db.execute("INSERT OR REPLACE INTO flow_hand_recovery VALUES (?,?,?,?,?,?)",
+                (fingerprint, p.identity, p.both_failures, *review))
             self._save_summary(p, fingerprint)
 
     def _save_summary(self, p: LearningPlan, fingerprint: str) -> None:
@@ -166,7 +185,7 @@ class ProgressRepository:
         with sqlite_atomic(self.db):
             for table in ("strategy_sessions", "learner_units", "learner_stages", "repeat_tempo_credit",
                           "stage_tempos", "mastery", "sessions", "flow_returns",
-                          "piece_progress", "flow_tempo_failures"):
+                          "piece_progress", "flow_tempo_failures", "flow_hand_recovery"):
                 self.db.execute(f"DELETE FROM {table} WHERE fingerprint=?", (fingerprint,))
             # A reset is historical exposure context, distinct from deletion.
             session = self.db.execute("""SELECT session_id FROM learning_sessions

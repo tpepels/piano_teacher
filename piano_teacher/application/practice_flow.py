@@ -36,6 +36,7 @@ class Outcome(str, Enum):
     BACK_TO_FREE = "back_to_free"
     STAGE_DONE = "stage_done"
     SECTION_READY = "section_ready"
+    HAND_REVIEW = "hand_review"
     PIECE_DONE = "piece_done"
 
 

@@ -173,6 +173,18 @@ def validate_teaching_decision(decision, *, event, state):
     if decision.definition_after is not state.definition:
         raise ValueError("A teaching decision cannot replace the course")
     available = {step.key for step in chosen.steps}
+    if type(p.both_failures) is not int or p.both_failures < 0:
+        raise ValueError("Invalid both-hand failure count")
+    if p.hand_review is not None:
+        review = p.hand_review
+        if (type(review) is not tuple or len(review) != 3
+                or type(review[0]) is not str or type(review[1]) is not int
+                or not 1 <= review[1] <= p.target_bpm
+                or type(review[2]) is not int or review[2] not in (0, 1)
+                or chosen.hand not in ("right", "left")
+                or not any(step.key == review[0] and step.hand == "both"
+                    and step.exercise_index == chosen.step.exercise_index for step in chosen.steps)):
+            raise ValueError("Invalid hand review binding")
     if type(p.tempo_clean) is not int or p.tempo_clean not in (0, 1):
         raise ValueError("Invalid below-target clean streak")
     if any(type(entry) is not tuple or len(entry) != 3 or type(entry[0]) is not str

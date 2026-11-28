@@ -43,6 +43,9 @@ class PlanProgress:
     free_returns: tuple[tuple[str, int], ...] = ()
     tempo_failures: tuple[tuple[str, int, int], ...] = ()
     tempo_clean: int = 0
+    both_failures: int = 0
+    # (original both-hand step key, review/return BPM, consecutive passes)
+    hand_review: tuple[str, int, int] | None = None
 
 
 def stage_key(exercise, hand, variant, profile, version):
@@ -137,7 +140,8 @@ def at_position(course, position: int):
     if type(position) is not int or not 0 <= position < len(course.steps):
         raise ValueError("Lesson step out of bounds")
     return course.with_progress(position=position, bpm=course.progress.target_bpm,
-                                streak=0, failures=0, tempo_clean=0)
+                                streak=0, failures=0, tempo_clean=0, both_failures=0,
+                                hand_review=None)
 
 
 def next_unmastered(course) -> int | None:
