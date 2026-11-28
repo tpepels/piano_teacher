@@ -42,7 +42,7 @@ def original_coda_levels(variant: ExerciseVariant, *,
     """Group original indices by hand, then by MIDI track/channel/voice."""
     phrase = variant.phrase
     if (len(boundaries) < 2 or not all(isfinite(b) for b in boundaries)
-            or any(b <= a for a, b in zip(boundaries, boundaries[1:]))):
+            or any(b <= a for a, b in zip(boundaries, boundaries[1:], strict=False))):
         raise ValueError("Invalid measure grid")
     hands = defaultdict(list)
     voices = defaultdict(list)

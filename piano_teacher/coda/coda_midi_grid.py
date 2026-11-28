@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from math import gcd, isfinite
 
-from ..music import Piece, Phrase
+from ..music import Phrase, Piece
 
 MAX_MATRIX_CELLS = 2_000_000
 
@@ -29,6 +29,15 @@ def midi_coda_quantization(
         raise ValueError("Coda MIDI grid requires a nonempty bounded phrase")
     if max_cells is not None and max_cells <= 0:
         raise ValueError("Coda MIDI matrix needs a positive capacity")
+    g = _grid_divisor(piece, phrase, ppq, compact)
+    q = (ppq//g if compact else ppq) * (2 if dotted else 1)
+    steps = (phrase.end-phrase.start)*q
+    if not isfinite(steps) or (max_cells is not None and steps*128 > max_cells):
+        raise ValueError("Coda MIDI source exceeds bounded matrix capacity")
+    return q
+
+
+def _grid_divisor(piece, phrase, ppq, compact):
     g = ppq
     for note in phrase.notes:
         if note.start < phrase.start-1e-8 or note.end > phrase.end+1e-8:
@@ -48,8 +57,4 @@ def midi_coda_quantization(
                 if not isfinite(ticks) or abs(ticks-round(ticks))>1e-5:
                     raise ValueError("Coda MIDI barline is not aligned to original PPQ")
                 g=gcd(g,abs(round(ticks)))
-    q = (ppq//g if compact else ppq) * (2 if dotted else 1)
-    steps = (phrase.end-phrase.start)*q
-    if not isfinite(steps) or (max_cells is not None and steps*128 > max_cells):
-        raise ValueError("Coda MIDI source exceeds bounded matrix capacity")
-    return q
+    return g
