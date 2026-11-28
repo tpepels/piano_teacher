@@ -360,8 +360,7 @@ func arm_take(facts: StreamGeometry, opening: float, start_world: float,
 func place_timeline_take(facts: StreamGeometry, opening: float,
         start_world: float, right: float, header: float,
         count_in_beats: float) -> Dictionary:
-    if not queue.abandon_unplayed(canvas(),facts.world,"timeline_new_run").is_empty():
-        _binding.reconcile()
+    # The exposure rule applies to every take, including unplayed takes.
     trim(facts,"timeline_replaces_unseen")
     # Print the count-in bar as a rest where no earlier ink fills it.
     var before: float = maxf(facts.world,ink_end(facts))
@@ -373,33 +372,27 @@ func place_timeline_take(facts: StreamGeometry, opening: float,
     timeline_placement = false
     return admitted
 
-## Draw the likely repeat early (it scrolls in from the right) without
-## binding it: the real repeat placed there adopts these notes.
-func place_predicted_take(facts: StreamGeometry, opening: float,
-        start_world: float) -> int:
-    var live: int = _binding.live_owner()
-    timeline_placement = true
-    var owner_serial: int = allocate_source(facts,opening,start_world,opening,"predicted",false)
-    timeline_placement = false
-    _binding.restore_live(live)
-    return owner_serial
+## A forecast is not permission to publish source ink. Retain this
+## compatibility entry point as a fail-closed boundary.
+func place_predicted_take(_facts: StreamGeometry, _opening: float,
+        _start_world: float) -> int:
+    return -1
 
 func adopt_predicted_take(facts: StreamGeometry, owner_serial: int,
         opening: float) -> Dictionary:
     return _binding.adopt(facts,owner_serial,opening)
 
 func withdraw_predicted_take(facts: StreamGeometry, owner_serial: int) -> void:
-    if not queue.abandon_owner(canvas(),owner_serial,facts.world,"prediction_not_taken").is_empty():
+    if not queue.withdraw_take_tail(canvas(),owner_serial,facts.world,
+            facts.density,facts.gap,facts.duration,facts.width,
+            facts.playhead,"prediction_not_taken").is_empty():
         _binding.reconcile()
 
 ## World beat where the ink that cannot be withdrawn ends (this layer and
 ## live peer layers), or -INF when the staff ahead is empty.
 func ink_end(facts: StreamGeometry) -> float:
-    var played: Array = queue.online.slice(0,queue.online.size()-
-        queue.unplayed_tail_count(queue.online,facts.world))
     var preview: Dictionary = queue.preview_tail_withdrawal(facts.world,
-        facts.density,facts.gap,facts.duration,facts.width,facts.playhead,
-        -1,false,-1,played)
+        facts.density,facts.gap,facts.duration,facts.width,facts.playhead)
     var end := -INF
     for item in preview.get("remaining",[]):
         var bounds: Vector2 = Admission.clip_bounds(

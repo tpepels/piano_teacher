@@ -346,7 +346,8 @@ func _process(_delta: float) -> bool:
         resumed_world_beat = renderer.stream_world_beat
         resumed_pass_serial = renderer.admission_queue_generation()
         return false
-    if Time.get_ticks_msec()-resumed_sample_ms < 450:
+    var observation_ms: int = 2400 if OS.get_environment("PIANO_VISUAL_CAPTURE_DIR") != "" else 450
+    if Time.get_ticks_msec()-resumed_sample_ms < observation_ms:
         return false
     var beat_advance: float = renderer.stream_world_beat-resumed_world_beat
     if beat_advance <= .04:
@@ -419,12 +420,10 @@ func _process(_delta: float) -> bool:
     # The head may disappear only after its last printed pixel has left
     # the viewport. An exposed remainder of the same logical take keeps
     # the original musical placement; no new take can silently replace it.
-    # A take paused in its count-in never sounded: Resume gives it a fresh
-    # full count-in bar, so its unplayed notes make way for the new copy.
+    # A visible count-in passage is retained too, even if it never sounded.
     var original_legitimately_retired: bool = \
         not original_present and (
-            renderer.stream_world_beat >= ready_first_expiry_world-.00001 or
-            ready_world_origin+ready_source_floor > paused_world_beat+.00001)
+            renderer.stream_world_beat >= ready_first_expiry_world-.00001)
     if not original_unchanged or \
             not (original_present or original_legitimately_retired) or \
             not future_only_at_enqueue or not has_transport_binding:

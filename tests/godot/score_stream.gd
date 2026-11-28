@@ -136,8 +136,8 @@ func run() -> void:
     check(overlapping.is_empty(),"A take may never overlap ink already drawn")
     automatic_canvas.free()
 
-    # A take whose first note never reached the playhead is withdrawn when
-    # a new run places its own take (e.g. Listen abandoned for Tempo).
+    # A visible unplayed source survives Resume/Retry; the new copy must
+    # follow the physically retained ink. A forecast never publishes notes.
     var abandon_controller := Controller.new()
     var abandon_pool := Pool.new()
     var abandon_canvas := Control.new()
@@ -147,12 +147,23 @@ func run() -> void:
         func(_beat: float) -> Array[Vector2]: return windows)
     check(not abandon_controller.place_timeline_take(geometry(0.0),0.0,4.0,6.7,0.4,4.0).is_empty(),
         "The first exposure is drawn")
-    check(abandon_controller.ink_end(geometry(0.5)) == -INF,
-        "Unplayed ink does not delay the next run")
-    check(not abandon_controller.place_timeline_take(geometry(0.5),0.0,5.0,6.7,0.4,4.0).is_empty()
-        and abandon_controller.online_snapshot().filter(
-            func(i): return str(i.get("kind","")) == "source").size() == 1,
-        "The abandoned unplayed take makes way for the new one")
+    acknowledge(abandon_controller,0.0,"piece|7|10|practice","original")
+    var retained: Array = fixed_music(abandon_controller.online_snapshot())
+    var old_owner: int = int(abandon_controller.queue.online[0]["take_owner"])
+    for item in abandon_controller.queue.online:
+        item["ever_visible"] = true
+    var clearance: float = abandon_controller.ink_end(geometry(0.5))
+    check(is_finite(clearance) and clearance >= 8.0,
+        "Visible unplayed ink remains in the physical clearance calculation")
+    abandon_controller.withdraw_predicted_take(geometry(0.5),old_owner)
+    check(fixed_music(abandon_controller.online_snapshot()) == retained,
+        "Cancellation cannot retract previously visible notation")
+    check(abandon_controller.place_predicted_take(geometry(0.5),0.0,clearance+4.0) < 0
+        and fixed_music(abandon_controller.online_snapshot()) == retained,
+        "An uncommitted prediction cannot publish source ink")
+    check(not abandon_controller.place_timeline_take(geometry(0.5),0.0,clearance+4.0,6.7,0.4,4.0).is_empty()
+        and fixed_music(abandon_controller.online_snapshot()).slice(0,retained.size()) == retained,
+        "The committed successor follows the visible abandoned take")
     abandon_canvas.free()
     # Free (owner report 2026-11-25): Python holds the staff at the target
     # it schedules from the view's reported travel distance; the passage

@@ -35,6 +35,7 @@ MOVE_LEAD_SECONDS = 0.12
 # Free moves from one found target to the next within this time, however
 # slow the piece, so the next target is soon at the line.
 MAX_MOVE_SECONDS = 1.5
+FREE_MOVE_RATE_FLOOR = 80.0
 # Past segments kept in the published snapshot (their ink is still leaving).
 KEPT_PAST_SEGMENTS = 6
 
@@ -466,7 +467,7 @@ class MusicalTimeline:
         m = max(last.start_at, self.musical(now)) + MOVE_LEAD_SECONDS
         self.segments[-1] = replace(last, hold_seconds=m - last.start_at)
         beats = max(0.0, beats)
-        bpm = max(bpm, beats*60.0/MAX_MOVE_SECONDS)
+        bpm = max(bpm, min(FREE_MOVE_RATE_FLOOR, beats*60.0/MAX_MOVE_SECONDS))
         rest = self.append(TimelineSegment(
             "rest", last.world_start, m, (TempoSpan(beats, bpm, bpm),)))
         self.append(TimelineSegment("hold", rest.world_end, rest.end_at,

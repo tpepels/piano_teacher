@@ -539,10 +539,10 @@ func _process(_delta: float) -> bool:
                     int(state.get("lesson_steps_mastered",0)) != 0):
                 _fail("Two real MIDI attacks did not produce a clean faster repeat (above 40 BPM)")
                 return false
-            # Owner rule: a repeat comes from the right. Its notes were
-            # drawn ahead and scrolled in; none popped onto the staff.
-            if app.score_admission.repeats_from_the_right < 1:
-                _fail("Automatic repeats did not scroll in from the right")
+            # The repeat must be admitted from the actual settled timeline,
+            # not an earlier guess that could be withdrawn while visible.
+            if app.score_admission.committed_successors < 1:
+                _fail("Automatic repeat did not admit its committed successor")
                 return false
             if _press_primary():
                 _advance("hitch_pause")
