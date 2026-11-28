@@ -454,17 +454,10 @@ def _isolate(root, parents: dict, target, crop: tuple[float, float, float, float
     return ET.tostring(top, encoding="unicode")
 
 
-def _sprite(svg: str, width: int):
-    import cairosvg
-    with Image.open(BytesIO(cairosvg.svg2png(bytestring=svg.encode(),
-                                             output_width=width))) as image:
-        return image.convert("RGBA")
-
-
-def _white(rgba, bbox) -> str:
-    cut = rgba.crop(bbox)
+def _white(alpha, bbox) -> str:
+    cut = alpha.crop(bbox)
     ink = Image.new("RGBA", cut.size, (255, 255, 255, 255))
-    ink.putalpha(cut.getchannel("A"))
+    ink.putalpha(cut)
     stream = BytesIO()
     ink.save(stream, format="PNG", optimize=True)
     return base64.b64encode(stream.getvalue()).decode("ascii")
@@ -473,6 +466,7 @@ def _white(rgba, bbox) -> str:
 def _cut(root, parents, chord, geometry, names, kind, box) -> dict:
     """One instance asset, in 250 units per staff space, origin at the
     centre of the lowest head (template note 0)."""
+    from .vector_art import svg_alpha
     from .glyphs import native_glyphs
     bx, by, width, height = box
     scale = _PAGE_PIXELS/width
@@ -498,9 +492,9 @@ def _cut(root, parents, chord, geometry, names, kind, box) -> dict:
     right = left+pixels/scale
     bottom = top+math.ceil((bottom-top)*scale)/scale
     full = _isolate(root, parents, chord, (bx+left, by+top, right-left, bottom-top), box)
-    rgba = _sprite(full, pixels)
-    heads_rgba = _sprite(_only_original_chord_heads(full), pixels)
-    stems_rgba = _sprite(_only_original_chord_stems(full), pixels)
+    alpha = svg_alpha(full, pixels)
+    heads_alpha = svg_alpha(_only_original_chord_heads(full), pixels)
+    stems_alpha = svg_alpha(_only_original_chord_stems(full), pixels)
     staff = space*scale
     head = native_glyphs()["head_" + (kind if kind in {"whole", "half"} else "black")]["bounds"]
     dx = (head[0]+head[2]*.5)*staff/250
@@ -512,25 +506,25 @@ def _cut(root, parents, chord, geometry, names, kind, box) -> dict:
         l, t, r, b = bbox
         return [(l-note_x)*unit, (t-note_y)*unit, (r-l)*unit, (b-t)*unit]
 
-    bbox = rgba.getchannel("A").getbbox()
+    bbox = alpha.getbbox()
     if not bbox:
         raise ValueError("Empty genuine chord sprite")
     positions = [[(x-heads[0][0])*scale*unit, (y-heads[0][1])*scale*unit] for x, y in heads]
     result = {"source": "verovio-engraved-chord", "bounds": bounds(bbox),
               "units_per_space": 250, "head_positions": positions,
-              "png_base64": _white(rgba, bbox)}
+              "png_base64": _white(alpha, bbox)}
     if not all(math.isfinite(v) for v in result["bounds"]+[c for p in positions for c in p]):
         raise ValueError("Nonfinite Verovio chord geometry")
-    head_bbox = heads_rgba.getchannel("A").getbbox()
+    head_bbox = heads_alpha.getbbox()
     if head_bbox:
         result["heads_only"] = {"source": "verovio-engraved-chord-heads",
                                 "bounds": bounds(head_bbox),
-                                "png_base64": _white(heads_rgba, head_bbox)}
-    stem_bbox = stems_rgba.getchannel("A").getbbox()
+                                "png_base64": _white(heads_alpha, head_bbox)}
+    stem_bbox = stems_alpha.getbbox()
     if stem_bbox:
         result["stem_only"] = {"source": "verovio-engraved-chord-stem",
                                "bounds": bounds(stem_bbox),
-                               "png_base64": _white(stems_rgba, stem_bbox)}
+                               "png_base64": _white(stems_alpha, stem_bbox)}
     return result
 
 

@@ -79,7 +79,7 @@ def _extract_tie(svg: str) -> str:
 
 def _render(toolkit, direction: str, *, first_kind="half", last_kind="half",
             placement: str | None = None) -> dict:
-    import cairosvg
+    from .vector_art import svg_alpha
     from ...source_svg import parse_svg_geometry
     if not toolkit.loadData(_score_xml(direction, first_kind=first_kind,
                                       last_kind=last_kind, placement=placement)):
@@ -94,26 +94,24 @@ def _render(toolkit, direction: str, *, first_kind="half", last_kind="half",
     if x1 <= x0 or len(rails) < 5:
         raise RuntimeError("Invalid Verovio tie anchor or staff geometry")
     svg = _extract_tie(svg)
-    png = cairosvg.svg2png(bytestring=svg.encode(), output_width=1600)
-    with Image.open(BytesIO(png)) as im:
-        image = im.convert("RGBA")
-    staff_px = (rails[1]-rails[0])*image.height
+    alpha = svg_alpha(svg, 1600)
+    staff_px = (rails[1]-rails[0])*alpha.height
     if staff_px <= 3:
         raise RuntimeError("Invalid Verovio staff-space for tie engraving")
-    bounds = image.getchannel("A").getbbox()
+    bounds = alpha.getbbox()
     if not bounds:
         raise RuntimeError("Verovio tie did not produce an ink contour")
     left, top, right, bottom = bounds
-    origin_x = x0*image.width
-    origin_y = y0*image.height
-    crop = image.crop(bounds)
+    origin_x = x0*alpha.width
+    origin_y = y0*alpha.height
+    crop = alpha.crop(bounds)
     tintable = Image.new("RGBA",crop.size,(255,255,255,255))
-    tintable.putalpha(crop.getchannel("A"))
+    tintable.putalpha(crop)
     encoded = BytesIO()
     tintable.save(encoded,format="PNG",optimize=True)
     box = [(left-origin_x)*250/staff_px,(top-origin_y)*250/staff_px,
            (right-left)*250/staff_px,(bottom-top)*250/staff_px]
-    span = (x1-x0)*image.width*250/staff_px
+    span = (x1-x0)*alpha.width*250/staff_px
     if not all(math.isfinite(v) for v in box+[span]) or span <= 0:
         raise RuntimeError("Non-finite genuine tie bounds")
     from .glyphs import native_glyphs

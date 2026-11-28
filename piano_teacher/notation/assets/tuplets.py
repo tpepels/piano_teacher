@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-from .vector_art import local_vector_art
+from .vector_art import local_vector_art, svg_alpha
 
 VERSION = 10
 MAX_RASTER_PIXELS = 8_000_000
@@ -76,7 +76,6 @@ from ...source_svg import isolate
 
 def crop_art(svg: str, staff_space: float,
              origin: tuple[float,float], source: str) -> dict | None:
-    import cairosvg
     viewport = [float(v) for v in ET.fromstring(svg).get('viewBox', '').replace(',', ' ').split()]
     if (len(viewport) != 4 or not all(math.isfinite(v) for v in viewport)
             or min(viewport[2:]) <= 0 or not math.isfinite(staff_space)
@@ -95,26 +94,24 @@ def crop_art(svg: str, staff_space: float,
         return local_vector_art(svg, staff_space, origin, source)
     if width*math.ceil(height) > MAX_RASTER_PIXELS:
         return None
-    png=cairosvg.svg2png(bytestring=svg.encode(),output_width=width)
-    with Image.open(BytesIO(png)) as img:
-        image=img.convert("RGBA")
-    pixels=staff_space*image.height
+    alpha = svg_alpha(svg, width)
+    pixels=staff_space*alpha.height
     if not 4 < pixels < 320:
         return None
-    bbox=image.getchannel("A").getbbox()
+    bbox=alpha.getbbox()
     if not bbox:
         return None
     left,top,right,bottom=bbox
     if right-left > 1500 or bottom-top > 850:
         return None
-    clipped=image.crop(bbox)
+    clipped=alpha.crop(bbox)
     white=Image.new("RGBA",clipped.size,(255,255,255,255))
-    white.putalpha(clipped.getchannel("A"))
+    white.putalpha(clipped)
     encoded=BytesIO()
     white.save(encoded,format="PNG",optimize=True)
     return {"source":source,"units_per_space":250,
-            "bounds":[(left-origin[0]*image.width)*250/pixels,
-                      (top-origin[1]*image.height)*250/pixels,
+            "bounds":[(left-origin[0]*alpha.width)*250/pixels,
+                      (top-origin[1]*alpha.height)*250/pixels,
                       (right-left)*250/pixels,(bottom-top)*250/pixels],
             "png_base64":base64.b64encode(encoded.getvalue()).decode()}
 

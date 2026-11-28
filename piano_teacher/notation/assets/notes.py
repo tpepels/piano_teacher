@@ -114,7 +114,7 @@ def _only_stem_svg(note_svg: str) -> str:
 
 def _render_template(toolkit, kind: str, direction: str,
                      head_center_units: float) -> dict:
-    import cairosvg
+    from .vector_art import svg_alpha
     from ...source_svg import parse_svg_geometry
 
     if not toolkit.loadData(_one_note_xml(kind, direction)):
@@ -131,28 +131,24 @@ def _render_template(toolkit, kind: str, direction: str,
     filtered = _only_note_svg(svg)
     # A constant resolution independent of the application window: the
     # original vector is rasterized once, not on every Godot frame.
-    data = cairosvg.svg2png(bytestring=filtered.encode("utf-8"),
-                           output_width=1800)
-    with Image.open(BytesIO(data)) as source:
-        image = source.convert("RGBA")
-    staff_space = (rails[1] - rails[0]) * image.height
+    alpha = svg_alpha(filtered, 1800)
+    staff_space = (rails[1] - rails[0]) * alpha.height
     if not (4.0 <= staff_space <= 250.0):
         raise RuntimeError("Verovio's note template has invalid staff scale")
-    bbox = image.getchannel("A").getbbox()
+    bbox = alpha.getbbox()
     if bbox is None:
         raise RuntimeError(f"Empty Verovio note template: {kind}/{direction}")
     # The head is positioned by its VISUAL centre in Godot, not the
     # non-centred font-origin used by the original Verovio SVG <use>.
-    head_center_x = note_x * image.width + (
+    head_center_x = note_x * alpha.width + (
         head_center_units / 250.0) * staff_space
-    head_origin_y = note_y * image.height
+    head_origin_y = note_y * alpha.height
     left, top, right, bottom = bbox
-    glyph = image.crop(bbox)
+    glyph = alpha.crop(bbox)
     # Use a white tintable RGBA mask; retain exact engraved alpha, not the
     # font's (possibly black) source ink color.
-    alpha = glyph.getchannel("A")
     opaque_white = Image.new("RGBA", glyph.size, (255, 255, 255, 255))
-    opaque_white.putalpha(alpha)
+    opaque_white.putalpha(glyph)
     file = BytesIO()
     opaque_white.save(file, format="PNG", optimize=True)
     bounds = [
@@ -172,17 +168,14 @@ def _render_template(toolkit, kind: str, direction: str,
     }
     if kind != "whole":
         stem_svg = _only_stem_svg(filtered)
-        stem_png = cairosvg.svg2png(bytestring=stem_svg.encode("utf-8"),
-                                   output_width=1800)
-        with Image.open(BytesIO(stem_png)) as decoded:
-            stem_image = decoded.convert("RGBA")
-        ink = stem_image.getchannel("A").getbbox()
+        stem_image = svg_alpha(stem_svg, 1800)
+        ink = stem_image.getbbox()
         if ink is None:
             raise RuntimeError("Verovio exported an empty individual stem")
         sx0, sy0, sx1, sy1 = ink
         cropped = stem_image.crop(ink)
         white_stem = Image.new("RGBA",cropped.size,(255,255,255,255))
-        white_stem.putalpha(cropped.getchannel("A"))
+        white_stem.putalpha(cropped)
         stem_bytes = BytesIO()
         white_stem.save(stem_bytes, format="PNG", optimize=True)
         result["stem_only"] = {

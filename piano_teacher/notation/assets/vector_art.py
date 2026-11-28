@@ -81,12 +81,7 @@ def local_vector_art(svg, staff_space, origin, source):
     context.scale(scale, scale)
     context.set_source_surface(recording.cairo, 0, 0)
     context.paint()
-    # Cairo stores native-endian premultiplied ARGB. Only coverage is
-    # published: the retained scene supplies the final ink colour.
-    bitmap.flush()
-    alpha_offset = 3 if sys.byteorder == "little" else 0
-    alpha_bytes = memoryview(bitmap.get_data())[alpha_offset::4].tobytes()
-    alpha = Image.frombytes("L", (w, h), alpha_bytes, "raw", "L", bitmap.get_stride() // 4)
+    alpha = _surface_alpha(bitmap)
     bbox = alpha.getbbox()
     if bbox is None:
         return None
@@ -101,3 +96,24 @@ def local_vector_art(svg, staff_space, origin, source):
                        (top+b-offset_y)*250/density,
                        (c-a)*250/density, (d-b)*250/density],
             'png_base64': base64.b64encode(encoded.getvalue()).decode()}
+
+
+def _surface_alpha(bitmap):
+    """Copy just the coverage bytes from a native-endian Cairo ARGB32 surface."""
+    bitmap.flush()
+    # View premultiplied colour as four raw bytes. Alpha is last on little
+    # endian hosts and first on big endian hosts, regardless of colour order.
+    image = Image.frombuffer("RGBA", (bitmap.get_width(), bitmap.get_height()),
+                             bitmap.get_data(), "raw", "RGBA", bitmap.get_stride(), 1)
+    return image.getchannel("A" if sys.byteorder == "little" else "R")
+
+
+def svg_alpha(svg: str, width: int) -> Image.Image:
+    from cairosvg.parser import Tree
+    from cairosvg.surface import PNGSurface
+
+    surface = PNGSurface(Tree(bytestring=svg.encode()), None, 96, output_width=width)
+    try:
+        return _surface_alpha(surface.cairo)
+    finally:
+        surface.finish()
