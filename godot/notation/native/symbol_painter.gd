@@ -331,8 +331,12 @@ func paint_grace_notes(canvas, frame: RenderPass, gap: float) -> void:
         var y: float = Geometry.note_y(step, score_layout.staff_center(hand)+gap*2.0,gap)
         var head: Vector2 = frame.pass_noteheads[target]
         var kind: String = str(grace.get("note_type", "eighth"))
+        var grace_scale := 0.66
+        if grace.get("slashed", false):
+            kind = "grace_slash_" + kind
+            grace_scale = 1.0
         score_layout.glyphs.paint_note(canvas, kind, step < 4,
-            head.x-gap*1.4, y, gap*.66, frame.event_ink(score_layout,grace))
+            head.x-gap*1.4, y, gap*grace_scale, frame.event_ink(score_layout,grace))
 
 
 static func tuplet_hidden(group: Dictionary) -> bool:

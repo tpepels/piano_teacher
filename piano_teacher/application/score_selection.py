@@ -35,7 +35,7 @@ class ScoreSelection:
         return {
             "piece": {
                 "title": piece.title, "bpm": piece.bpm,
-                "notes": [vars(note) for note in piece.notes],
+                "notes": [_score_note(note) for note in piece.notes],
                 "bar_boundaries": piece.bar_boundaries,
                 "time_signatures": piece.time_signatures,
                 "key_signatures": [vars(key) for key in piece.key_signatures],
@@ -44,10 +44,16 @@ class ScoreSelection:
                 "fingering_plan": _fingering_document(piece.fingering_plan),
             },
             "phrase": {**vars(self.phrase),
-                       "notes": [vars(note) for note in self.phrase.notes]},
+                       "notes": [_score_note(note) for note in self.phrase.notes]},
             "timing": timing,
             "transformed_rhythm": self.transformed_rhythm,
         }
+
+
+def _score_note(note: Note) -> dict:
+    if note.written_id or note.written_note or note.grace_before:
+        return vars(note)
+    return note.performance_document()
 
 
 def _fingering_document(plan: FingeringPlan | None) -> dict | None:

@@ -20,18 +20,22 @@ from PIL import Image
 KINDS = ("whole", "half", "quarter", "eighth", "16th", "32nd", "64th", "128th")
 BEATS = {"whole": 4, "half": 2, "quarter": 1, "eighth": 0.5,
          "16th": 0.25, "32nd": 0.125, "64th": 0.0625, "128th": 0.03125}
-TEMPLATE_VERSION = 5
+TEMPLATE_VERSION = 6
 XML_DIVISIONS = 10080
 
 
 def keys() -> tuple[str, ...]:
     return ("whole",) + tuple(
-        f"{kind}_{direction}" for kind in KINDS[1:]
+        f"{kind}_{direction}" for kind in (*KINDS[1:], "grace_slash_eighth", "grace_slash_16th")
         for direction in ("up", "down"))
 
 
 def _one_note_xml(kind: str, direction: str) -> str:
+    slashed = kind.startswith("grace_slash_")
+    kind = kind.removeprefix("grace_slash_")
     duration = round(BEATS[kind] * XML_DIVISIONS)
+    timing = "" if slashed else f"<duration>{duration}</duration>"
+    grace = '<grace slash="yes"/>' if slashed else ""
     # Middle-line B4 avoids incidental ledger rules, key changes, and
     # accidentals. Direction is explicit so Verovio decides the stem shape.
     stem = f"<stem>{direction}</stem>" if kind != "whole" else ""
@@ -44,8 +48,8 @@ def _one_note_xml(kind: str, direction: str) -> str:
   <attributes><divisions>{XML_DIVISIONS}</divisions><key><fifths>0</fifths></key>
     <time><beats>4</beats><beat-type>4</beat-type></time>
     <clef><sign>G</sign><line>2</line></clef></attributes>
-  <note id="template"><pitch><step>B</step><octave>4</octave></pitch>
-    <duration>{duration}</duration><type>{kind}</type>{stem}</note>
+  <note id="template">{grace}<pitch><step>B</step><octave>4</octave></pitch>
+    {timing}<type>{kind}</type>{stem}</note>
  </measure></part>
 </score-partwise>"""
 
@@ -233,6 +237,8 @@ def _generate(font: str) -> dict:
                            else name.rsplit("_", 1))
         head = atlas["head_" + (kind if kind in {"whole", "half"} else "black")]["bounds"]
         head_center = head[0] + head[2] * 0.5
+        if kind.startswith("grace_slash_"):
+            head_center *= toolkit.getOptions()["graceFactor"]
         result[name] = _render_template(toolkit, kind, direction, head_center)
     return result
 

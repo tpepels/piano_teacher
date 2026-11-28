@@ -18,8 +18,8 @@ LessonStep = course_policy.Step
 class LearningPlan:
     def __init__(self, piece: Piece, *,
                  lesson_generator: LessonGenerator | None = None) -> None:
-        if piece.source_format != "midi":
-            raise ValueError("Practice Flow requires an imported MIDI piece")
+        if piece.source_format not in ("midi", "musicxml"):
+            raise ValueError("Practice Flow requires an imported piece")
         self.piece = piece
         self.lesson_generator = lesson_generator or PracticeFlowLessonGenerator()
         self.lesson_definition = self.lesson_generator.generate(piece)

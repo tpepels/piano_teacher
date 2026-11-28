@@ -42,7 +42,7 @@ class ScoreArtifacts:
             time_signatures=piece.time_signatures, key_signatures=piece.key_signatures,
             clef_changes=piece.clef_changes, default_clefs=infer_piece_clefs(piece.notes),
             inferred_clefs=infer_midi_clef_plan(piece.notes, piece.bar_boundaries),
-            barlines=piece.barlines)
+            barlines=piece.barlines, written_marks=not self.selected.transformed_rhythm)
 
     @cached_property
     def notation_model(self) -> dict:

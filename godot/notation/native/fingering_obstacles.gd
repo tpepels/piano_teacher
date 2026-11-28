@@ -244,9 +244,13 @@ func build(gap: float, bins: Dictionary, cell: float, play_from_beat: float = 0.
         var step: int = Geometry.staff_step(grace.get("spelling",{}),score_layout.clef_for(hand,score_layout.measure_for(grace)))
         var y: float = Geometry.note_y(step,score_layout.staff_center(hand)+gap*2.0,gap)
         var kind: String = str(grace.get("note_type","eighth"))
+        var grace_scale := 0.66
+        if grace.get("slashed",false):
+            kind = "grace_slash_" + kind
+            grace_scale = 1.0
         var box: Array = score_layout.glyphs.note_bounds.get(kind+("_up" if step<4 else "_down"),[])
         if box.size() == 4:
-            var scale: float = unit*.66
+            var scale: float = unit*grace_scale
             var x: float = float(target["beat"])*density+float(score_layout.cached_head_offsets.get(str(target["id"]),0.0))-gap*1.4
             block(Rect2(x+float(box[0])*scale,y+float(box[1])*scale,
                 float(box[2])*scale,float(box[3])*scale),bins,cell)

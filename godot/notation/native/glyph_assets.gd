@@ -42,6 +42,8 @@ const NOTE_TEMPLATES := [
     "16th_up", "16th_down",
     "32nd_up", "32nd_down",
     "64th_up", "64th_down", "128th_up", "128th_down",
+    "grace_slash_eighth_up", "grace_slash_eighth_down",
+    "grace_slash_16th_up", "grace_slash_16th_down",
 ]
 
 var textures: Dictionary = {}

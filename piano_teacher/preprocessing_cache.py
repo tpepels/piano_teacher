@@ -17,7 +17,7 @@ from .music import BarlineChange, ClefChange, KeySignature, Note, Phrase, Piece
 
 # Bump this whenever the importer, exercise generation, musical notation
 # contract or engraving algorithm changes. All historical entries then miss.
-CACHE_VERSION = "2026-11-24-musicxml-fingering-v6"
+CACHE_VERSION = "2026-11-28-authored-attacks-v7"
 MAX_CACHE_BYTES = 256 * 1024 * 1024
 MAX_ENTRY_BYTES = 20 * 1024 * 1024
 
@@ -49,7 +49,7 @@ def _piece_from_json(data: dict) -> Piece:
         import_warnings=tuple(data["import_warnings"]),
         barlines=tuple(BarlineChange(**item)
                        for item in data.get("barlines", [])),
-        source_format="midi",
+        source_format=data["source_format"],
         midi_ticks_per_beat=int(data.get("midi_ticks_per_beat",0)),
         authored_fingerings=tuple((str(sid), int(finger))
                                   for sid, finger in data.get("authored_fingerings", [])),

@@ -321,14 +321,11 @@ def _grace_notes(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
                 binding = score.note_bindings.get(child.get("id"))
                 if not binding or not binding.get("is_attack") or not group:
                     continue
-                # Only simple, unslashed, isolated grace notes use the
-                # already genuine Verovio note-template atlas. More complex
-                # unsupported source marks remain explicitly unrendered.
+                # Isolated grace notes use the corresponding Verovio template.
                 if len(group) != 1:
                     continue
                 item = group[0]
-                if item.findtext("type") not in ("eighth", "16th") or (
-                        item.find("grace").get("slash", "no") != "no"):
+                if item.findtext("type") not in ("eighth", "16th"):
                     continue
                 pitch = item.find("pitch")
                 if pitch is None:
@@ -340,6 +337,7 @@ def _grace_notes(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
                     "measure": score.phrase.first_bar + mi,
                     "beat": round(binding["display_beat"], 8),
                     "note_type": item.findtext("type"),
+                    "slashed": item.find("grace").get("slash") == "yes",
                     "spelling": {
                         "step": pitch.findtext("step"),
                         "alter": int(Fraction(pitch.findtext("alter", "0"))),

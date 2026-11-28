@@ -26,6 +26,17 @@ class Note:
     voice: str = ""
     spelling: tuple[str, int, int] | None = None
     velocity: int = 85  # Original MIDI attack dynamics for sampled Listen
+    written_id: str = ""  # Shared by repeated occurrences of one written note.
+    written_note: str = ""  # Original note markup, including authored notations.
+    written_divisions: int = 0
+    grace_before: str = ""  # Untimed MusicXML note attached to this attack.
+
+    def performance_document(self) -> dict:
+        """The performed attack stored in predictions and learner evidence."""
+        return {"start": self.start, "end": self.end, "pitch": self.pitch,
+                "track": self.track, "channel": self.channel, "hand": self.hand,
+                "source_id": self.source_id, "voice": self.voice,
+                "spelling": self.spelling, "velocity": self.velocity}
 
 
 def source_note_id(note: Note, index: int) -> str:
@@ -172,6 +183,82 @@ def phrases_from_notes(notes: list[Note], boundaries: list[float], bars_per_phra
     return tuple(phrases)
 
 
+class PerformanceNotes:
+    """One FIFO release policy for the historical practice and progress timeline."""
+
+    def __init__(self, ticks_per_beat):
+        self.ticks = ticks_per_beat
+        self.notes = []
+        self.warnings = []
+        self.pending = defaultdict(deque)
+        self.zero_duration = self.orphan_releases = 0
+
+    def attack(self, note, tick):
+        key = note.track, note.channel, note.pitch
+        if self.pending[key]:
+            self.warnings.append(
+                f"Ambiguous overlapping MIDI notes on track {note.track}, "
+                f"channel {note.channel}, pitch {note.pitch}: attack "
+                f"{note.source_id} at tick {tick}; releases paired "
+                "FIFO (oldest attack first). All attack/release times retained; "
+                "individual pairing is not uniquely specified by MIDI.")
+        self.pending[key].append(note)
+
+    def release(self, track, channel, pitch, tick):
+        key = track, channel, pitch
+        if key not in self.pending:
+            self.orphan_releases += 1
+            return
+        pending = self.pending[key]
+        note = pending.popleft()
+        if not pending:
+            del self.pending[key]
+        end = tick / self.ticks
+        if end == note.start:
+            self.zero_duration += 1
+        elif end < note.start:
+            raise ValueError(f"Invalid MIDI event ordering on track {track}, pitch {pitch}")
+        else:
+            self.notes.append(note if note.end == end else replace(note, end=end))
+
+    def finish(self):
+        if self.pending:
+            track, channel, pitch = next(iter(self.pending))
+            raise ValueError(f"unterminated MIDI note on track {track}, channel {channel}, pitch {pitch}")
+        if self.zero_duration:
+            self.warnings.append(
+                f"Skipped {self.zero_duration} zero-duration MIDI note(s) with no audible length.")
+        if self.orphan_releases:
+            self.warnings.append(
+                f"Ignored {self.orphan_releases} unmatched MIDI note-off event(s).")
+
+
+def _read_track(messages, track, notes, names, changes, tempos, keys):
+    tick = 0
+    for ordinal, msg in enumerate(messages):
+        tick += msg.time
+        if msg.type == "track_name":
+            names[track] = msg.name
+        elif msg.type == "time_signature":
+            changes.append((tick / notes.ticks, msg.numerator, msg.denominator))
+        elif msg.type == "set_tempo":
+            tempos.append((tick, msg.tempo))
+        elif msg.type == "key_signature":
+            minor = msg.key.endswith("m")
+            key_names = ("Abm Ebm Bbm Fm Cm Gm Dm Am Em Bm F#m C#m G#m D#m A#m" if minor
+                         else "Cb Gb Db Ab Eb Bb F C G D A E B F# C#").split()
+            keys.append(KeySignature(tick / notes.ticks, key_names.index(msg.key)-7,
+                                     mode="minor" if minor else "major"))
+        elif msg.type in ("note_on", "note_off") and msg.channel != 9:
+            if msg.type == "note_on" and msg.velocity > 0:
+                notes.attack(Note(tick/notes.ticks, tick/notes.ticks, msg.note, track, msg.channel,
+                    source_id=f"midi-t{track}-e{ordinal}", voice=f"midi-t{track}-c{msg.channel}",
+                    velocity=msg.velocity), tick)
+            else:
+                notes.release(track, msg.channel, msg.note, tick)
+    return tick
+
+
 def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int = 2,
               data: bytes | None = None) -> Piece:
     if bars_per_phrase < 1:
@@ -182,74 +269,18 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     if midi.ticks_per_beat <= 0:
         raise ValueError("SMPTE/timecode MIDI files are not supported")
     ticks = midi.ticks_per_beat
-    notes: list[Note] = []
-    names: dict[int, str] = {}
-    changes: list[tuple[float, int, int]] = []
-    tempos: list[tuple[int, int]] = []
-    keys: list[KeySignature] = []
-    source_end_tick = 0
-    discarded_zero_duration = 0
-    discarded_orphan_releases = 0
-    overlap_warnings: list[str] = []
-    for track_idx, track in enumerate(midi.tracks):
-        tick = 0
-        open_notes: dict[tuple[int, int], deque[tuple[int, int, int]]] = {}
-        for ordinal, msg in enumerate(track):
-            tick += msg.time
-            if msg.type == "track_name":
-                names[track_idx] = msg.name
-            if msg.type == "time_signature":
-                changes.append((tick / ticks, msg.numerator, msg.denominator))
-            if msg.type == "set_tempo":
-                tempos.append((tick, msg.tempo))
-            if msg.type == "key_signature":
-                minor = msg.key.endswith("m")
-                key_names = ("Abm Ebm Bbm Fm Cm Gm Dm Am Em Bm F#m C#m G#m D#m A#m" if minor
-                         else "Cb Gb Db Ab Eb Bb F C G D A E B F# C#").split()
-                keys.append(KeySignature(tick / ticks, key_names.index(msg.key)-7,
-                                         mode="minor" if minor else "major"))
-            if msg.type not in ("note_on", "note_off") or msg.channel == 9:
-                continue  # percussion is not piano practice material
-            key = (msg.channel, msg.note)
-            if msg.type == "note_on" and msg.velocity > 0:
-                if key in open_notes:
-                    overlap_warnings.append(
-                        f"Ambiguous overlapping MIDI notes on track {track_idx}, "
-                        f"channel {msg.channel}, pitch {msg.note}: attack "
-                        f"midi-t{track_idx}-e{ordinal} at tick {tick}; releases paired "
-                        "FIFO (oldest attack first). All attack/release times retained; "
-                        "individual pairing is not uniquely specified by MIDI.")
-                open_notes.setdefault(key, deque()).append((tick, ordinal, msg.velocity))
-            elif key in open_notes:
-                # MIDI 1.0 releases carry channel/pitch but no attack identity.
-                # FIFO preserves every source endpoint without truncating an
-                # earlier note on a repeated attack or inventing written voices.
-                # Overlapping pairings remain explicitly ambiguous above.
-                start_tick, attack, attack_velocity = open_notes[key].popleft()
-                if not open_notes[key]:
-                    del open_notes[key]
-                if tick == start_tick:
-                    # Some piano MIDI exports contain instantaneous placeholder
-                    # note pairs. They have no sounding duration and cannot be
-                    # assessed as played notes; dropping only this pair preserves
-                    # the real notes and their canonical source identities.
-                    discarded_zero_duration += 1
-                    continue
-                if tick < start_tick:
-                    raise ValueError(f"Invalid MIDI event ordering on track {track_idx}, pitch {msg.note}")
-                notes.append(Note(start_tick / ticks, tick / ticks, msg.note, track_idx, msg.channel,
-                                  source_id=f"midi-t{track_idx}-e{attack}",
-                                  voice=f"midi-t{track_idx}-c{msg.channel}",
-                                  velocity=attack_velocity))
-            else:
-                # Many MIDI performance exports include unmatched channel
-                # releases from pedal/voice processing. With no corresponding
-                # attack they cannot sound or affect a practice exercise.
-                discarded_orphan_releases += 1
-        if open_notes:
-            channel, pitch = next(iter(open_notes))
-            raise ValueError(f"unterminated MIDI note on track {track_idx}, channel {channel}, pitch {pitch}")
-        source_end_tick = max(source_end_tick, tick)
+    notes = PerformanceNotes(ticks)
+    names, changes, tempos, keys = {}, [], [], []
+    end = max((_read_track(messages, track, notes, names, changes, tempos, keys)
+               for track, messages in enumerate(midi.tracks)), default=0)
+    notes.finish()
+    return piece_from_performance(path, notes.notes, names, changes, tempos, keys,
+                                 end, ticks, split_pitch, bars_per_phrase, notes.warnings, "midi")
+
+
+def piece_from_performance(path, notes, names, changes, tempos, keys, source_end_tick,
+                          ticks, split_pitch, bars_per_phrase, warnings, source_format):
+    """Build the one practice timeline and its historical measure windows."""
     if not notes:
         raise ValueError("No pitched MIDI notes found (drum-only/empty file)")
     # Discard impossible export-only meter spikes while keeping the most
@@ -282,18 +313,11 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
         key_contexts[signature.beat] = context
     end = max(max(n.end for n in notes), source_end_tick / ticks)
     boundaries = _bar_boundaries(end, changes)
-    warnings = list(overlap_warnings)
-    if discarded_zero_duration:
-        warnings.append(
-            f"Skipped {discarded_zero_duration} zero-duration MIDI note(s) with no audible length.")
-    if discarded_orphan_releases:
-        warnings.append(
-            f"Ignored {discarded_orphan_releases} unmatched MIDI note-off event(s).")
     if repaired_meters:
         warnings.append("Ignored implausible time signature(s): " + ", ".join(repaired_meters) + ".")
     return Piece(Path(path).stem, bpm, tuple(notes), phrases_from_notes(notes, boundaries, bars_per_phrase),
                  split_pitch, tuple(boundaries), tuple(sorted(set(changes))),
                  tuple(sorted(set(keys), key=lambda signature: (signature.beat, signature.fifths))),
                  import_warnings=tuple(warnings),
-                 source_format="midi", midi_ticks_per_beat=ticks)
+                 source_format=source_format, midi_ticks_per_beat=ticks)
 

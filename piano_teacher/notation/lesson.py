@@ -16,6 +16,7 @@ from ..measure_grid import phrase_grid
 from ..source_timing import source_meter
 from .midi_beaming import beam_midi_measure
 from .piano_registers import distribute_piano_registers
+from .written_marks import project_written_marks
 
 DIVISIONS = 10080
 
@@ -696,7 +697,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        key_signatures=(), clef_changes=(),
                        default_clefs: dict | None = None,
                        inferred_clefs: dict[int, dict[str, dict]] | None = None,
-                       barlines: tuple = ()) -> LessonScore:
+                       barlines: tuple = (), written_marks: bool = True) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
     identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
     if len(set(identities)) != len(identities):
@@ -845,5 +846,6 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             beam_midi_measure(measure, beats, beat_type, DIVISIONS,
                               bar_end - bar_start)
             append_barline(measure,phrase.start+grid[b+1],"right")
+    project_written_marks(root, phrase, bindings, DIVISIONS, written_marks)
     return LessonScore(
         ET.tostring(root, encoding="unicode"), phrase, bindings, staff_clefs)
