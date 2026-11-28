@@ -1,7 +1,7 @@
 """Whole practice journeys driven by real MIDI keys, correct and incorrect.
 
 Every take is played on the engine's own clock from the real score
-(score.semantic), as a learner at the piano would; only the inputs vary.
+(the score bundle), as a learner at the piano would; only the inputs vary.
 The expected states are the Practice Flow rules (docs/practice-flow.md);
 owner request 2026-11-24: more MIDI journeys, including wrong notes.
 """
@@ -17,7 +17,7 @@ def play(session, state, *, wrong=(), missing=(), extra=(), late=None):
     after the take has finished and the engine has continued."""
     current = state["playback_timeline"]["current"]
     start = current["deadline_ms"]/1000
-    source = session.ask("score.semantic")
+    source = session.ask("score.bundle")["model"]
     floor, seconds_per_beat = state["play_from_beat"], 60/state["bpm"]
     events = []
     for index, note in enumerate(source["notes"]):

@@ -64,7 +64,6 @@ def test_current_practice_source_exposes_single_ready_bundle(practice_session):
     assert set(bundle["model"]["active_note_ids"]).issubset(
         bundle["source_note_ids"])
     assert bundle["layout"].get("anchors") is not None
-    assert session.ask("score.semantic") == bundle["model"]
 
 
 def test_bundle_does_not_mutate_the_next_read_after_client_edits(practice_session):

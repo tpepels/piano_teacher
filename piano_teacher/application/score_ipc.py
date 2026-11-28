@@ -6,7 +6,7 @@ import socket
 import struct
 
 VERSION = 1
-OPERATIONS = frozenset(("score.bundle", "score.semantic", "score.native_layout"))
+OPERATIONS = frozenset(("score.bundle",))
 BINDING_FIELDS = ("fingerprint", "revision", "stage_key", "hand")
 METADATA_LIMIT = 8 * 1024
 REQUEST_LIMIT = 32 * 1024 * 1024

@@ -153,8 +153,8 @@ def test_percussion_only_file_cannot_be_opened_as_piano_music(tmp_path):
 def test_native_score_preserves_chord_attacks_and_full_tied_ending(practice_session):
     session = practice_session(bars=2, chords=True, held_tail=2)
     session.select(1, 2, hand="both")
-    source = session.ask("score.semantic")
-    layout = session.ask("score.native_layout")
+    bundle = session.ask("score.bundle")
+    source, layout = bundle["model"], bundle["layout"]
     heads = {note["id"]: note for note in layout["notes"]}
     chord = [note for note in source["notes"] if note["hand"] == "right" and note["onset_beats"] == 0]
     assert {note["midi_pitch"] for note in chord} == {72,76,79}
@@ -179,8 +179,8 @@ def test_midi_triplets_reach_native_notation_with_their_beam_and_number(practice
     shutil.copyfile(FIXTURES/"midi_triplets.mid", target)
     session.ask("library.open", id=target.name)
     session.select(hand="both", final=True)
-    source = session.ask("score.semantic")
-    layout = session.ask("score.native_layout")
+    bundle = session.ask("score.bundle")
+    source, layout = bundle["model"], bundle["layout"]
     triplet = source["notes"][:3]
     assert [note["onset_beats"] for note in triplet] == pytest.approx([0,1/3,2/3])
     heads = {layout["attack_map"][note["id"]] for note in triplet}
@@ -197,8 +197,8 @@ def test_authored_meter_change_survives_source_selection_and_native_engraving(pr
     shutil.copyfile(FIXTURES/"midi_mixed_meter.mid", target)
     session.ask("library.open", id=target.name)
     session.select(2,2)
-    source = session.ask("score.semantic")
-    layout = session.ask("score.native_layout")
+    bundle = session.ask("score.bundle")
+    source, layout = bundle["model"], bundle["layout"]
     assert source["duration_beats"] == 4
     assert source["practice_timeline"]["gap"]["meter"] == [4,4]
     active = set(source["active_note_ids"])

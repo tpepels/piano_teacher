@@ -9,7 +9,7 @@ def test_repeat_follows_held_ending_with_exactly_one_bar(practice_session, corre
     session.finish_listen()
     session.finish_free()
     before = session.ready_score()
-    source = session.ask("score.semantic")
+    source = session.ask("score.bundle")["model"]
     outgoing_start = take(before)["deadline_ms"]/1000
     assert before["play_from_beat"] == .5
     assert source["duration_beats"] == 4
@@ -39,7 +39,7 @@ def test_count_in_uses_authored_six_eight_and_first_playable_attack(practice_ses
     assert state["count_in_meter"] == [6,8]
     assert state["count_in_beats"] == 3
     assert state["play_from_beat"] == .5
-    assert min(note["onset_beats"] for note in session.ask("score.semantic")["notes"]) == .5
+    assert min(note["onset_beats"] for note in session.ask("score.bundle")["model"]["notes"]) == .5
 
 
 def test_navigation_publishes_source_timing_before_notation(practice_session, monkeypatch):
@@ -143,9 +143,9 @@ def test_live_and_final_feedback_keep_the_same_authentic_source_heads(practice_s
     session = practice_session(bars=1)
     session.finish_listen()
     session.finish_free()
-    layout = session.ask("score.native_layout")
+    layout = session.ask("score.bundle")["layout"]
     state = session.ready_score()
-    source = session.ask("score.semantic")["notes"]
+    source = session.ask("score.bundle")["model"]["notes"]
     start = take(state)["deadline_ms"]/1000
     session.clock.at = start
     session.strike(source[0]["midi_pitch"])

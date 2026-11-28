@@ -42,8 +42,7 @@ def failed_take(session, *, fault="missed"):
     state = state_at(session, step="tempo", mode="practice", running=True)
     # The real player obtains its engraving before rendering feedback.
     # Exercise that same path so final assessments can map source note IDs.
-    session.ask("score.native_layout")
-    source = session.ask("score.semantic")
+    source = session.ask("score.bundle")["model"]
     assert take(state)["transport_id"] == state["transport_id"]
     start = take(state)["deadline_ms"] / 1000
     bpm = state["bpm"]
@@ -193,7 +192,7 @@ def test_fake_keyboard_failed_take_transitions_to_repeat_and_floor_free(
 def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_return(practice_session):
     session = practice_session(bars=1, chords=True)
     session.finish_listen()
-    original = session.ask("score.semantic")
+    original = session.ask("score.bundle")["model"]
     from test_midi_journeys import play
     session.finish_free()
     for _ in range(2):
@@ -213,14 +212,14 @@ def test_fake_keyboard_repeated_floor_failures_choose_real_aid_and_original_retu
     # The curriculum still identifies the original source and grants no
     # mastery. The active SCORE, not the source label, must contain a real
     # reduced set of attacks from the selected Coda/Fukuda contribution.
-    simplified = session.ask("score.semantic")
+    simplified = session.ask("score.bundle")["model"]
     assert len(simplified["notes"]) < len(original["notes"])
     assert {n["id"] for n in simplified["notes"]} < {n["id"] for n in original["notes"]}
     assert aid["mastered"] == 0
     session.finish_free()
     restored = state_at(session, step="free", mode="learn")
     assert restored["lesson_level"] == "original"
-    assert {n["id"] for n in session.ask("score.semantic")["notes"]} == {
+    assert {n["id"] for n in session.ask("score.bundle")["model"]["notes"]} == {
         n["id"] for n in original["notes"]}
     session.open()
     reopened = state_at(session, step="free", mode="learn", hand="right")
@@ -373,7 +372,7 @@ def test_real_midi_release_setting_changes_tempo_credit(
     session.finish_free()
     active = session.ready_score()
     assert active["flow"]["step"] == "tempo" and active["bpm"] == 80
-    semantic = session.ask("score.semantic")
+    semantic = session.ask("score.bundle")["model"]
     assert len(semantic["notes"]) == 1
     note = semantic["notes"][0]
     assert note["duration_beats"] >= 3.0

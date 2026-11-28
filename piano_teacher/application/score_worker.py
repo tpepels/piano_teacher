@@ -45,7 +45,7 @@ def _reply(channel, cache, artifacts, previous_source):
             del document, selected
             previous_source = source
         del raw
-        body = encode(artifacts.prepare(header["operation"]))
+        body = encode(artifacts.bundle())
         if len(body) > REPLY_LIMIT:
             raise ValueError("Score exceeds the worker response limit")
         status = 0

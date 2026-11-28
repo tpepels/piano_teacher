@@ -53,7 +53,7 @@ class Rules:
 
 def take_events(session, state, rng, kind):
     start = state["playback_timeline"]["current"]["deadline_ms"]/1000
-    source = session.ask("score.semantic")
+    source = session.ask("score.bundle")["model"]
     floor, beat = state["play_from_beat"], 60/state["bpm"]
     events = []
     notes = [n for n in source["notes"] if n["onset_beats"] >= floor]

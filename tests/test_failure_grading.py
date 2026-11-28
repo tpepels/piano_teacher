@@ -11,7 +11,7 @@ import pytest
 
 from test_midi_journeys import tempo
 
-CHORD, LAST = (0, 1, 2), 3   # note indexes in score.semantic order
+CHORD, LAST = (0, 1, 2), 3   # note indexes in score model order
 
 
 def play(session, state, *, wrong=(), missing=(), extra=(), shift=None,
@@ -20,7 +20,7 @@ def play(session, state, *, wrong=(), missing=(), extra=(), shift=None,
     attack; `held` is the fraction of each note's length that is held;
     `speed` > 1 rushes the whole take; `doubled` notes are struck twice."""
     start = state["playback_timeline"]["current"]["deadline_ms"]/1000
-    source = session.ask("score.semantic")
+    source = session.ask("score.bundle")["model"]
     floor, seconds_per_beat = state["play_from_beat"], 60/state["bpm"]
     events = []
     for index, note in enumerate(source["notes"]):
@@ -91,7 +91,7 @@ def test_a_mistake_fails_the_take_and_the_same_tempo_follows(practice_session, n
     options, statuses, (correct, wrong, omitted, extra) = CASES[name]
     session = practice_session(bars=2, chords=True)
     state = tempo(session)
-    session.ask("score.native_layout")
+    session.ask("score.bundle")
     after = play(session, state, **options)
     ignored = correct == 0
     assert graded(session, state["transport_id"]) == ([] if ignored else statuses)
@@ -111,7 +111,7 @@ def test_a_mistake_fails_the_take_and_the_same_tempo_follows(practice_session, n
 def test_an_attack_inside_the_tolerance_stays_correct(practice_session, shift):
     session = practice_session(bars=2, chords=True)
     state = tempo(session)
-    session.ask("score.native_layout")
+    session.ask("score.bundle")
     after = play(session, state, shift=(LAST, shift))
     assert graded(session, state["transport_id"]) == [C, C, C, C]
     assert 40 < after["bpm"] < 80   # clean, but off centre: a smaller step
@@ -125,7 +125,7 @@ def test_notes_released_far_too_soon_fail_only_when_holds_are_graded(
     session = practice_session(bars=2, chords=True)
     session.ask("settings.update", grade_note_holds=hold_grading)
     state = tempo(session)
-    session.ask("score.native_layout")
+    session.ask("score.bundle")
     after = play(session, state, held=.1)
     assert graded(session, state["transport_id"]) == statuses
     assert (after["bpm"] > 40) is clean
@@ -188,7 +188,7 @@ def window_take(session, window):
     state = session.ready_score()
     expected_bpm = 80 if window == (1, 1, "left") else 40
     assert state["running"] and state["bpm"] == expected_bpm, state
-    session.ask("score.native_layout")
+    session.ask("score.bundle")
     return state
 
 
@@ -198,7 +198,7 @@ def test_every_window_kind_grades_a_mistake_and_repeats(practice_session, window
     options, selected = WINDOWS[window]
     session = practice_session(bars=3, chords=True, **options)
     state = window_take(session, selected)
-    notes = session.ask("score.semantic")["notes"]
+    notes = session.ask("score.bundle")["model"]["notes"]
     build, index, status = MISTAKES[mistake]
     after = play(session, state, **build(len(notes)))
     expected = [C]*len(notes)
@@ -217,7 +217,7 @@ def test_every_window_kind_passes_a_clean_take_and_rejects_silence(practice_sess
     options, selected = WINDOWS[window]
     session = practice_session(bars=3, chords=True, **options)
     state = window_take(session, selected)
-    count = len(session.ask("score.semantic")["notes"])
+    count = len(session.ask("score.bundle")["model"]["notes"])
     clean = play(session, state)
     assert graded(session, state["transport_id"]) == [C]*count
     if state["bpm"] == state["target_bpm"]:

@@ -46,12 +46,12 @@ def tempo(session):
     state = session.ready_score()
     assert state["mode"] == "practice" and state["running"], state
     assert state["flow"]["step"] == "tempo"
-    session.ask("score.native_layout")
+    session.ask("score.bundle")
     return state
 
 
 def notes(session):
-    return session.ask("score.semantic")["notes"]
+    return session.ask("score.bundle")["model"]["notes"]
 
 
 def perform(session, state, events):
@@ -60,7 +60,7 @@ def perform(session, state, events):
     for after, pitch, on in sorted(events, key=lambda e: (e[0], not e[2])):
         session.clock.at = max(session.clock.at, start+after)
         session.engine.midi.port.send(pitch, on)
-    source = session.ask("score.semantic")
+    source = session.ask("score.bundle")["model"]
     floor, beat = state["play_from_beat"], 60/state["bpm"]
     sounding = source["practice_timeline"]["sounding_duration_beats"]
     session.clock.at = max(session.clock.at, start+(sounding-floor)*beat+.001)
@@ -100,7 +100,7 @@ def assert_follows_directly(session, before, after, source=None):
     """The next take's first note comes after the rest to the barline and one
     count-in bar: never a longer pause. Barlines are the piece's own (a
     window may hold a pickup or a change of meter)."""
-    timeline = session.ask("score.semantic")["practice_timeline"]
+    timeline = session.ask("score.bundle")["model"]["practice_timeline"]
     floor = before["play_from_beat"]
     sounding = timeline["sounding_duration_beats"]
     if source is not None:

@@ -273,7 +273,7 @@ class PracticeSession:
         state = self.ready_score()
         assert state["running"] and state["mode"] == "practice", state
         transport = state["transport_id"]
-        source = self.ask("score.semantic")
+        source = self.ask("score.bundle")["model"]
         start = self.receipt["deadline_ms"]/1000
         floor = state["play_from_beat"]
         seconds_per_beat = 60/state["bpm"]

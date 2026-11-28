@@ -85,7 +85,7 @@ def test_listen_audio_and_lighting_wait_for_the_count_in(practice_session):
 def test_automatic_repeat_follows_after_one_count_in_bar(practice_session):
     session = practice_session(bars=1)
     take = desktop_tempo(session)
-    session.ask("score.native_layout")
+    session.ask("score.bundle")
     initial = session.snapshot()
     # Sparse two-attack material opens at target tempo; one clean
     # attempt repeats at target and a second masters this hand.

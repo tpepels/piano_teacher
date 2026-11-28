@@ -63,7 +63,7 @@ def floor_return(session):
     for _ in range(14):
         # A fully silent take is ignored. Use a genuine 50%-accuracy
         # failure, progressing all the way down to the recovery floor.
-        notes = session.ask("score.semantic")["notes"]
+        notes = session.ask("score.bundle")["model"]["notes"]
         if len(notes) == 1:
             # An extra key at the attack makes the one-note take 50%.
             state = play(session,state,extra=((.05,61),))
@@ -77,21 +77,21 @@ def floor_return(session):
 def test_second_floor_return_survives_reopen_and_announces_a_real_aid(practice_session):
     session = practice_session(bars=1, chords=True)
     session.finish_listen()
-    original = session.ask("score.semantic")
+    original = session.ask("score.bundle")["model"]
     first_return = floor_return(session)
     assert first_return["lesson_level"] == "original"
     assert not first_return["guided_recovery"]
     session.open()
     second_return = floor_return(session)
     assert "Simplified:" in second_return["flow"]["message"]
-    aid = session.ask("score.semantic")
+    aid = session.ask("score.bundle")["model"]
     assert len(aid["notes"]) < len(original["notes"])
     assert second_return["mastered"] == 0
     session.finish_free()
     returned = session.ready_score()
     assert returned["mode"] == "learn"
     assert returned["flow"]["step"] == "free"
-    assert {note["id"] for note in session.ask("score.semantic")["notes"]} == {
+    assert {note["id"] for note in session.ask("score.bundle")["model"]["notes"]} == {
         note["id"] for note in original["notes"]}
     assert returned["mastered"] == 0
     session.finish_free()

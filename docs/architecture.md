@@ -83,8 +83,7 @@ Every state change enters `PracticeSession.apply` as one typed event:
 Read requests include
 `state.snapshot`, `lesson.overview`, `library.catalog`,
 `library.health_status`, `settings.snapshot`, `learning.status`,
-`learning.statistics`, `score.bundle`, `score.semantic`,
-`score.native_layout`, `playback.status`,
+`learning.statistics`, `score.bundle`, `playback.status`,
 `feedback.events`, `listen.audio`, `performance.diagnostics`.
 Only the capture and publication of the selected score take the session lock.
 Score placements attached to polls or commands apply to the matching revision.

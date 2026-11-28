@@ -146,7 +146,7 @@ class ScoreProcess:
                 raise ValueError("Score source exceeds the worker request limit")
             checkpoint()
             status, body = self._exchange(expected, payload, checkpoint, validate_json)
-            if not status and operation == "score.bundle":
+            if not status:
                 self._reply_binding = (binding, generation)
             return status, body
         finally:

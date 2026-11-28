@@ -175,7 +175,6 @@ void PianoNative::initialize_python() {
 bool PianoNative::is_asset_operation(const std::string &operation) {
     // Score process IPC and independent history reads use the asset lane.
     return operation == "score.bundle" ||
-           operation == "score.native_layout" || operation == "score.semantic" ||
            operation == "learning.statistics";
 }
 

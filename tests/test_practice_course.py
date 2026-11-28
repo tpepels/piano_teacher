@@ -157,7 +157,7 @@ def test_failure_breaks_the_target_streak_before_the_hand_can_complete(practice_
 def test_whole_original_final_requires_two_clean_target_takes(practice_session):
     session = practice_session()
     session.select(hand="both", final=True)
-    source = session.ask("score.semantic")
+    source = session.ask("score.bundle")["model"]
     assert source["duration_beats"] == 20
     assert {note["hand"] for note in source["notes"]} == {"right","left"}
     session.open()
@@ -203,7 +203,7 @@ def test_midi_section_choice_repeats_at_target_or_enters_the_final_at_half_speed
 def test_dim_neighbours_and_other_hand_are_not_active_performance_notes(practice_session):
     session = practice_session(bars=3)
     session.select(2,2)
-    model = session.ask("score.semantic")
+    model = session.ask("score.bundle")["model"]
     active = {note["id"] for note in model["notes"]}
     assert active == set(model["active_note_ids"])
     assert all(note["hand"] == "right" and 0 <= note["onset_beats"] < 4

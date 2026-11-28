@@ -61,13 +61,6 @@ class ScoreArtifacts:
             raise ValueError("Notation differs from its authoritative source timing")
         return project_model(model, selected.piece.fingering_plan)
 
-    def prepare(self, operation: str) -> dict:
-        if operation == "score.semantic":
-            return self.semantic
-        if operation == "score.native_layout":
-            return self.layout
-        return self.bundle()
-
     def bundle(self) -> dict:
         selected = self.selected
         model = self.semantic
