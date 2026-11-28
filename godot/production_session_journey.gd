@@ -1,5 +1,5 @@
 extends SceneTree
-const VisualCapture := preload("res://tests/visual_capture.gd")
+const VISUAL_CAPTURE := preload("res://tests/visual_capture.gd")
 ## Phase 6: actual Godot scene, embedded Python, and an authored real score.
 ## Exercise the player-visible journey with controls, not EngineCommands fakes.
 ## Runs against a saved copy of midi/Moonlight_Sonata_I.midi in an isolated home.
@@ -30,7 +30,7 @@ var selected_bpm := 0.0
 var selected_revision := -1
 
 var _finishing := false
-var _visual_capture = VisualCapture.new()
+var _visual_capture = VISUAL_CAPTURE.new()
 
 func _initialize() -> void:
     call_deferred("_boot")

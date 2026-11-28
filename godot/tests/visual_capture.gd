@@ -1,6 +1,7 @@
 extends RefCounted
 ## Test-only observer of the real Window texture after every completed draw.
 ## No runtime caller; no synthetic paint or clock. Analysis runs after exit.
+const PLAYHEAD_FRACTION := preload("res://notation/shared/spacing_policy.gd").PLAYHEAD_FRACTION
 const WIDTH := 640
 const HEIGHT := 400
 const MAX_FRAMES := 14000
@@ -14,12 +15,14 @@ var _count := 0
 var _failed := false
 var _enabled := false
 var _max_capture_ms := 0.0
+var _directory := ""
 
 func start(app: Node, window: Window) -> void:
     var directory: String = OS.get_environment("PIANO_VISUAL_CAPTURE_DIR")
     if directory.is_empty():
         return
     _enabled = true
+    _directory = directory
     _app = app
     _window = window
     if DisplayServer.get_name() == "headless":
@@ -62,7 +65,7 @@ func _sample() -> Dictionary:
     if not is_instance_valid(staff):
         staff = stage.renderer
     var cursor: float = (staff.get_global_rect().position.x+\
-        staff.playhead_region().position.x)/size.x
+        staff.size.x*PLAYHEAD_FRACTION)/size.x
     var flow = _app.score_flow
     var world: float = float(flow.beat)
     if not is_finite(world):
@@ -123,5 +126,12 @@ func finish() -> bool:
     _metadata = null
     _app = null
     _window = null
+    var success: bool = not _failed and _count > 0
+    var manifest := FileAccess.open(_directory.path_join("complete.json"),FileAccess.WRITE)
+    if manifest == null:
+        return false
+    manifest.store_string(JSON.stringify({"frames":_count,"success":success,
+        "max_capture_ms":_max_capture_ms}))
+    manifest.close()
     print("VISUAL_CAPTURE_COMPLETE frames=",_count," max_capture_ms=",_max_capture_ms)
-    return not _failed and _count > 0
+    return success

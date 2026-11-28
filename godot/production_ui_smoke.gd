@@ -1,5 +1,5 @@
 extends SceneTree
-const VisualCapture := preload("res://tests/visual_capture.gd")
+const VISUAL_CAPTURE := preload("res://tests/visual_capture.gd")
 const ScoreView := preload("res://notation/shared/view_base.gd")
 const Admission := preload("res://score_stream_admission.gd")
 ## Actual production scene -> embedded Python -> MIDI -> Verovio -> retained
@@ -35,7 +35,7 @@ var resumed_world_beat := NAN
 var resumed_pass_serial := -1
 
 var _finishing := false
-var _visual_capture = VisualCapture.new()
+var _visual_capture = VISUAL_CAPTURE.new()
 
 func _initialize() -> void:
     call_deferred("_boot")

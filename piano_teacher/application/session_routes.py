@@ -54,6 +54,29 @@ def command_routes(*, device_workflows, settings_workflows, midi_input,
     }
 
 
+def _physical_midi(event, *, epoch, midi_input, midi_delivery):
+    # Hardware state is independent of take admission, shortcuts and
+    # deferred grading. Replaying a note must not replay a physical key.
+    if not event.deferred and (event.arrival is None or
+            epoch.same_device(event.arrival)):
+        midi_input.observe_physical_keys(event.message,
+            received_at=event.received_at)
+    if (event.arrival is not None and not epoch.admits(
+            event.arrival, event.received_at, event.corrected_at)):
+        # Stale keys may update hardware observation/release hygiene,
+        # but never current-take grading, calibration or shortcuts.
+        # A late release must not leave a shortcut permanently
+        # suppressed after Stop/source replacement.
+        if epoch.same_device(event.arrival):
+            midi_input.discard_stale_release(event.message)
+            midi_input.observe_midi(event.message, now=event.received_at)
+        return None
+    return midi_delivery.deliver(
+        event.message, received_at=event.received_at,
+        corrected_at=event.corrected_at, deferred=event.deferred)
+
+
+
 def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
                    midi_device, midi_callback,
                    settings_workflows, pause_resume, playback_authorization,
@@ -61,27 +84,6 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
                    device_workflows, history_management, history_reads,
                    lifecycle):
     """Event type -> handler(event)."""
-    def physical(event):
-        # Hardware state is independent of take admission, shortcuts and
-        # deferred grading. Replaying a note must not replay a physical key.
-        if not event.deferred and (event.arrival is None or
-                epoch.same_device(event.arrival)):
-            midi_input.observe_physical_keys(event.message,
-                received_at=event.received_at)
-        if (event.arrival is not None and not epoch.admits(
-                event.arrival, event.received_at, event.corrected_at)):
-            # Stale keys may update hardware observation/release hygiene,
-            # but never current-take grading, calibration or shortcuts.
-            # A late release must not leave a shortcut permanently
-            # suppressed after Stop/source replacement.
-            if epoch.same_device(event.arrival):
-                midi_input.discard_stale_release(event.message)
-                midi_input.observe_midi(event.message, now=event.received_at)
-            return None
-        return midi_delivery.deliver(
-            event.message, received_at=event.received_at,
-            corrected_at=event.corrected_at, deferred=event.deferred)
-
     def shortcut(event):
         effect = event.effect
         if effect.completed_range is not None:
@@ -120,7 +122,8 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
 
     handlers = {
         UserCommand: lambda e: commands.apply(e.action, **e.parameters),
-        PhysicalMidi: physical,
+        PhysicalMidi: lambda e: _physical_midi(
+            e, epoch=epoch, midi_input=midi_input, midi_delivery=midi_delivery),
         ClockAdvanced: advance_clock,
         MidiShortcut: shortcut,
         PlaybackFailed: lambda e: playback_authorization.fail_physical(**e.failure),

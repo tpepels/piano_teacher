@@ -71,6 +71,9 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
         # Repeat an acknowledgement if another control request was in flight.
         prepared.emit(token, revision)
         return
+    _sync_playback(state,visual_beat)
+
+func _sync_playback(state: Dictionary, visual_beat: float) -> void:
     if bool(state.get("running", false)):
         var timeline: Variant = state.get("playback_timeline")
         if timeline is Dictionary and not bool(timeline.get("presentation_confirmed",true)):

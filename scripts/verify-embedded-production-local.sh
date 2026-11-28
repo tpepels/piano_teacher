@@ -161,7 +161,10 @@ run_player() {
   timeout "$budget" env PIANO_VISUAL_CAPTURE_DIR="$capture" LIBGL_ALWAYS_SOFTWARE=1 \
     xvfb-run -a -s '-screen 0 1600x1000x24' "$GODOT_BIN" \
     --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy \
-    --path godot "$@" || status=$?
+    --path godot "$@" 2>&1 | tee "$output/journey.log" || status=$?
+  if [[ -f "$capture/complete.json" ]]; then
+    cp "$capture/complete.json" "$output/capture.json"
+  fi
   "$PYTHON" "$ROOT/tests/visual_continuity.py" "$capture" "$output" \
     "${required[@]}" || status=1
   if ((status == 0)); then
@@ -172,6 +175,8 @@ run_player() {
     # images are already outside the disposable test HOME.
     if [[ "${PIANO_KEEP_VISUAL_CAPTURE:-0}" == 1 ]]; then
       mv "$capture" "$output/raw-capture"
+    else
+      rm -rf "$capture"
     fi
   fi
   return "$status"

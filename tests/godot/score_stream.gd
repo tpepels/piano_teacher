@@ -177,7 +177,8 @@ func run() -> void:
             target,6.7,0.4,"free:%s" % str(with_take),false,0.0,false,true)
         check(placed and absf(free_controller.scheduled_plan_opening(
             "free:%s" % str(with_take))-target) < .0001,
-            "A Free target is drawn exactly where Python holds the staff (after a take: %s)" % str(with_take))
+            "A Free target is drawn exactly where Python holds the staff (after a take: %s)" % \
+                str(with_take))
         free_canvas.free()
     var flow := Flow.new()
     flow.backend_clock = func(): return float(Time.get_ticks_msec())

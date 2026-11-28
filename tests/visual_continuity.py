@@ -142,26 +142,31 @@ def compare(before, after, previous, current):
     rect0 = rectangle(previous,"score",(h,w))
     rect1 = rectangle(current,"score",(h,w))
     if rect0 != rect1:
-        if max(abs(a-b) for a,b in zip(rect0,rect1)) > 2:
+        if max(abs(a-b) for a,b in zip(rect0,rect1,strict=True)) > 2:
             reasons.append("score_viewport_moved_or_resized")
         return reasons, metrics, None
+    score_change = np.abs(background(before.crop(rect0))-background(after.crop(rect1))).max(axis=2)
+    metrics["score_background_changed_fraction"] = float(np.mean(score_change > 27))
+    if metrics["score_background_changed_fraction"] > .45:
+        reasons.append("large_score_flash")
     a,va,ra = score_features(before, previous)
     b,vb,rb = score_features(after, current)
+    metrics["staff_present"] = bool(ra.sum() >= 3 and rb.sum() >= 3)
     shifts = motion_shifts(previous,current,w)
     metrics["expected_scroll_pixels"] = shifts
     # Explicit hand focus can reposition the staff. Do not suppress
     # background comparisons or ordinary same-hand lesson changes.
-    if previous["staff_hand"] == current["staff_hand"]:
-        if staff_change(ra,rb,metrics):
-            reasons.append("staff_disappeared_or_shifted")
-    else:
+    if previous["staff_hand"] != current["staff_hand"]:
         metrics["hand_focus_changed"] = True
+    elif staff_change(ra,rb,metrics):
+        reasons.append("staff_disappeared_or_shifted")
     more, residual = ink_change(a,va,b,vb,shifts,metrics)
     return reasons+more, metrics, residual
 
 
 def records(folder):
     """Read bounded length-prefixed PNGs paired with one metadata line each."""
+    count = 0
     with (folder/"frames.bin").open("rb") as frames, (folder/"frames.jsonl").open() as metadata:
         for index,line in enumerate(metadata):
             length = frames.read(4)
@@ -176,10 +181,14 @@ def records(folder):
             meta = json.loads(line)
             if meta["frame"] != index:
                 raise ValueError("Missing or duplicate rendered frame")
+            count += 1
             with Image.open(io.BytesIO(data)) as img:
                 yield meta,img.convert("RGB")
         if frames.read(1):
             raise ValueError("Unmatched rendered frames")
+    complete = json.loads((folder/"complete.json").read_text())
+    if count != complete["frames"] or not complete["success"]:
+        raise ValueError("Capture was incomplete")
 
 
 def save_frame(folder, meta, image):
@@ -205,7 +214,8 @@ class Review:
         self.witnesses = []
         self.failures = []
         self.coverage = {"frames":0,"score_pairs":0,"motion_pairs":0,"no_overlap_pairs":0,
-                         "navigation_pairs":0,"phases":{},"steps":{},"max_frame_gap_ms":0.0}
+                         "navigation_pairs":0,"staff_pairs":0,"ink_pairs":0,
+                         "phases":{},"steps":{},"max_frame_gap_ms":0.0}
         self.armed = False
 
     def consume(self, meta, image):
@@ -243,6 +253,8 @@ class Review:
             self.coverage["no_overlap_pairs"] += 1
         elif any(metrics.get("expected_scroll_pixels",[])):
             self.coverage["motion_pairs"] += 1
+        self.coverage["staff_pairs"] += int(metrics.get("staff_present",False))
+        self.coverage["ink_pairs"] += int(min(metrics.get("old_ink",0),metrics.get("new_ink",0)) >= 45)
         if reasons:
             event = {"frame":meta["frame"],"previous":prior["frame"],"dt_ms":dt,
                      "reasons":reasons,"metrics":metrics,"phase":key}
@@ -253,7 +265,8 @@ class Review:
                 self.witnesses.append((dest,meta["frame"]+3))
 
     def finish(self, required_steps):
-        if self.coverage["score_pairs"] < 60 or self.coverage["motion_pairs"] < 20:
+        if (self.coverage["score_pairs"] < 60 or self.coverage["motion_pairs"] < 20
+                or self.coverage["staff_pairs"] < 20 or self.coverage["ink_pairs"] < 20):
             self.failures.append({"reasons":["insufficient_rendered_motion_coverage"]})
         missing = sorted(set(required_steps)-self.coverage["steps"].keys())
         if missing:
@@ -269,8 +282,11 @@ class Review:
 def analyze(folder, output, required_steps=()):
     output.mkdir(parents=True, exist_ok=True)
     review = Review(output)
-    for meta,image in records(folder):
-        review.consume(meta,image)
+    try:
+        for meta,image in records(folder):
+            review.consume(meta,image)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        review.failures.append({"reasons":["invalid_capture"],"detail":str(exc)})
     return review.finish(required_steps)
 
 

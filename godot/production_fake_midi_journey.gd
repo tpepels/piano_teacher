@@ -1,5 +1,5 @@
 extends SceneTree
-const VisualCapture := preload("res://tests/visual_capture.gd")
+const VISUAL_CAPTURE := preload("res://tests/visual_capture.gd")
 ## Real production main.tscn + embedded Python + actual native notation,
 ## with a TEST-ONLY mido input port at the hardware boundary. No fake
 ## state machine, renderer, assessment, shortcut, or transport owner.
@@ -39,7 +39,7 @@ var continuity_violation := ""
 var ink_shown_since := -1
 
 var _finishing := false
-var _visual_capture = VisualCapture.new()
+var _visual_capture = VISUAL_CAPTURE.new()
 
 func _initialize() -> void:
     call_deferred("_boot")

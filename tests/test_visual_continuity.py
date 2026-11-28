@@ -68,3 +68,12 @@ def test_long_hitch_keeps_staff_and_background_checks():
     assert metrics["overlap_unavailable"]
     assert "large_background_or_screen_flash" in compare(
         frame(),Image.new("RGB",(640,400),"white"),old,new)[0]
+
+
+def test_score_only_flash_is_detected():
+    old,new = metadata()
+    old["score"] = new["score"] = [0,.25,1,.5]
+    before = frame()
+    after = before.copy()
+    ImageDraw.Draw(after).rectangle((0,100,639,299),fill=(220,220,220))
+    assert "large_score_flash" in compare(before,after,old,new)[0]
