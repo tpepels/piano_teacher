@@ -22,7 +22,8 @@ STAGE="$PWD/dist/piano-teacher-linux-x86_64"
 rm -rf "$STAGE"
 mkdir -p "$STAGE/bin" "$STAGE/licenses"
 PYTHONDONTWRITEBYTECODE=1 "$PY" scripts/release/stage.py "$STAGE"
-install -m 644 scripts/release/Verovio-fonts.txt scripts/release/godot-cpp-LICENSE.md "$STAGE/licenses/"
+bash scripts/build-release-fluidsynth.sh "$STAGE"
+install -m 644 scripts/release/Library-sources.txt scripts/release/FlatBuffers-LICENSE.txt scripts/release/Verovio-fonts.txt scripts/release/godot-cpp-LICENSE.md "$STAGE/licenses/"
 cp "$PIANO_GODOT_BINARY" "$STAGE/bin/godot"
 cat > "$STAGE/PianoTeacher" <<'LAUNCH'
 #!/usr/bin/env bash
@@ -90,6 +91,7 @@ if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then
   echo "Assembled standalone runtime import/assets audit passed"
   exit 0
 fi
+bash scripts/release/library-sources.sh "$STAGE" dist/piano-teacher-library-sources.tar
 tar -C dist -czf dist/piano-teacher-linux-x86_64.tar.gz piano-teacher-linux-x86_64
 "$PY" scripts/release/inventory.py "$STAGE" dist/piano-teacher-linux-x86_64.tar.gz > dist/runtime-inventory.json
 du -sb "$STAGE" dist/piano-teacher-linux-x86_64.tar.gz

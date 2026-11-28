@@ -53,7 +53,7 @@ def inventory(root):
             if source.read(4) == b"\x7fELF":
                 libraries[name], versions = inspect_elf(path)
                 required_versions.update(versions)
-        if "/verovio/data/" in name or path.suffix == ".onnx":
+        if "/verovio/data/" in name or path.suffix in {".onnx", ".sf2"}:
             assets[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     supplied = {Path(name).name for name in libraries}
     needed = {lib for libs in libraries.values() for lib in libs}
@@ -67,8 +67,7 @@ def inventory(root):
             "required_symbol_versions": sorted(required_versions),
             "bytes_by_path": sizes, "elf_needed": libraries, "asset_sha256": assets,
             "external_elf_sonames": sorted(needed - supplied), "resolved_host_sonames": sorted(host),
-            "dynamic_host_libraries": {"libcairo.so.2": "CairoSVG engraving rasterization",
-                                       "libfluidsynth": "Sampled Listen with optional SF2 bank"},
+            "dynamic_host_libraries": {"libcairo.so.2": "CairoSVG engraving rasterization"},
             "device_requirements": "Host MIDI sequencer, display and audio drivers"}
 
 

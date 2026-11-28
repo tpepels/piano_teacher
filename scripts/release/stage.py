@@ -26,6 +26,7 @@ ENGINE_ROOTS = (
     "piano_teacher/fingering/worker.py", "piano_teacher/__init__.py",
 )
 WHEEL_OWNERS = {
+    "numpy": "Fingering tensors and sampled piano PCM",
     "mido": "MIDI file import and device messages",
     "python-rtmidi": "MIDI driver discovery and input",
     "music21": "MusicXML import",
@@ -35,6 +36,7 @@ WHEEL_OWNERS = {
     "pillow": "Score ink and atlas images",
 }
 ENGINE_ASSETS = (
+    "piano_teacher/soundfonts/UprightPianoKW-small.sf2", "piano_teacher/soundfonts/NOTICE.txt",
     "piano_teacher/lesson_settings.json", "piano_teacher/fingering/THIRD_PARTY_NOTICES.md",
     *(f"piano_teacher/fingering/models/fingering_transformer_{hand}.onnx" for hand in ("left", "right")),
 )
@@ -109,11 +111,15 @@ def wheel_runtime(path):
         return False
     if path.suffix in {".pyc", ".a", ".h", ".hpp", ".c", ".cpp", ".pyx", ".pxd"}:
         return False
-    if parts[0] == "music21" and path.suffix.lower() in {
-            ".wav", ".mxl", ".midi", ".mid", ".xml", ".musicxml", ".krn", ".abc"}:
+    if parts == ("verovio", "data", "Liberation.css"):
+        # fontTextLiberation defaults to false throughout our engraving pipeline.
         return False
-    if parts[:2] == ("music21", "corpus") and len(parts) > 3:
-        return False
+    if parts[0] == "music21":
+        # Importer code and its schema. Upstream's optional corpus, Scala scales
+        # and format samples carry independent rights and have no app consumer.
+        return (path.suffix == ".py"
+                or path.name.lower() in {"license", "license.txt"}
+                or parts == ("music21", "musicxml", "musicxml.xsd"))
     if parts[0] == "onnxruntime" and len(parts) > 2 and parts[1] != "capi":
         return False
     return not {"tests", "benchmarks", "sample_data"} & set(parts)
@@ -138,6 +144,7 @@ def stage_python(stage):
     resolved = requirements()
     for name, dist in sorted(resolved.items()):
         size = 0
+        notices = []
         for path in dist.files or ():
             if wheel_runtime(path):
                 source = Path(dist.locate_file(path))
@@ -147,12 +154,16 @@ def stage_python(stage):
                         raise ValueError(f"Verovio wheel resource differs from its RECORD: {path}")
                 copy(source, target / "site-packages" / path)
                 size += source.stat().st_size
+                if ("licenses" in path.parts or path.name.lower().startswith(
+                        ("license", "copying", "notice", "thirdpartynotice", "copyright"))):
+                    notices.append(str(path))
         if not size:
             raise ValueError(f"Missing installed wheel records for {name}")
         requirements_used = [Requirement(spec) for spec in dist.requires or ()]
         dependencies = sorted({canonicalize_name(req.name) for req in requirements_used
                                if not req.marker or req.marker.evaluate()})
         report[name] = {"version": dist.version, "bytes": size, "requires": dependencies,
+                        "notice_paths_in_site_packages": sorted(notices),
                         "role": WHEEL_OWNERS.get(name, "Transitive wheel dependency")}
 
     (stage / "wheel-inventory.json").write_text(json.dumps(report, indent=2) + "\n")

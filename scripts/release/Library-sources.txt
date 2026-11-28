@@ -1,0 +1,25 @@
+Piano Teacher uses Verovio (LGPLv3), CairoSVG (LGPLv3 or later) and FluidSynth
+(LGPLv2.1 or later). Their respective notices and licenses accompany the
+installed Python packages and licenses/FluidSynth. Compatible replacement
+libraries can be installed in the extracted application directory. The SoundFont
+credits and CC0 dedication are in piano_teacher/soundfonts/NOTICE.txt.
+
+The companion download piano-teacher-library-sources.tar contains the following
+sources for this Linux build. Distribute it alongside the application archive.
+
+* Verovio 5.7.0 Python source distribution, with the unused Liberation.css
+  resource omitted from both the runtime and source download. Its setup.py
+  and bindings/python files build the native Python extension.
+  https://pypi.org/project/verovio/5.7.0/#files
+* AlmaLinux gcc-8.5.0-28.el8_10.alma.1.src.rpm, including the patches and
+  spec for the libquadmath and libgfortran binaries in the NumPy wheel.
+  These files have the build IDs of the corresponding x86_64 AlmaLinux RPMs.
+  NumPy distributes them with private SONAMEs and loader search paths.
+  Its dist-info license contains their licenses and the GCC runtime exception.
+  https://vault.almalinux.org/8/BaseOS/Source/Packages/
+
+FluidSynth source and the build script are included in licenses/FluidSynth.
+CairoSVG Python source and metadata are in runtime/python/lib/python*/site-packages.
+wheel-inventory.json indexes the installed wheel notices. For FlatBuffers
+25.12.19, whose wheel has no license file, licenses/FlatBuffers-LICENSE.txt
+reproduces https://github.com/google/flatbuffers/blob/v25.12.19/LICENSE.

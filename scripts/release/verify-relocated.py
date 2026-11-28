@@ -40,12 +40,14 @@ def verify(work):
     plan = LearningPlan(import_piece(source))
     assert [n.pitch for n in plan.piece.notes] == [72]
     audio = DemoAudioCache(work / "audio", sample_rate=16000).render(plan.active_variant, 120)
-    sampled = bool(os.environ.get("PIANO_TEACHER_SOUNDFONT"))
+
     with wave.open(str(audio.path)) as wav:
-        assert wav.getnchannels() == (2 if sampled else 1)
+        assert wav.getnchannels() == 2
         assert wav.getnframes() == audio.frame_count
         assert any(wav.readframes(wav.getnframes()))
-    assert audio.instrument.endswith("(sampled)") == sampled
+    assert audio.instrument.endswith("(sampled)")
+    if not os.environ.get("PIANO_TEACHER_SOUNDFONT"):
+        assert audio.instrument == "FreePats Upright Piano KW (sampled)"
     key = hashlib.sha256(SCORE).hexdigest()
     db = work / "progress.db"
     repository = ProgressRepository(db)

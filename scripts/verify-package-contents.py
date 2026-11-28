@@ -67,7 +67,7 @@ def audit_dependencies(root: Path) -> list[str]:
         errors.append(f"Development wheels installed: {sorted(unexpected)}")
     if next(root.rglob("__pycache__"), None) or next(root.rglob("*.pyc"), None):
         errors.append("Package includes compiled Python caches")
-    for notice in ("Godot.txt", "Verovio-fonts.txt", "godot-cpp-LICENSE.md"):
+    for notice in ("Library-sources.txt", "FlatBuffers-LICENSE.txt", "Godot.txt", "Verovio-fonts.txt", "godot-cpp-LICENSE.md"):
         if not (root / "licenses" / notice).is_file() or not (root / "licenses" / notice).stat().st_size:
             errors.append(f"Empty release license: {notice}")
     return errors
@@ -138,7 +138,8 @@ def audit_godot_imports(root):
 def audit_runtime_files(root):
     result = audit_godot_imports(root)
     for path in (
-        "PianoTeacher", "bin/godot",
+        "PianoTeacher", "bin/godot", "runtime/lib/libfluidsynth.so.3",
+        "piano_teacher/soundfonts/NOTICE.txt", "piano_teacher/soundfonts/UprightPianoKW-small.sf2",
         "godot/project.godot", "godot/native/piano_bridge.gdextension",
         "godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so",
         "runtime/python/bin/python3",
