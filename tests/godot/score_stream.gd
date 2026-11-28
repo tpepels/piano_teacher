@@ -101,6 +101,9 @@ func run() -> void:
     acknowledge(controller,6.0,"piece|7|11|practice","recovery")
     check(controller.bound_segment() == "recovery",
         "A new acknowledged segment binds even when transport identity is unchanged")
+    controller.observe_transport(geometry(6.0),6.0,0.0,0.0,"piece|7|11|practice","count_in",false,true,true,"unreceived",true)
+    check(controller.bound_segment().is_empty(),
+        "An old same-transport owner cannot attest a different segment")
     # A real one-bar printed rest must reserve the following native header
     # *inside* that bar's musical silence, otherwise a fixed four-beat repeat
     # becomes impossible even when no source notes overlap. Use this same

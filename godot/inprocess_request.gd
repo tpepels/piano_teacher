@@ -59,7 +59,7 @@ func cancel_request() -> void:
     _pending_id = -1
     _operation = ""
     set_process(false)
-    if canceled_id >= 0 and _bus != null:
+    if canceled_id >= 0 and is_instance_valid(_bus):
         _bus.forget(canceled_id, self)
 
 func complete(identifier: int, status: int, body: PackedByteArray) -> void:
