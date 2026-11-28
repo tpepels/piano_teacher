@@ -18,7 +18,7 @@ from dataclasses import dataclass, replace
 
 from .exercise_generator import generate_variants
 from .exercise_pipeline import ExerciseStage
-from .lesson_settings import course_rules
+from .lesson_settings import SETTINGS, course_rules
 from .lesson_contracts import Exercise, LessonPlanDefinition
 from .music import Phrase, Piece
 from .practice_windows import moving_windows, MAX_PRACTICE_BARS
@@ -112,9 +112,6 @@ def _entry_tempo(event, state, decision):
 
 # --- Decisions ---------------------------------------------------------
 
-BOTH_HAND_FAILURE_LIMIT = 4
-
-
 def _hand_review_result(course, accepted):
     """Rehearse each hand twice at the recovery BPM without awarding mastery."""
     p = course.progress
@@ -175,12 +172,13 @@ def graded_progress(course, *, accepted, quality=0.0, attacks=8,
                                     streak=t.state.clean_at_target,
                                     free_returns=tuple(sorted(returns.items())),
                                     both_failures=both_failures)
-        if (offer_section_choice and both_failures >= BOTH_HAND_FAILURE_LIMIT
+        if (offer_section_choice and both_failures >= SETTINGS.both_hand_review_after_failures
                 and not accepted and course.hand == "both" and course.exercise.kind != "perform"
                 and "right" in course.hands and "left" in course.hands):
             review_bpm = bpm if t.outcome is not Outcome.BACK_TO_FREE else floor_bpm(int(p.target_bpm))
             right = position_of(course, course.step.exercise_index, "right")
-            updated = updated.with_progress(free_returns=p.free_returns)
+            if t.outcome is Outcome.BACK_TO_FREE:
+                updated = updated.with_progress(free_returns=p.free_returns)
             review = at_position(updated, right).with_progress(bpm=review_bpm,
                 hand_review=(course.key, review_bpm, 0))
             return review, "Both hands need review · right hand", Outcome.HAND_REVIEW

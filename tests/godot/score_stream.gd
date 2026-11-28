@@ -170,9 +170,12 @@ func run() -> void:
             free_controller.place_timeline_take(geometry(0.0),0.0,4.0,6.7,0.4,4.0)
             acknowledge(free_controller,0.0,"piece|7|10|practice","take")
             world = 0.5   # its notes are still ahead on the staff
-        var travel: float = Admission.earliest_opening(free_controller.queue.online,
-            world,6.7,0.4,100.0,20.0,4.0)-world+.25
-        var target: float = world+travel
+        var travel: float = free_controller.free_opening(geometry(world),6.7,0.4)-world+.25
+        var target: float = world+maxf(4.0,travel)
+        if not with_take:
+            check(target-world == 4.0,"Empty Free strip uses one bar, not viewport width")
+        else:
+            check(target-world >= 4.0,"Free keeps clearance from prior retained ink")
         var placed: bool = free_controller.schedule_recovery(geometry(world),world,0.0,
             target,6.7,0.4,"free:%s" % str(with_take),false,0.0,false,true)
         check(placed and absf(free_controller.scheduled_plan_opening(

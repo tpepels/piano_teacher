@@ -46,6 +46,7 @@ class LessonSettings:
     recovery_accuracy_percent: float = 70.0
     ignored_accuracy_below_percent: float = 5.0
     grading_max_late_attack_seconds: float = 0.20
+    both_hand_review_after_failures: int = 4
 
 
 def load_lesson_settings(path: Path | None = None) -> LessonSettings:
@@ -60,6 +61,7 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
         raw.setdefault("grading_max_late_attack_seconds", 0.20)
         raw.setdefault("recovery_accuracy_percent", 70.0)
         raw.setdefault("ignored_accuracy_below_percent", 5.0)
+        raw.setdefault("both_hand_review_after_failures", 4)
     expected = set(LessonSettings.__dataclass_fields__)
     if not isinstance(raw, dict) or set(raw) != expected:
         raise ValueError(f"Lesson settings keys must match {sorted(expected)}")
@@ -92,6 +94,7 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
             or not 0 <= data.minimum_accuracy_percent <= 100
             or not 0 <= data.recovery_accuracy_percent <= 100
             or not 0 <= data.ignored_accuracy_below_percent <= 100
+            or data.both_hand_review_after_failures < 2
             or data.grading_max_late_attack_seconds <= 0
             or not 0 < data.recovery_tempo_multiplier < 1):
         raise ValueError("Invalid lesson target, BPM limit, or adaptive tempo multiplier")

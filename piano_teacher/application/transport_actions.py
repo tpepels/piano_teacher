@@ -107,8 +107,8 @@ class PlaybackAuthorization:
         bpm = float(lesson.plan.bpm)
         timeline = transport.musical_timeline
         if self._free is None or self._free[0] != key or not timeline.segments:
-            # The staff covers the travel distance by the arrival: faster
-            # than the tempo on a slow piece (at most a few seconds).
+            # The staff covers the measured physical travel distance
+            # by the source-bound arrival selected by the score publisher.
             travel = self.transport_timing.score.free_target_travel(lesson, transport)
             seconds = max(0.0, arrival-now)
             if travel is None or seconds <= 1e-6:
