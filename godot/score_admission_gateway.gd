@@ -78,6 +78,13 @@ func _report_authorized_failure(take_id: String, segment_id: String,
         return
     var payload := {"take_id":take_id,
         "segment_id":segment_id,"reason":reason}
+    # Replacement must measure the ink that is actually retained NOW,
+    # not reuse the command snapshot that failed. Python validates the
+    # failed take identity before accepting these revision-bound facts.
+    if score_session != null:
+        var placement: Dictionary = score_session.continuation_geometry()
+        if not placement.is_empty():
+            payload["placement"] = placement
     if failure_request.request("playback.failure",payload) == OK:
         reported_failure_segment = segment_id
         failure_report_in_flight = segment_id

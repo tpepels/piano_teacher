@@ -363,8 +363,23 @@ func place_timeline_take(facts: StreamGeometry, opening: float,
         start_world: float, right: float, header: float,
         count_in_beats: float) -> Dictionary:
     # The exposure rule applies to every take, including unplayed takes.
+    if not facts.ready or not is_finite(start_world) or start_world <= facts.world:
+        return {}
+    var windows: Array[Vector2] = _source_windows.call(maxf(0.0,opening))
+    if windows.is_empty():
+        return {}
     var plan: Dictionary = queue.preview_tail_withdrawal(facts.world,facts.density,
         facts.gap,facts.duration,facts.width,facts.playhead,-1,false,-1,null,true)
+    # Refuse an impossible published location before withdrawing anything.
+    # Use the exact opening window and same local/peer geometry as enqueue.
+    var first: Vector2 = windows[0]
+    var leading_spaces: float = facts.first_header_spaces if first.x <= .0001 else 1.6
+    var first_left: float = start_world-opening+first.x-leading_spaces*facts.gap/maxf(1.0,facts.density)
+    var occupied: float = queue.occupied_end(plan["remaining"],facts.density,facts.gap,facts.duration)
+    var inside: bool = facts.playhead+(first_left-facts.world)*facts.density <= facts.width
+    if first_left < occupied-.00001 or not queue.clears_prior_layers(
+            first_left,facts.density,facts.width,facts.playhead,inside):
+        return {}
     var result: Dictionary = queue.apply_withdrawal(canvas(),plan,"timeline_replaces_unseen")
     if not result["removed"].is_empty():
         _binding.reconcile()

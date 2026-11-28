@@ -22,3 +22,9 @@ Initial stalls have not been attributed to a specific operation by a new native 
 The previous asynchronous Listen PCM preparation remains isolated and removes genuine blocking work, but its contribution to startup hitches was not established. Public compatibility methods and unreferenced-looking helper scripts have not been deleted solely on the basis of unavailable repository-wide search.
 
 Run the complete regression, embedded production verification, full visual capture and lightweight 60 FPS capture before claiming the native acceptance gate has passed. Keep thresholds unchanged. Compare both capture types and use the phase breakdown to identify any remaining real stalls before making further changes.
+
+## Follow-up
+
+Composite source masks and their display-sized textures now use the detached CPU preparation and existing upload budget. A stale withdrawal plan is rejected before the first journal write, including when its clip has become exposed. A placement that already conflicts with retained source or peer ink is refused before any withdrawal. Automatic display recovery can receive a fresh revision-bound clearance after failed-take identity validation. This does not convert the asynchronous backend/render protocol into a cross-process transaction; safety still depends on live renderer revalidation and the existing authorized-failure boundary. Native verification and frame timing remain required.
+
+Local acceptance is now `bash scripts/verify.sh`; see [local-testing.md](local-testing.md).
