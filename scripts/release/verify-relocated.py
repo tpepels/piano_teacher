@@ -7,6 +7,8 @@ import tempfile
 import wave
 from pathlib import Path
 
+import rtmidi
+
 from piano_teacher.application.midi_connection import MidiConnection
 from piano_teacher.demo import DemoAudioCache
 from piano_teacher.importing.pieces import import_piece
@@ -60,8 +62,12 @@ def verify(work):
     repository.close()
     scan = MidiConnection().scan()
     # A headless Linux host may have no ALSA sequencer.
-    if scan.error and (not isinstance(scan.error, RuntimeError) or "ALSA" not in str(scan.error)):
-        raise scan.error
+    if scan.error:
+        missing_sequencer = (not Path("/dev/snd/seq").exists()
+                             and isinstance(scan.error, RuntimeError | rtmidi.SystemError)
+                             and "ALSA sequencer" in str(scan.error))
+        if not missing_sequencer:
+            raise scan.error
     print("RELOCATED_XML_AUDIO_PROGRESS_MIDI", audio.instrument, audio.frame_count,
           scan.feedback if scan.error else scan.names)
 

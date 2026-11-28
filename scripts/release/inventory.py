@@ -75,7 +75,7 @@ def inventory(root):
 if __name__ == "__main__":
     release = Path(sys.argv[1]).resolve()
     report = inventory(release)
-    for field, filename in zip(("archive", "library_sources"), sys.argv[2:]):
+    for field, filename in zip(("archive", "library_sources"), sys.argv[2:], strict=False):
         archive = Path(filename)
         with archive.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
