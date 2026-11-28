@@ -38,6 +38,11 @@ class Note:
                 "source_id": self.source_id, "voice": self.voice,
                 "spelling": self.spelling, "velocity": self.velocity}
 
+    def score_document(self) -> dict:
+        if self.written_id or self.written_note or self.grace_before:
+            return vars(self)
+        return self.performance_document()
+
 
 def source_note_id(note: Note, index: int) -> str:
     """Canonical imported attack identity; explicit local legacy fallback."""

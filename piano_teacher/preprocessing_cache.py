@@ -5,7 +5,7 @@ The original MIDI is authoritative; old or corrupt entries are cache misses.
 """
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import gzip
 import hashlib
 import json
@@ -29,15 +29,27 @@ def _note(data: dict) -> Note:
     return Note(**values)
 
 
+def _import_document(piece: Piece) -> dict:
+    # Phrase membership refers to the original attacks. Duplicating their
+    # complete written notes here made cold import and warm restore expensive.
+    result = asdict(replace(piece, notes=(), phrases=()))
+    result["notes"] = [note.score_document() for note in piece.notes]
+    result["phrases"] = [{**vars(phrase), "notes": [n.source_id for n in phrase.notes]}
+                         for phrase in piece.phrases]
+    return result
+
+
 def _piece_from_json(data: dict) -> Piece:
+    notes = tuple(_note(n) for n in data["notes"])
+    by_id = {note.source_id: note for note in notes}
     return Piece(
         title=str(data["title"]),
         bpm=int(data["bpm"]),
-        notes=tuple(_note(n) for n in data["notes"]),
+        notes=notes,
         phrases=tuple(Phrase(
             number=int(p["number"]), first_bar=int(p["first_bar"]),
             last_bar=int(p["last_bar"]), start=float(p["start"]),
-            end=float(p["end"]), notes=tuple(_note(n) for n in p["notes"]))
+            end=float(p["end"]), notes=tuple(by_id[sid] for sid in p["notes"]))
             for p in data["phrases"]),
         split_pitch=int(data["split_pitch"]),
         bar_boundaries=tuple(data["bar_boundaries"]),
@@ -141,7 +153,7 @@ class PreprocessingCache:
 
         fingerprint = hashlib.sha256(data).hexdigest()
         # Discard the old import keys, whose path was reopened after hashing.
-        key = self.key("source", "snapshot-v1", fingerprint, source.name)
+        key = self.key("source", "snapshot-v2", fingerprint, source.name)
         cached = self.read_json("source", key)
         if cached is not None:
             try:
@@ -151,7 +163,8 @@ class PreprocessingCache:
             except (TypeError, ValueError, KeyError, AttributeError):
                 pass
         piece = import_piece(source, data=data)
-        self.write_json("source", key, asdict(piece))
+        if self.enabled:
+            self.write_json("source", key, _import_document(piece))
         return fingerprint, piece
 
     def prune(self) -> None:
