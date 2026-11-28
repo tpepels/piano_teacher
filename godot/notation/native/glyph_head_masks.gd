@@ -92,38 +92,60 @@ func interior(head: String, glyph: Image) -> Texture2D:
     return _head_interiors[head]
 
 static func interior_image(glyph: Image) -> Image:
-    if glyph != null and not glyph.is_empty():
-        var image: Image = glyph.duplicate()
-        image.convert(Image.FORMAT_RGBA8)
-        var w: int = image.get_width()
-        var h: int = image.get_height()
-        var outside := PackedByteArray()
-        outside.resize(w*h)
-        var stack: Array[Vector2i] = []
-        for x in range(w):
-            stack.append(Vector2i(x,0))
-            stack.append(Vector2i(x,h-1))
-        for y in range(h):
-            stack.append(Vector2i(0,y))
-            stack.append(Vector2i(w-1,y))
-        while not stack.is_empty():
-            var at: Vector2i = stack.pop_back()
-            if at.x < 0 or at.y < 0 or at.x >= w or at.y >= h or \
-                    outside[at.y*w+at.x] != 0 or image.get_pixel(at.x,at.y).a >= .5:
+    if glyph == null or glyph.is_empty():
+        return null
+    var image: Image = glyph.duplicate()
+    image.convert(Image.FORMAT_RGBA8)
+    var width := image.get_width()
+    var height := image.get_height()
+    var rgba := image.get_data()
+    # Pad the mask with transparent pixels. One seed outside the glyph can
+    # now reach every transparent boundary pixel using four-way adjacency.
+    var stride := width + 2
+    var mask := PackedByteArray()
+    mask.resize(stride * (height + 2))
+    mask.fill(1)
+    for y in range(height):
+        var row := (y + 1) * stride + 1
+        var alpha := (y * width) * 4 + 3
+        for x in range(width):
+            mask[row + x] = int(rgba[alpha] < 128)
+            alpha += 4
+
+    # Visit each exterior scanline span once. A neighbour is queued only
+    # at the start of a connected run, avoiding four pushes per pixel.
+    var stack: Array[int] = [0]
+    while not stack.is_empty():
+        var seed: int = stack.pop_back()
+        if mask[seed] == 0:
+            continue
+        var start := seed
+        var row_start := seed - seed % stride
+        while start > row_start and mask[start - 1] != 0:
+            start -= 1
+        var end := start
+        var row_end := row_start + stride
+        while end < row_end and mask[end] != 0:
+            mask[end] = 0
+            end += 1
+        for offset: int in [-stride, stride]:
+            var adjacent := start + offset
+            if adjacent < 0 or adjacent >= mask.size():
                 continue
-            outside[at.y*w+at.x] = 1
-            stack.append(Vector2i(at.x+1,at.y))
-            stack.append(Vector2i(at.x-1,at.y))
-            stack.append(Vector2i(at.x,at.y+1))
-            stack.append(Vector2i(at.x,at.y-1))
-        var interior := Image.create_empty(w,h,false,Image.FORMAT_RGBA8)
-        var enclosed := 0
-        for y in range(h):
-            for x in range(w):
-                var a: float = image.get_pixel(x,y).a
-                if outside[y*w+x] == 0 and a < .5:
-                    interior.set_pixel(x,y,Color(1,1,1,1.0-a))
-                    enclosed += 1
-        if enclosed > 0:
-            return interior
-    return null
+            var in_span := false
+            for index in range(adjacent, end + offset):
+                var reachable := mask[index] != 0
+                if reachable and not in_span:
+                    stack.append(index)
+                in_span = reachable
+
+    if not mask.has(1):
+        return null
+    var interior := Image.create_empty(width,height,false,Image.FORMAT_RGBA8)
+    for y in range(height):
+        var row := (y + 1) * stride + 1
+        for x in range(width):
+            if mask[row + x] != 0:
+                var alpha := image.get_pixel(x,y).a
+                interior.set_pixel(x,y,Color(1,1,1,1.0-alpha))
+    return interior
