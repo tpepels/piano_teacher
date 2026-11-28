@@ -55,7 +55,8 @@ jobs:
 
   tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Player journeys request real model-and-layout bundles under coverage.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
