@@ -66,6 +66,19 @@ and makes audio teardown and lost confirmed score ink strict acceptance
 gates. See ROADMAP.md for the exact verification record. No new native,
 performance or physical acceptance is claimed yet.
 
+### Latest owner software verification
+
+On c4e3c62d the owner logs show 388 Python tests, all five Godot suites,
+both fake-MIDI journeys, all 17 repertoire journeys, the Debian archive
+build and relocated Arch execution passing. Neither the prior scrolling
+assertion, confirmed missing-score error nor ObjectDB leak recurred.
+Native worker recovery passed. The developer-host package audit was
+explicitly skipped in favor of the Debian-built archive. Physical and
+Pathétique II acceptance remain open. A test-only rendered visual
+continuity suite is added to exercise the actual framebuffer under Xvfb;
+its execution and threshold validation remain pending. This does not
+replace comparative performance measurements or establish sale readiness.
+
 ## 1. Purpose and constraints
 
 Identify external runtimes, redundant transformations, obsolete interfaces, unnecessary runtime assets and duplicated responsibilities. A dependency must have an explicit owner, a current product requirement and a demonstrated reason to remain. Do not remove a dependency just because another language/library could perform a similar task.

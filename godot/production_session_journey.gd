@@ -1,4 +1,5 @@
 extends SceneTree
+const VisualCapture := preload("res://tests/visual_capture.gd")
 ## Phase 6: actual Godot scene, embedded Python, and an authored real score.
 ## Exercise the player-visible journey with controls, not EngineCommands fakes.
 ## Runs against a saved copy of midi/Moonlight_Sonata_I.midi in an isolated home.
@@ -29,6 +30,7 @@ var selected_bpm := 0.0
 var selected_revision := -1
 
 var _finishing := false
+var _visual_capture = VisualCapture.new()
 
 func _initialize() -> void:
     call_deferred("_boot")
@@ -43,6 +45,7 @@ func _boot() -> void:
         return
     app = scene.instantiate()
     root.add_child(app)
+    _visual_capture.start(app,root)
     if app.score_session == null:
         _fail("Production main scene has no score session")
         return
@@ -50,6 +53,7 @@ func _boot() -> void:
 
 func _advance(next: String) -> void:
     phase = next
+    _visual_capture.step = next
     phase_ms = Time.get_ticks_msec()
     print("PHASE6_REAL_SCORE_STEP:",phase)
 
@@ -114,6 +118,8 @@ func _finish(code: int) -> void:
     if _finishing:
         return
     _finishing = true
+    if not _visual_capture.finish():
+        code = 1
     if is_instance_valid(app):
         app._shutdown_and_quit(code)
     else:

@@ -19,8 +19,8 @@ if [[ -n "${PIANO_PATHETIQUE_II_MIDI:-}" ]]; then
   export PIANO_PATHETIQUE_II_MIDI
 fi
 MODE="${1:-full}"
-if [[ "$MODE" != full && "$MODE" != --without-package && "$MODE" != --package-only ]]; then
-  echo "Usage: bash scripts/verify-embedded-production-local.sh [--without-package | --package-only]" >&2
+if [[ "$MODE" != full && "$MODE" != --without-package && "$MODE" != --package-only && "$MODE" != --visual-only ]]; then
+  echo "Usage: bash scripts/verify-embedded-production-local.sh [--without-package | --package-only | --visual-only]" >&2
   exit 2
 fi
 PYTHON="${PIANO_PYTHON:-$ROOT/.venv/bin/python}"
@@ -46,6 +46,16 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+if [[ "$MODE" == --visual-only ]]; then
+  if ! command -v xvfb-run >/dev/null || ! command -v Xvfb >/dev/null || ! command -v xauth >/dev/null; then
+    echo "Visual acceptance requires Xvfb, xvfb-run and xauth (plus Mesa OpenGL)." >&2
+    exit 2
+  fi
+  VISUAL_RESULTS="${PIANO_VISUAL_RESULTS:-$HOME/piano-teacher-results/visual-$(date +%Y%m%d-%H%M%S)}"
+  mkdir -p "$VISUAL_RESULTS"
+  VISUAL_RESULTS="$(realpath "$VISUAL_RESULTS")"
+  export VISUAL_RESULTS
+fi
 sample_bank="${PIANO_TEACHER_SOUNDFONT:-$HOME/.local/share/piano-teacher/soundfonts/salamander-grand-piano.sf2}"
 export sample_bank
 export HOME="$WORK/home"
@@ -129,11 +139,47 @@ verify_bridge() {
 make_fixture() {
   "$PYTHON" "$ROOT/scripts/release/make-fixtures.py"
 }
+run_player() {
+  local name="$1" budget="$2"
+  shift 2
+  if [[ "$MODE" != --visual-only ]]; then
+    timeout "$budget" "$GODOT_BIN" --headless --audio-driver Dummy --path godot "$@"
+    return
+  fi
+  local capture="$WORK/visual-$name" output="$VISUAL_RESULTS/$name"
+  local status=0
+  local required=()
+  case "$name" in
+    fake-midi-*) required=(--require-step wrong_free --require-step pause_free
+      --require-step resume_tempo --require-step second_failure --require-step free_again
+      --require-step clean_repeat --require-step hitch_recover --require-step stopped_stable) ;;
+    moonlight) required=(--require-step paused --require-step resumed --require-step retry_wait
+      --require-step listen_playback --require-step stage_change --require-step reopen) ;;
+    fixture) required=(--require-step fixture) ;;
+  esac
+  mkdir -p "$capture" "$output"
+  timeout "$budget" env PIANO_VISUAL_CAPTURE_DIR="$capture" LIBGL_ALWAYS_SOFTWARE=1 \
+    xvfb-run -a -s '-screen 0 1600x1000x24' "$GODOT_BIN" \
+    --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy \
+    --path godot "$@" || status=$?
+  "$PYTHON" "$ROOT/tests/visual_continuity.py" "$capture" "$output" \
+    "${required[@]}" || status=1
+  if ((status == 0)); then
+    rm -rf "$capture"
+  else
+    echo "Visual failure evidence: $output"
+    # Preserve raw capture only on explicit request; report and surrounding
+    # images are already outside the disposable test HOME.
+    if [[ "${PIANO_KEEP_VISUAL_CAPTURE:-0}" == 1 ]]; then
+      mv "$capture" "$output/raw-capture"
+    fi
+  fi
+  return "$status"
+}
 verify_fixture_ui() {
   set_case fixture
   seed phase6_native_fixture.mid
-  timeout 105s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
-    --script res://production_ui_smoke.gd
+  run_player fixture 105s --script res://production_ui_smoke.gd
 }
 verify_score_recovery() {
   set_case score-recovery
@@ -164,10 +210,9 @@ PY
   local scenario_log="$WORK/native-midi-$variant.log"
   # A fresh physical Resume includes an entire authored count-in bar.
   # Bound the longer real-time journey consistently with its Godot budget.
-  timeout 210s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
+  PIANO_TEST_FAKE_MIDI_PORT="$port" \
     PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
-    "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
-      --script res://production_fake_midi_journey.gd | tee "$scenario_log"
+    run_player "fake-midi-$variant" 210s --script res://production_fake_midi_journey.gd | tee "$scenario_log"
 }
 verify_moonlight() {
   set_case moonlight
@@ -181,10 +226,9 @@ ScoreLibrary().update(midi_device="CI Synthetic Keyboard")
 PY
   local port
   port="$("$PYTHON" -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')"
-  timeout 180s env PIANO_TEST_FAKE_MIDI_PORT="$port" \
+  PIANO_TEST_FAKE_MIDI_PORT="$port" \
     PYTHONPATH="$ROOT/tests/native_fake_midi:$PYTHONPATH" \
-    "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
-    --script res://production_session_journey.gd
+    run_player moonlight 180s --script res://production_session_journey.gd
 }
 verify_real_source() {
   local case_name="$1"
@@ -252,8 +296,8 @@ audit_package() {
 # Export only this runner's local case helpers. Each subprocess inherits
 # the isolated HOME and native ABI configuration; no case can leave the
 # following scenarios unrun after a nonfatal failure.
-export ROOT WORK PYTHON GODOT_BIN PY_SITE PY_LIB
-export -f set_case seed verify_bridge make_fixture verify_fixture_ui verify_score_recovery
+export ROOT WORK PYTHON GODOT_BIN PY_SITE PY_LIB MODE
+export -f set_case seed verify_bridge make_fixture verify_fixture_ui verify_score_recovery run_player
 export -f verify_fake_midi_ui verify_moonlight verify_real_source audit_package
 
 printf 'Revision: %s\n' "$(git rev-parse --short HEAD)"
@@ -272,11 +316,22 @@ if [[ "$MODE" == --package-only ]]; then
 fi
 check "Create isolated two-hand MIDI fixture" make_fixture || :
 check "Embedded Godot + Python registration and real score" verify_bridge || :
-check "Native score cancellation, backpressure, crash recovery and restart" verify_score_recovery || :
+if [[ "$MODE" != --visual-only ]]; then
+  check "Native score cancellation, backpressure, crash recovery and restart" verify_score_recovery || :
+fi
 check "Production UI / Play / Pause / Resume" verify_fixture_ui || :
 check "Real Godot practice transitions with synthetic physical MIDI" verify_fake_midi_ui normal || :
 check "Same journey in 2/4 (short bars, short rests)" verify_fake_midi_ui two-four || :
 check "Moonlight Sonata / retry / Listen / lesson navigation" verify_moonlight || :
+if [[ "$MODE" == --visual-only ]]; then
+  echo "Visual results: $VISUAL_RESULTS"
+  if (( ${#FAILED_CASES[@]} > 0 )); then
+    printf "FAIL  VISUAL CONTINUITY: %s\n" "${FAILED_CASES[@]}" >&2
+    exit 1
+  fi
+  echo "PASS  RENDERED VISUAL CONTINUITY"
+  exit 0
+fi
 # Every checked-in MIDI source is part of the real native acceptance
 # corpus. Do not quietly narrow the scope to a few handpicked pieces:
 # source-specific ties, meters, multipage layouts, long rests and

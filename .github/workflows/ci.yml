@@ -129,7 +129,7 @@ jobs:
           # wheel exists. The ALSA and JACK headers are build prerequisites,
           # not packaged/runtime dependencies.
           sudo apt-get update -qq
-          sudo apt-get install -y libasound2-dev libjack-jackd2-dev pkg-config cmake
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev pkg-config cmake xvfb xauth libgl1-mesa-dri
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/python -m pip install -c scripts/release/binary-constraints.txt -e '.[godot,test]' scons
@@ -144,6 +144,19 @@ jobs:
           PIANO_PYTHON: ${{ github.workspace }}/.venv/bin/python
           GODOT_BIN: /usr/local/bin/godot
         run: bash scripts/verify-embedded-production-local.sh
+      - name: Verify rendered visual continuity
+        env:
+          PIANO_PYTHON: ${{ github.workspace }}/.venv/bin/python
+          GODOT_BIN: /usr/local/bin/godot
+          PIANO_VISUAL_RESULTS: ${{ runner.temp }}/visual-continuity
+        run: bash scripts/verify-embedded-production-local.sh --visual-only
+      - name: Preserve visual evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered-visual-continuity
+          path: ${{ runner.temp }}/visual-continuity
+          if-no-files-found: ignore
 
   report-core:
     if: ${{ always() }}

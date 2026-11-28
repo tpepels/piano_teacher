@@ -229,6 +229,32 @@ continuity failure may have included mismatched observation timestamps;
 the prior logs do not independently prove that was its only cause.
 Do not mark native or physical acceptance complete before the new gates pass.
 
+### Owner acceptance and rendered continuity follow-up
+
+Owner logs on clean c4e3c62d: 388 Python tests passed in 287.74 s
+(81.7% lines, 64.9% branches; three existing music21 pedal warnings).
+Five Godot behaviour suites passed. Native 4/4 and 2/4 fake MIDI journeys
+both passed, including Tempo-to-Free and replacement after the 14-second
+frame hitch; all 17 repertoire journeys passed; no confirmed missing-score
+or ObjectDB leak warning appeared. Native cancellation/recovery passed
+(32 ms shutdown during held fingering). The developer-host package audit
+was explicitly skipped, but the independent Debian 12 build passed
+(171,400,209-byte archive) and that archive passed relocated execution on
+Arch (43 ms held-inference shutdown, zero worker-recovery failures).
+Pathétique II source and physical acceptance remain pending.
+
+Owner authorized rendered-frame continuity testing. Add a test-only
+Window capture after each rendered frame, run production journeys under
+Xvfb/Mesa, and analyze scroll-compensated ink, stationary staff and
+background offline. Fault injection exercises disappearance, insertion,
+jump, vertical shift, flash and normal motion. Failure evidence contains
+surrounding rendered frames and timeline state. See
+[rendered visual continuity](docs/development.md#rendered-visual-continuity).
+The new display-backed acceptance is not yet verified; the previous native
+results are headless software acceptance, not image or physical acceptance.
+Comparative performance measurements and redistribution clearance remain
+separate open gates.
+
 ## Python ONNX fingering (A2, 2026-11-28)
 
 The existing Lumikey 0.3.0 weights run through Python ONNX Runtime 1.30.0 CPU.

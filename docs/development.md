@@ -220,6 +220,47 @@ Pause/Resume, no new source admission while paused, exact one-to-four-bar
 visible windows, preserved long ties and barlines, speakers/count-in and
 actual piano input. Headless software acceptance does not certify those.
 
+## Rendered visual continuity
+
+Run the test against the real desktop scene, not the dummy headless renderer:
+
+```bash
+bash scripts/verify-embedded-production-local.sh --visual-only
+```
+
+Install Xvfb, xvfb-run, xauth and Mesa OpenGL first (Arch: xorg-server-xvfb,
+xorg-xauth, mesa; Debian/Ubuntu: xvfb, xauth, libgl1-mesa-dri). The full
+manually dispatched CI suite runs this check and uploads its reports.
+The visual suite repeats the fixture, both 4/4 and 2/4 fake MIDI journeys,
+and Moonlight retry/Listen/stage navigation. It checks required journey
+steps and actual moving frame coverage. It captures every rendered frame
+at a test-only 30 FPS cap via Window texture readback after frame_post_draw;
+640×400 lossless captures are analyzed offline. It is not a frame-rate
+benchmark or proof of physical display/driver behaviour.
+
+The detector compensates expected scroll using each visible score layer's
+world position and horizontal density. It compares common interior ink
+in both directions with a two-pixel antialias tolerance, checks stationary
+staff rows and large-area background changes, and checks the score region
+position/size. The fixed gutter, narrow cursor/feedback lane, and actual
+count-in rectangle have explicit allowances. Screen/piece navigation
+resets the comparison; same-piece revision changes and the frame hitch
+do not globally disable it. A long hitch with no common ink still checks
+the stationary staff and backdrop. Legitimate hand-focus changes may
+change staff rows. Small localized status/particle changes are tolerated
+by the ink area thresholds. The thresholds are initial policy, validated
+against injected faults, and must be checked with real rendered journeys;
+do not hide a failure by loosening them without inspecting its evidence.
+
+Results default to `~/piano-teacher-results/visual-<timestamp>/` or
+`PIANO_VISUAL_RESULTS`. Each journey writes a JSON report including phase
+coverage, expected pixel displacement and all failures. Up to eight
+failure sequences retain the preceding three frames, offending frame,
+following three frames, metadata (backend state/timeline) and an ink
+residual heatmap. Use a disk-backed TMPDIR. Raw captures are temporary
+unless `PIANO_KEEP_VISUAL_CAPTURE=1` is set for failed journeys. No visual
+test assets or capture hooks are reachable from the released application.
+
 ## Local automated verification
 
 Run these from the repository root after checking the working tree and

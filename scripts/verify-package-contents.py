@@ -24,6 +24,7 @@ DEVELOPMENT_PATHS = (
     "godot/production_ui_smoke.gd",
     "godot/production_session_journey.gd",
     "godot/production_fake_midi_journey.gd",
+    "godot/tests/visual_capture.gd",
 )
 
 

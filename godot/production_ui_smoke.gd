@@ -1,4 +1,5 @@
 extends SceneTree
+const VisualCapture := preload("res://tests/visual_capture.gd")
 const ScoreView := preload("res://notation/shared/view_base.gd")
 const Admission := preload("res://score_stream_admission.gd")
 ## Actual production scene -> embedded Python -> MIDI -> Verovio -> retained
@@ -34,6 +35,7 @@ var resumed_world_beat := NAN
 var resumed_pass_serial := -1
 
 var _finishing := false
+var _visual_capture = VisualCapture.new()
 
 func _initialize() -> void:
     call_deferred("_boot")
@@ -52,6 +54,8 @@ func _boot() -> void:
         return
     app = scene.instantiate()
     root.add_child(app)
+    _visual_capture.start(app,root)
+    _visual_capture.step = "fixture"
     if not is_instance_valid(app) or app.score_session == null:
         _fail("Production scene did not initialize the score session")
         return
@@ -61,6 +65,8 @@ func _finish(code: int) -> void:
     if _finishing:
         return
     _finishing = true
+    if not _visual_capture.finish():
+        code = 1
     if is_instance_valid(app):
         app._shutdown_and_quit(code)
     else:

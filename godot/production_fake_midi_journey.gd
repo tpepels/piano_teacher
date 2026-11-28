@@ -1,4 +1,5 @@
 extends SceneTree
+const VisualCapture := preload("res://tests/visual_capture.gd")
 ## Real production main.tscn + embedded Python + actual native notation,
 ## with a TEST-ONLY mido input port at the hardware boundary. No fake
 ## state machine, renderer, assessment, shortcut, or transport owner.
@@ -38,6 +39,7 @@ var continuity_violation := ""
 var ink_shown_since := -1
 
 var _finishing := false
+var _visual_capture = VisualCapture.new()
 
 func _initialize() -> void:
     call_deferred("_boot")
@@ -56,11 +58,13 @@ func _boot() -> void:
         return
     app = scene.instantiate()
     root.add_child(app)
+    _visual_capture.start(app,root)
     _advance("connect")
 
 
 func _advance(next: String) -> void:
     phase = next
+    _visual_capture.step = next
     phase_ms = Time.get_ticks_msec()
     print("FULL_SCENE_MIDI_STEP:",next)
 
@@ -166,6 +170,8 @@ func _finish(code: int) -> void:
     if _finishing:
         return
     _finishing = true
+    if not _visual_capture.finish():
+        code = 1
     if is_instance_valid(app):
         app._shutdown_and_quit(code)
     else:
