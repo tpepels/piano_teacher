@@ -15,10 +15,10 @@ from ..exercise_generator import ExerciseVariant
 from ..exercise_pipeline import ExerciseStage
 from ..lesson_settings import SETTINGS
 from ..music import Phrase, Piece
-from ..research.coda_midi_grid import midi_coda_quantization
-from ..research.coda_midi_sparse import sparse_midi_coda
-from ..research.coda_reference_exercises import original_coda_levels
-from ..research.coda_author_catalog import (
+from ..coda.coda_midi_grid import midi_coda_quantization
+from ..coda.coda_midi_sparse import sparse_midi_coda
+from ..coda.coda_reference_exercises import original_coda_levels
+from ..coda.coda_author_catalog import (
     AUTHOR_SLOWDOWN_FACTORS, catalog_requests,
 )
 
@@ -125,8 +125,8 @@ def midi_coda_catalog(piece: Piece, original: ExerciseVariant
     as for the hand-specific teaching path. Unsafe author behavior is never
     represented as a successful result. See entries with non-success status.
     """
-    if piece.source_format != "midi":
-        raise ValueError("Coda catalog requires imported MIDI")
+    if piece.source_format not in ("midi", "musicxml"):
+        raise ValueError("Coda catalog requires an imported performance timeline")
     phrase = original.phrase
     boundaries = tuple(t for t in piece.bar_boundaries
                        if phrase.start - 1e-7 <= t <= phrase.end + 1e-7)
@@ -227,8 +227,8 @@ def midi_coda_stages(
     catalogs occur in the existing RH/LH hand lessons, not as duplicated
     or mixed-voice dotted stages in the both-hands route.
     """
-    if piece.source_format != "midi":
-        raise ValueError("Coda exercises need imported MIDI notes")
+    if piece.source_format not in ("midi", "musicxml"):
+        raise ValueError("Coda exercises need imported notes")
     if not variants:
         return ()
     original = variants[-1]

@@ -20,6 +20,7 @@ piano_teacher = ["lesson_settings.json"]
 
 [tool.setuptools.packages.find]
 include = ["piano_teacher*"]
+exclude = ["piano_teacher.research*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
