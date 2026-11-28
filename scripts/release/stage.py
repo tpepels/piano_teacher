@@ -134,7 +134,9 @@ def stage_python(stage):
     alias = f"libpython{sys.version_info.major}.{sys.version_info.minor}.so"
     if alias != soname:
         (prefix / "lib" / alias).symlink_to(soname)
-    excluded = {"site-packages", "dist-packages", "Tools", "test", "tests", "idlelib",
+    # Progress uses SQLite. The optional ndbm binding otherwise requires the
+    # builder-specific Berkeley DB ABI even on a clean desktop installation.
+    excluded = {"_dbm.*.so", "site-packages", "dist-packages", "Tools", "test", "tests", "idlelib",
                 "turtledemo", "turtle.py", "tkinter", "_tkinter*.so", "ensurepip", "venv", "__pycache__"}
     shutil.copytree(stdlib, target, ignore=shutil.ignore_patterns(
         *excluded, "*.pyc", "config-*", "_test*.so", "_xxtest*.so"))
