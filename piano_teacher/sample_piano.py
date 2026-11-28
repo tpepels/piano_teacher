@@ -115,11 +115,12 @@ class _Synth:
 
     def note(self, on: bool, pitch: int, velocity: int = 85):
         if on:
-            status = self.lib.fluid_synth_noteon(self.synth, 0, pitch, velocity)
+            if self.lib.fluid_synth_noteon(self.synth, 0, pitch, velocity) < 0:
+                raise RuntimeError(f"FluidSynth rejected pitch {pitch}")
         else:
-            status = self.lib.fluid_synth_noteoff(self.synth, 0, pitch)
-        if status < 0:
-            raise RuntimeError(f"FluidSynth rejected pitch {pitch}")
+            # A short recording can finish before a slow passage releases the key.
+            # FluidSynth reports FLUID_FAILED when that channel has no matching voice.
+            self.lib.fluid_synth_noteoff(self.synth, 0, pitch)
 
     def frames(self, count: int) -> bytes:
         # FluidSynth offsets/strides are in signed 16-bit samples, not bytes.
