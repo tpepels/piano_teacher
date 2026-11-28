@@ -21,7 +21,11 @@ fetch() {
 # their original AlmaLinux RPMs before associating the common GCC source RPM.
 for pair in libgfortran:04dbe32dceb80654422140fb7641f732065999c8 libquadmath:c1c5f8d61f17e5579c4e85718845b74e4b94116c; do
   libraries=("${site[0]}"/numpy.libs/"${pair%:*}"*.so*)
-  [[ ${#libraries[@]} == 1 && -f "${libraries[0]}" ]]
+  if [[ ${#libraries[@]} != 1 || ! -f "${libraries[0]}" ]]; then
+    echo "Expected NumPy's separate ${pair%:*} library for the recorded GCC sources." >&2
+    echo "Use the verified Linux release constraints or review the installed wheel's native libraries." >&2
+    exit 1
+  fi
   build_id=$(readelf -n "${libraries[0]}" | sed -n 's/.*Build ID: //p')
   if [[ $build_id != "${pair#*:}" ]]; then
     echo "Review matching source RPM for ${libraries[0]} ($build_id)" >&2
@@ -32,7 +36,10 @@ gcc='gcc-8.5.0-28.el8_10.alma.1.src.rpm'
 fetch "$gcc" "https://vault.almalinux.org/8/BaseOS/Source/Packages/$gcc" \
   c94dbbd2cd6d5d01a5a6822ea18f8ce34942c25a80e17b4682d547d5e652dbd0
 
-test -d "${site[0]}/verovio-5.7.0.dist-info"
+if [[ ! -d "${site[0]}/verovio-5.7.0.dist-info" ]]; then
+  echo "Review the Verovio source archive and font notices for this wheel version." >&2
+  exit 1
+fi
 verovio='verovio-5.7.0.tar.gz'
 fetch "$verovio" "https://files.pythonhosted.org/packages/1c/ce/975d7295c436dc24ae8a77910053a6b8831060282e3be41adef5c6fc5f6a/$verovio" \
   f51cbaf49574a85a8d2d136a0f1feded641322f6f4d639cfe0087216979f68f3
