@@ -22,6 +22,8 @@ var _fps := 30
 var _pacing_only := false
 var _events: Array = []
 var _previous_capture_ms := 0.0
+var _pre_draw_us := 0
+var _last_draw_us := 0
 var _midi_until_ms := -1.0
 
 # Test-only markers taken BEFORE the real input is sent. They are attached
@@ -50,11 +52,12 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
             # The synthetic journey plays the first attack of its
             # authorized take. Resolve that expected source before MIDI,
             # independently of whether a physical head has been projected.
-            var current: Dictionary = state.get("playback_timeline",{}).get("current",{})
-            var source: Dictionary = current.get("source",{})
-            if int(source.get("revision",-1)) == renderer.timeline.revision:
-                targets = correct_probe_targets(renderer.timeline.model,pitch,
-                    float(source.get("from_beat",NAN)))
+            var current: Variant = state.get("playback_timeline",{}).get("current")
+            if current is Dictionary:
+                var source: Dictionary = current.get("source",{})
+                if int(source.get("revision",-1)) == renderer.timeline.revision:
+                    targets = correct_probe_targets(renderer.timeline.model,pitch,
+                        float(source.get("from_beat",NAN)))
         baseline = _painted_heads(stage,viewport_size)
     _events.append({"kind":kind,"label":label,"pitch":pitch,"targets":targets,"baseline_feedback":baseline,
         "take":"%s|%d|%d|%s" % [str(state.get("piece_fingerprint","")),int(state.get("revision",-1)),
@@ -106,7 +109,12 @@ func start(app: Node, window: Window) -> void:
     if requested in ["30","60","120"]:
         _fps = int(requested)
     Engine.max_fps = _fps
+    if _pacing_only:
+        RenderingServer.frame_pre_draw.connect(_before_draw)
     RenderingServer.frame_post_draw.connect(_capture)
+
+func _before_draw() -> void:
+    _pre_draw_us = Time.get_ticks_usec()
 
 func _error(message: String) -> void:
     _failed = true
@@ -256,7 +264,11 @@ func _capture() -> void:
     if _pacing_only:
         # No screenshot/readback, resize, PNG encoding or full queue/state
         # snapshot. A second real-rendered run measures pacing independently.
+        var draw_ms: float = float(began-_pre_draw_us)*.001 if _pre_draw_us > _last_draw_us else -1.0
+        var between_draws_ms: float = float(_pre_draw_us-_last_draw_us)*.001 if _last_draw_us > 0 and _pre_draw_us > _last_draw_us else -1.0
+        _last_draw_us = began
         _metadata.store_line(JSON.stringify({
+            "draw_ms":draw_ms,"between_draws_ms":between_draws_ms,
             "frame":_count,"engine_frame":Engine.get_frames_drawn(),
             "time_ms":float(began)*.001,"fps":_fps,
             "capture_cost_ms":_previous_capture_ms,"step":step,
@@ -301,6 +313,8 @@ func _capture() -> void:
 func finish() -> bool:
     if not _enabled:
         return true
+    if RenderingServer.frame_pre_draw.is_connected(_before_draw):
+        RenderingServer.frame_pre_draw.disconnect(_before_draw)
     if RenderingServer.frame_post_draw.is_connected(_capture):
         RenderingServer.frame_post_draw.disconnect(_capture)
     if _frames != null:

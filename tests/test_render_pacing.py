@@ -39,3 +39,13 @@ def test_missing_rendered_frames_fail_closed():
     data[50]["engine_frame"]+=1
     with pytest.raises(ValueError,match="Missing real rendered frame"):
         review(data,MANIFEST)
+
+
+def test_hitch_keeps_draw_boundary_diagnostics():
+    data=frames(hitch=True)
+    data[50]["events"]=[]
+    data[50].update(draw_ms=20., between_draws_ms=13980.)
+    result=review(data,MANIFEST)
+    hitch=next(f for f in result["failures"] if "render_frame_hitch" in f["reasons"])
+    assert hitch["draw_ms"]==20.
+    assert hitch["between_draws_ms"]==13980.

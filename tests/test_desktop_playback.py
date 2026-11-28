@@ -288,3 +288,21 @@ def test_a_late_decision_adds_a_whole_rest_bar_before_the_count_in(practice_sess
     bar_seconds = 4*60/take["bpm"]
     bars = (incoming["deadline_ms"]/1000-end)/bar_seconds
     assert bars >= 1 and bars == pytest.approx(round(bars),abs=.001)
+
+
+@pytest.mark.parametrize("reusable,expected_lead", [(0., 7.5), (3., 4.5)])
+def test_retry_count_in_reuses_only_measured_silence(practice_session, reusable, expected_lead):
+    session = practice_session(bars=1)
+    take = desktop_tempo(session)
+    session.clock.at = take["deadline_ms"]/1000 + .5
+    before = session.tick()
+    assert before["running"] and before["bpm"] == 80
+    timeline = session.engine.transport.musical_timeline
+    world = timeline.world_at(session.clock())
+    after = session.command("restart", placement_revision=before["revision"],
+        ink_ahead_beats=3.5, reusable_rest_beats=reusable, opening_header_beats=.75)
+    after = session.ready_score(state=after)
+    retry = after["playback_timeline"]["current"]
+    assert retry["take_id"] != take["take_id"]
+    assert retry["count_in_beats"] == 4
+    assert timeline.take(retry["segment_id"]).world_start == pytest.approx(world + expected_lead)

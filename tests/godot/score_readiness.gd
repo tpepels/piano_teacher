@@ -3,6 +3,7 @@ extends SceneTree
 ## The bundle is produced by the production Python/Verovio engine.
 const Session := preload("res://score_asset_session.gd")
 const Native := preload("res://notation/native/view.gd")
+const Glyphs := preload("res://notation/native/glyphs.gd")
 const Meter := preload("res://moving_meter_grid.gd")
 const StreamQueue := preload("res://score_stream_queue.gd")
 var failures := 0
@@ -94,11 +95,11 @@ func run() -> void:
             "Authentic source masks must be prepared before the first graded draw")
         var ordinary: Texture2D = view.glyphs.note_textures["quarter_up"]
         var box: Array = view.glyphs.note_bounds["quarter_up"]
-        var scale: Vector2 = view.glyphs.screen_scale_for(view)
+        var scale: Vector2 = Glyphs.screen_scale_for(view)
         var nominal := Vector2i((Vector2(box[2],box[3])*view.staff_gap()/250.0*scale).round())
         nominal = nominal.clamp(Vector2i.ONE,Vector2i(ordinary.get_size()))
         if nominal != Vector2i(ordinary.get_size()):
-            check(view.glyphs._display_cache.has(view.glyphs._display_key(ordinary,nominal)),
+            check(Glyphs._display_cache.has(Glyphs._display_key(ordinary,nominal)),
                 "Ordinary retained source textures are prepared before first draw")
         var original = view.engraving
         var selected: Dictionary = state(2)

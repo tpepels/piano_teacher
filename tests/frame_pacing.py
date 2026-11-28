@@ -27,6 +27,8 @@ class FramePacing:
                 "frame_gap_ms": dt, "limit_ms": limit, "capture_cost_ms": cost,
                 "previous_ms": old["time_ms"], "at_ms": new["time_ms"],
                 "frame_budget_ms": 1000/fps,
+                "draw_ms": new.get("draw_ms"),
+                "between_draws_ms": new.get("between_draws_ms"),
             }
         return [], {}
 

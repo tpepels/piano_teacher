@@ -369,8 +369,8 @@ class MusicalTimeline:
     def start_after(self, take: TakeSpec, *, now: float, rest_beats: float,
                     bar_beats: float, meter: tuple[int, int], bpm: float,
                     lead: float = RUN_LEAD_SECONDS) -> TimelineSegment:
-        """Rest past `rest_beats` of ink still ahead of the playhead, one
-        count-in bar, then `take`. Continues the run after a cut take;
+        """Wait the measured clearance before one full count-in bar, then
+        `take`. Retained silent space may already fit within that bar. Continues the run after a cut take;
         otherwise begins it at `now`."""
         self.end_world = None
         m = self.musical(now)
