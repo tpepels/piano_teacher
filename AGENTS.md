@@ -21,7 +21,10 @@ piano.
 
 The test suite is small on purpose (owner decision 2026-11-18): only tests
 that guard behaviour a player notices. Run it with `bash scripts/test.sh`
-(GitHub runs the same script). Do not add abstract, pixel, parity or
-infrastructure tests. Add a regression test only after the owner has
+(GitHub runs the same script). Do not add abstract, golden-image, parity or infrastructure tests.
+The owner explicitly authorized motion-compensated rendered-frame continuity
+acceptance and fault-injection checks of that detector on 2026-11-28. Keep
+these tests tied to visible defects (flash, missing ink, abrupt displacement),
+not arbitrary exact screenshot equality. Add a regression test only after the owner has
 confirmed the behaviour at the piano. A test that encodes behaviour the
 owner has since changed is updated or removed, not worked around.
