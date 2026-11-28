@@ -55,7 +55,9 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
             var nearest := INF
             for head in renderer.drawn_note_instances:
                 var source: String = str(head.get("source_id",""))
-                if int(source_pitches.get(source,-1)) != pitch:
+                if str(head.get("take_key","")) != "%s|%d|%d|%s" % [str(state.get("piece_fingerprint","")),
+                        int(state.get("revision",-1)),int(state.get("transport_id",-1)),str(state.get("mode",""))] or \
+                        int(source_pitches.get(source,-1)) != pitch:
                     continue
                 var distance: float = absf(float(head["position"].x)-renderer.size.x*PLAYHEAD_FRACTION)
                 if distance < nearest:
@@ -145,30 +147,12 @@ func _strips(view, viewport_size: Vector2) -> Array:
             "left":(x+bounds.x)/viewport_size.x,"right":(x+bounds.y)/viewport_size.x,
             "gutter":(origin_x+29.0)/viewport_size.x,
             "kind":kind,"world_end":origin+bounds.y/maxf(1.0,density),
-            "pitch_feedback":_feedback(item),
             "visible":is_instance_valid(clip) and clip.is_visible_in_tree(),
             "ever_visible":bool(item.get("ever_visible",false)),
             "authorized":authorized.has(owner),
             "admitted_inside":is_finite(admitted_world) and first_x <= admitted_width
                 and (kind == "rest" or bool(item.get("admitted_on_empty_strip",false))),
             "future":is_finite(admitted_world) and origin+float(item.get("source_floor",0.0)) > admitted_world})
-    return result
-
-func _feedback(item: Dictionary) -> Array:
-    var segment = item.get("segment")
-    var clip = item.get("clip")
-    if not is_instance_valid(segment) or not is_instance_valid(clip) or \
-            not clip.is_visible_in_tree() or not is_instance_valid(segment.get("status_layer")):
-        return []
-    var status = segment.status_layer
-    var result: Array = []
-    # Read the retained status painter's prepared entries after frame_post_draw.
-    # The offline checker also requires visible color change for its MIDI probes.
-    for entry in status.get("_colored"):
-        var instance: Dictionary = entry["instance"]
-        result.append([str(instance.get("event_id","")),str(entry["status"])])
-    for ghost in status.get("_ghosts"):
-        result.append([str(ghost.get("pitch","")),str(ghost.get("shown_ms",""))])
     return result
 
 func _painted_heads(stage, viewport_size: Vector2) -> Array:
@@ -232,9 +216,9 @@ func _sample() -> Dictionary:
         "time_ms":float(Time.get_ticks_usec())*.001,
         "sample_ms":float(flow.last_ms),"backend_sample_ms":flow.diagnostic_backend_sample_ms(),
         "world":world,"motion_world":float(staff.stream_world_beat),"step":step,
-        "timing_version":1,"fps":_fps,"capture_cost_ms":_previous_capture_ms,
+        "timing_version":2,"fps":_fps,"capture_cost_ms":_previous_capture_ms,
         "run_offset":float(flow.run_offset),"following":bool(flow.following),
-        "events":_events.duplicate(true),"feedback_version":2,
+        "events":_events.duplicate(true),
         "painted_feedback":_painted_heads(stage,size) if float(Time.get_ticks_usec())*.001 <= _midi_until_ms else [],
         "midi_count":int(state.get("midi_input_count",0)),
         "teaching":state.get("teaching"),

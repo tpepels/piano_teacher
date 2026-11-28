@@ -5,7 +5,7 @@ from visual_timing import TimingReview, _policy_rate, _clearance
 
 def meta(t=0, world=0, bpm=40, kind="take", speed=None):
     speed = bpm if speed is None else speed
-    return {"timing_version":1,"fps":30,"time_ms":t,"sample_ms":t,
+    return {"timing_version":2,"fps":30,"time_ms":t,"sample_ms":t,
             "world":world,"run_offset":0,"following":True,"bpm":bpm,
             "mode":"practice","paused":False,"phase":"playing","transport":1,
             "midi_count":0,"button_text":"Pause","button_disabled":False,
@@ -102,20 +102,16 @@ def test_retry_rejects_excessive_placement_even_with_correct_rendering():
         {"kind":"take","world_start":14,"start_ms":21000,"beats":4,"spans":[[4,40,40]],"take_id":"new"}]
     assert "unnecessary_transition_travel" in observe(r,old,new)
 
-def test_midi_requires_receipt_new_feedback_and_pixels():
-    for actual in (False,True):
-        r=TimingReview()
-        old,new=meta(),meta(40,.02)
-        new.update(midi_count=1,events=[{"kind":"midi","label":"wrong","pitch":61,
-                                        "at_ms":1,"midi_count":0}])
-        new["layers"]=[{"id":1,"strips":[{"id":"s","visible":True,"left":.4,"right":.6,
-                       "gutter":.05,"pitch_feedback":[["61","100"]]}]}]
-        observe(r,old,new,after=image((240,100,100)) if actual else image())
-        late=deepcopy(new)
-        late.update(time_ms=300,sample_ms=300,events=[])
-        reasons=observe(r,new,late)
-        assert ("midi_feedback_missing_or_late" in reasons)==(not actual)
-        assert r.completed[0].get("visible_ms")== (39 if actual else None)
+def test_full_capture_uses_same_midi_probe_as_lightweight():
+    r=TimingReview()
+    old,new=meta(),meta(40,.02)
+    new.update(midi_count=1,events=[{"kind":"midi","label":"wrong","pitch":61,
+                    "at_ms":1,"midi_count":0,"targets":["target"],"take":"take"}],
+               painted_feedback=[{"take":"take","source":"target","event":"note",
+                    "slot":"slot","layer":1,"status":"missed","x":.5,"y":.5,
+                    "rx":.02,"ry":.02}])
+    assert not observe(r,old,new,after=image((240,100,100)))
+    assert r.finish()[0]["probes"][0]["visible_ms"]==39
 
 def test_required_timing_probes_cannot_be_omitted():
     r=TimingReview()

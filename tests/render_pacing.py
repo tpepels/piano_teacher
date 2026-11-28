@@ -3,20 +3,20 @@ import argparse
 import json
 import math
 from pathlib import Path
-import numpy as np
+from frame_pacing import FramePacing
 from midi_visual_probe import MidiProbeReview
 
 
 def review(records, manifest, required_steps=()):
-    failures, gaps, costs, steps = [], [], [], set()
+    failures, steps = [], set()
     previous = None
     midi = MidiProbeReview()
-    count = injected = 0
+    pacing = FramePacing()
+    count = 0
     armed = False
     fps = manifest.get("fps")
     if fps not in (30,60,120) or not manifest.get("pacing_only"):
         raise ValueError("Not a valid lightweight pacing capture")
-    limit = min(100.,max(50.,3000/fps))
     for index,frame in enumerate(records):
         if frame["frame"] != index or frame["fps"] != fps:
             raise ValueError("Missing or mismatched pacing sample")
@@ -31,17 +31,10 @@ def review(records, manifest, required_steps=()):
         if armed:
             steps.add(frame["step"])
         if previous and armed and previous["screen"]=="practice":
-            if any(e["kind"]=="injected_hitch" for e in frame.get("events",[])):
-                injected += 1
-            else:
-                dt = frame["time_ms"]-previous["time_ms"]
-                gaps.append(dt)
-                costs.append(frame["capture_cost_ms"])
-                if dt>limit:
-                    failures.append({"reasons":["render_frame_hitch"],"frame":index,"step":frame["step"],
-                                     "gap_ms":dt,"limit_ms":limit,"capture_cost_ms":costs[-1],
-                                     "previous_ms":previous["time_ms"],"at_ms":frame["time_ms"],
-                                     "phase":frame.get("phase"),"revision":frame.get("revision")})
+            reasons,metrics = pacing.observe(previous,frame)
+            if reasons:
+                failures.append(dict(metrics,reasons=reasons,frame=index,step=frame["step"],
+                                     phase=frame.get("phase"),revision=frame.get("revision")))
         if armed:
             sample=dict(frame.get("midi_sample",{}))
             sample.update(time_ms=frame["time_ms"],events=frame.get("events",[]))
@@ -51,21 +44,14 @@ def review(records, manifest, required_steps=()):
         previous=frame
     if count != manifest["frames"] or not manifest["success"]:
         raise ValueError("Incomplete pacing capture")
-    summary={"fps":fps,"frames":count,"frame_samples":len(gaps),"injected_hitches":injected,"steps":sorted(steps)}
-    if len(gaps)<60:
-        failures.append({"reasons":["insufficient_pacing_coverage"]})
-    else:
-        p95,p99=float(np.percentile(gaps,95)),float(np.percentile(gaps,99))
-        summary.update(p95_frame_ms=p95,p99_frame_ms=p99,max_frame_ms=max(gaps),
-                       p95_capture_ms=float(np.percentile(costs,95)),
-                       p95_limit_ms=1750/fps,p99_limit_ms=2500/fps)
-        if p95>1750/fps or p99>2500/fps:
-            failures.append({"reasons":["recurring_frame_pacing_failure"]})
+    summary,pacing_failures=pacing.finish(minimum_samples=60)
+    failures.extend(pacing_failures)
+    summary.update(frames=count,steps=sorted(steps))
     missing=set(required_steps)-steps
     if missing:
         failures.append({"reasons":["missing_journey_steps"],"steps":sorted(missing)})
-    if "hitch_recover" in required_steps and injected!=1:
-        failures.append({"reasons":["missing_injected_hitch_witness"],"count":injected})
+    if "hitch_recover" in required_steps and pacing.injected!=1:
+        failures.append({"reasons":["missing_injected_hitch_witness"],"count":pacing.injected})
     summary["midi_probes"]=midi.completed
     failures.extend(midi.finish("wrong_free" in required_steps))
     return {"timing":summary,"failures":failures}
