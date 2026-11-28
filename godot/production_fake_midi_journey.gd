@@ -650,5 +650,6 @@ func _master_section(state: Dictionary, step: String, mode: String) -> void:
 
 func _success() -> void:
     print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo " +
-        "resume_tempo wrong_tempo auto_repeat second_failure free_again clean_tempo frame_hitch stop")
+        "resume_tempo wrong_tempo auto_repeat second_failure free_again " +
+        "clean_tempo frame_hitch stop")
     _finish(0)
