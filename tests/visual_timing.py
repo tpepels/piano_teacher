@@ -100,10 +100,22 @@ def _rate_at(segment, beat):
 def _policy_rate(meta):
     """Independent bound on artificial speed, not the published rest rate."""
     current = _segment(meta)
-    if not current or current["kind"] != "rest":
+    if not current or current["kind"] not in ("rest","count_in"):
         return None
     segments = meta["timeline"]["segments"]
     index = segments.index(current)
+    if current["kind"] == "count_in":
+        # The ending half of the current authorized count-in runs at the
+        # selected take BPM. Do not treat an old count-in or an easing span
+        # as constant just because the current state has another BPM.
+        playback=meta.get("playback") or {}
+        take=(playback.get("current") or {}).get("segment_id",playback.get("segment_id"))
+        next_take=segments[index+1] if index+1<len(segments) else {}
+        span=_span(meta)
+        if (take and next_take.get("take_id")==take and span
+                and span[0][-1]==len(current["spans"])-1 and meta.get("bpm",0)>0):
+            return float(meta["bpm"])
+        return None
     if not index:
         return None
     # Cut-at-Resume leaves a zero-length placeholder; it is not a

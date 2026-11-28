@@ -23,7 +23,6 @@ var _pacing_only := false
 var _events: Array = []
 var _previous_capture_ms := 0.0
 var _midi_until_ms := -1.0
-var _last_midi_sample: Dictionary = {}
 
 # Test-only markers taken BEFORE the real input is sent. They are attached
 # to the next completed viewport frame, not reconstructed from phase names.
@@ -271,6 +270,8 @@ func _capture() -> void:
             "time_ms":float(began)*.001,"fps":_fps,
             "capture_cost_ms":_previous_capture_ms,"step":step,
             "screen":str(_app.current_screen),"ready":_app.score_session.is_ready(),
+            "phase":str(_app.state_inbox.current.get("phase","")),
+            "revision":int(_app.state_inbox.current.get("revision",-1)),
             "events":_events,"midi_sample":_midi_sample(float(began)*.001)}))
         if _metadata.get_error() != OK:
             _error("Cannot write lightweight pacing record")

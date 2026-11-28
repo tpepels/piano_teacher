@@ -39,7 +39,9 @@ def review(records, manifest, required_steps=()):
                 costs.append(frame["capture_cost_ms"])
                 if dt>limit:
                     failures.append({"reasons":["render_frame_hitch"],"frame":index,"step":frame["step"],
-                                     "gap_ms":dt,"limit_ms":limit,"capture_cost_ms":costs[-1]})
+                                     "gap_ms":dt,"limit_ms":limit,"capture_cost_ms":costs[-1],
+                                     "previous_ms":previous["time_ms"],"at_ms":frame["time_ms"],
+                                     "phase":frame.get("phase"),"revision":frame.get("revision")})
         if armed:
             sample=dict(frame.get("midi_sample",{}))
             sample.update(time_ms=frame["time_ms"],events=frame.get("events",[]))

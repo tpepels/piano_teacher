@@ -218,7 +218,7 @@ func run() -> void:
     trim_pool.install(trim_canvas,windows)
     trim_controller.bind_surface(trim_canvas,trim_pool,
         func(_beat: float) -> Array[Vector2]: return windows)
-    check(not trim_controller.place_timeline_take(geometry(0.0),0.0,10.0,6.7,0.4,4.0).is_empty(),
+    check(not trim_controller.place_timeline_take(geometry(0.0),0.0,4.0,6.7,0.4,4.0).is_empty(),
         "Trailing-rest fixture is admitted")
     acknowledge(trim_controller,0.0,"piece|7|10|practice","trim")
     var trim_queue = trim_controller.queue
@@ -226,10 +226,13 @@ func run() -> void:
     var rest: Dictionary = trim_queue.online[-1]
     source["ever_visible"] = true
     var source_slot: String = str(source["slot_id"])
-    var preview: Array = trim_queue.preview_timed_withdrawal(0.0,100.0,10.0,4.0,670.0,200.0)
+    var exposed_preview: Array = trim_queue.preview_timed_withdrawal(3.0,100.0,20.0,4.0,1000.0,330.0)
+    check(exposed_preview.size() == trim_queue.online.size(),
+        "A trailing rest within the viewport cannot be withdrawn even before the draw flags it")
+    var preview: Array = trim_queue.preview_timed_withdrawal(0.0,100.0,20.0,4.0,1000.0,330.0)
     check(preview.size() == trim_queue.online.size()-1 and str(preview[-1]["slot_id"]) == source_slot,
         "Preview drops only unseen trailing silence")
-    var removed: Array[int] = trim_queue.withdraw_timed_tail(trim_canvas,0.0,100.0,10.0,4.0,670.0,200.0,"resume")
+    var removed: Array[int] = trim_queue.withdraw_timed_tail(trim_canvas,0.0,100.0,20.0,4.0,1000.0,330.0,"resume")
     check(removed.size() == 1 and str(trim_queue.online[-1]["slot_id"]) == source_slot,
         "Withdrawal matches preview and keeps the source identity")
     check(trim_queue.has_take(int(source["take_owner"])), "Rest removal cannot discard its source take")

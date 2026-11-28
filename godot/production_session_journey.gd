@@ -316,10 +316,16 @@ func _process(_delta: float) -> bool:
                     str(_ready_score()),str(reserved_match),
                     str(wrong_side),str(retry_rest_seen)])
                 return false
-            if retry_playing_since < 0:
-                retry_playing_since = now
-            # Capture at least one full stable-tempo analysis window after
-            # the real Retry downbeat before switching to Listen.
+            retry_playing_since = now
+            _advance("retry_playing")
+        "retry_playing":
+            # The admission witness above is a downbeat assertion. During
+            # sustained observation its preceding rest may lawfully exit.
+            if int(state.get("transport_id",-1)) != restarted_transport or \
+                    int(state.get("revision",-1)) != initial_revision or \
+                    not bool(state.get("running",false)) or str(state.get("phase","")) != "playing":
+                _fail("Retry did not sustain the same authorized timed exposure")
+                return false
             if now-retry_playing_since < 1250:
                 return false
             if not _press(app.practice_view.listen_button,"Listen"):

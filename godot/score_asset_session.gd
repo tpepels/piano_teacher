@@ -451,7 +451,7 @@ func _install_prepared(job) -> void:
     _publish_status()
     if _timing_diagnostics:
         print("SCORE_BUNDLE_MAIN_THREAD:",JSON.stringify({
-            "revision":revision,"bytes":job.result["timing"]["bytes"],
+            "revision":revision,"at_ms":float(started)*.001,"bytes":job.result["timing"]["bytes"],
             "upload_cpu_ms":float(_upload_cpu_usec)*.001,
             "upload_elapsed_ms":float(started-_upload_started)*.001,
             "install_publish_ms":float(Time.get_ticks_usec()-started)*.001}))
@@ -488,7 +488,7 @@ func _finish_native_score() -> void:
     score_published.emit(revision)
     if _timing_diagnostics:
         print("SCORE_RETAINED_READY:",JSON.stringify({
-            "revision":revision,"retained_wait_ms":retained_ms,
+            "revision":revision,"at_ms":float(ready_started)*.001,"retained_wait_ms":retained_ms,
             "ready_callbacks_ms":float(Time.get_ticks_usec()-ready_started)*.001}))
     if str(_state.get("phase","")) == "loading" and \
             int(_state.get("awaiting_score_revision",-1)) == revision and is_ready():

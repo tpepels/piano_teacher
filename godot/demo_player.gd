@@ -178,6 +178,7 @@ func _process(_delta: float) -> void:
         _decode_job = null
         _decode_id = -1
         if job.generation == _decode_generation and not token.is_empty():
+            var publish_started: int = Time.get_ticks_usec()
             downloading = false
             if joined != OK or job.stream == null:
                 audio_error = true
@@ -186,6 +187,9 @@ func _process(_delta: float) -> void:
                 player.stream = job.stream
                 loaded = true
                 prepared.emit(token,revision)
+            if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+                print("LISTEN_PCM_PUBLISH:",JSON.stringify({"at_ms":float(publish_started)*.001,
+                    "elapsed_ms":float(Time.get_ticks_usec()-publish_started)*.001,"revision":revision}))
     _start_decode()
 
 func clear() -> void:

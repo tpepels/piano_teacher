@@ -157,7 +157,7 @@ run_player() {
     fake-midi-*) required=(--require-step wrong_free --require-step pause_free
       --require-step resume_tempo --require-step second_failure --require-step free_again
       --require-step clean_repeat --require-step hitch_recover --require-step stopped_stable) ;;
-    moonlight) required=(--require-step paused --require-step resumed --require-step retry_wait
+    moonlight) required=(--require-step paused --require-step resumed --require-step retry_wait --require-step retry_playing
       --require-step listen_playback --require-step stage_change --require-step reopen) ;;
     fixture) required=(--require-step fixture) ;;
   esac
