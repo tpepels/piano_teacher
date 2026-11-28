@@ -34,7 +34,11 @@ PIANO_BUILD_DIR="$(mktemp -d "$PWD/godot/native/bin/.build-XXXXXX")"
 trap 'rm -rf "$PIANO_BUILD_DIR"' EXIT
 (
   cd native
-  scons platform=linux target=template_release piano_output_dir="$PIANO_BUILD_DIR" -j2
+  profile=()
+  if [[ -n ${PIANO_GODOT_CPP_PROFILE:-} ]]; then
+    profile=("build_profile=$PIANO_GODOT_CPP_PROFILE")
+  fi
+  scons platform=linux target=template_release piano_output_dir="$PIANO_BUILD_DIR" "${profile[@]}" -j2
 )
 PIANO_BUILT_BINARY="$PIANO_BUILD_DIR/libpiano_bridge.linux.template_release.x86_64.so"
 test -s "$PIANO_BUILT_BINARY"

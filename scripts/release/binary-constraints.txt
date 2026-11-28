@@ -1,0 +1,4 @@
+# The distribution notices and corresponding-source archive identify these builds.
+flatbuffers==25.12.19
+numpy==2.5.4
+verovio==5.7.0
