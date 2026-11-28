@@ -10,6 +10,9 @@ const Request := preload("res://inprocess_request.gd")
 
 signal admission_problem(message: String)
 
+# Accepted snapshots a running take may wait for its renderer.
+const MAX_UNPLACED_FRAMES := 240
+
 var bus: Node
 var stage
 var score_session
@@ -34,8 +37,6 @@ var _missing_segment := ""
 var _unplaced_segment := ""
 var _last_problem := ""
 var _last_problem_ms := -100000
-# Frames a running take may wait for its renderer before it is reported.
-const MAX_UNPLACED_FRAMES := 240
 
 func last_problem() -> String:
     """The most recent display problem reported to the learner."""

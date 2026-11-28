@@ -48,7 +48,7 @@ PY
   if ! grep -Fq "PIANO_PACKAGE_NATIVE_READY" "$package_log" || \
        ! grep -Eq 'SCORE_WORKER_GENERATION: [0-9]+ score\.bundle ' "$package_log" || \
        ! grep -Fq "NATIVE_MODEL_READY:" "$package_log" || \
-       grep -Eq 'Embedded Piano Teacher stopped|SCRIPT ERROR|ERROR:.*(extension|python|libpiano)' "$package_log"; then
+       grep -Eq 'Embedded Piano Teacher stopped|SCRIPT ERROR|TAKE_WITHOUT_SCORE|Leaked instance:|ObjectDB instances leaked|ERROR:.*(extension|python|libpiano)' "$package_log"; then
     echo "Relocated package did not generate and install its native score" >&2
     tail -n 100 "$package_log" >&2
     return 1
@@ -78,7 +78,7 @@ PY
     "$release/bin/godot" "$release/godot" "$ROOT/tests/godot/score_worker_recovery.gd" \
     2>&1 | tee "$WORK/recovery.log"
   grep -Eq '^NATIVE_SCORE_RECOVERY_FAILURES:[[:space:]]*0$' "$WORK/recovery.log"
-  if grep -Fq 'SCRIPT ERROR:' "$WORK/recovery.log"; then
+  if grep -Eq 'SCRIPT ERROR:|TAKE_WITHOUT_SCORE|Leaked instance:|ObjectDB instances leaked' "$WORK/recovery.log"; then
     return 1
   fi
   echo "Relocated standalone package generated both hands' fingerings and native notation"

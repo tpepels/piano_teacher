@@ -120,23 +120,20 @@ func _finish(code: int) -> void:
         quit(code)
 
 func _process(_delta: float) -> bool:
-    if not _finishing:
-        _journey_frame()
-    return false
-
-func _journey_frame() -> bool:
+    if _finishing:
+        return false
     if app == null or not is_instance_valid(app):
         return false
     var now := Time.get_ticks_msec()
     if now-started_ms > MAX_MS:
         _fail("Overall journey deadline exceeded")
-        return true
+        return false
     if now-phase_ms > (55000 if phase in ["startup","listen_load","listen_playback","stage_change"] else 35000):
         _fail("Phase deadline exceeded")
-        return true
+        return false
     if not app.score_error.is_empty():
         _fail("Native score failed to render: "+app.score_error)
-        return true
+        return false
     var state: Dictionary = app.current_state()
     var view = app.practice_view.stage.renderer
     match phase:
@@ -147,10 +144,10 @@ func _journey_frame() -> bool:
                 return false
             if int(state.get("lesson_steps",0)) < 2:
                 _fail("Real source generated fewer than two lesson steps")
-                return true
+                return false
             if app.current_screen != "practice" or                     app.practice_view.stage.score_status_panel.visible:
                 _fail("Native score ready but still obscured by loading panel")
-                return true
+                return false
             # Practice Flow opens with Listen. This journey exercises timed
             # Play/Pause/Retry, so choose Practice rhythm as a learner can.
             if str(state.get("mode","")) != "practice":
@@ -180,7 +177,7 @@ func _journey_frame() -> bool:
             initial_transport = int(state["transport_id"])
             if int(state["revision"]) != initial_revision:
                 _fail("Play unexpectedly invalidated source score")
-                return true
+                return false
             _advance("pause")
         "pause":
             if not _press(app.practice_view.start_button,"Pause"):
@@ -198,10 +195,10 @@ func _journey_frame() -> bool:
                 return false
             if absf(view.stream_world_beat-paused_clock) > .01:
                 _fail("Paused score moved after Pause was acknowledged")
-                return true
+                return false
             if view.admission_queue_generation() != paused_serial:
                 _fail("Pause admitted additional source notes")
-                return true
+                return false
             if not _press(app.practice_view.start_button,"Resume"):
                 return false
             _advance("resumed")
@@ -210,7 +207,7 @@ func _journey_frame() -> bool:
                 return false
             if int(state.get("transport_id",-1)) != initial_transport:
                 _fail("Resume created a new attempt instead of resuming")
-                return true
+                return false
             if not _press(app.practice_view.practice_retry_button,"Retry"):
                 return false
             retry_world_start = view.stream_world_beat
@@ -225,7 +222,7 @@ func _journey_frame() -> bool:
             # while an authored rest and one final count-in precede new ink.
             if view.stream_world_beat+0.0001 < retry_world_start:
                 _fail("Retry moved the perpetual score world backwards")
-                return true
+                return false
             for item in view.diagnostic_stream_snapshot():
                 if str(item.get("kind","")) == "rest" and \
                         float(item.get("world_origin",-INF)) >= retry_world_start-5.0:
@@ -236,7 +233,7 @@ func _journey_frame() -> bool:
             restarted_transport = transport
             if int(state.get("revision",-1)) != initial_revision:
                 _fail("Retry re-engraved or replaced the selected source")
-                return true
+                return false
             var playback: Variant = state.get("playback_timeline")
             var current: Variant = (playback.get("current") if playback is Dictionary
                 else null)
@@ -247,7 +244,7 @@ func _journey_frame() -> bool:
             if not count_plan is Dictionary or \
                     float(count_plan.get("beats",0.0)) <= 0.0:
                 _fail("Retry lacks its single authorized count-in plan")
-                return true
+                return false
             if str(state.get("phase","")) == "count_in":
                 retry_countdown_seen = retry_countdown_seen or \
                     app.practice_view.stage.count_in.visible
@@ -263,7 +260,7 @@ func _journey_frame() -> bool:
             # a displayed final count-in or scheduled audible cue.
             if not retry_countdown_seen or not retry_audio_seen:
                 _fail("Retry played without its single visible/audible count-in")
-                return true
+                return false
             var expected: String = "%s|%d|%d|practice" % [
                 str(state.get("piece_fingerprint","")),
                 initial_revision,restarted_transport]
@@ -309,7 +306,7 @@ func _journey_frame() -> bool:
                     "ready=%s matched=%s early=%s rest=%s" % [
                     str(_ready_score()),str(reserved_match),
                     str(wrong_side),str(retry_rest_seen)])
-                return true
+                return false
             if not _press(app.practice_view.listen_button,"Listen"):
                 return false
             _advance("listen_load")
@@ -321,14 +318,14 @@ func _journey_frame() -> bool:
             if int(state.get("revision",-1)) < initial_revision or \
                     str(state.get("stage_key","")) != initial_stage_key:
                 _fail("Listen is not on the practised window's score")
-                return true
+                return false
             # A newly engraved Listen score can be ready before synthesis,
             # download, WAV decoding, and the audio-ready handshake complete.
             # The user needs an audible synchronized example, not a spinner.
             var demo: Dictionary = state.get("demo",{}) if state.get("demo") is Dictionary else {}
             if demo.has("error") or bool(app.demo_player.audio_error):
                 _fail("Listen WAV preparation or decoding failed")
-                return true
+                return false
             if not bool(demo.get("audio_available",false)) or \
                     not bool(demo.get("ready",false)) or \
                     not bool(app.demo_player.loaded) or \
@@ -341,7 +338,7 @@ func _journey_frame() -> bool:
                 return false
             if app.demo_player.player.stream == null:
                 _fail("Listen entered playback without decoded PCM audio")
-                return true
+                return false
             # Practice Flow leads from Listen into Free; the learner returns
             # to timed practice by choosing Practice rhythm.
             if app.command_coordinator.state.pending:
@@ -355,7 +352,7 @@ func _journey_frame() -> bool:
                 return false
             if int(state.get("lesson_step",0)) != 1:
                 _fail("Listen changed the selected lesson")
-                return true
+                return false
             if app.command_coordinator.state.pending:
                 return false
             app.send_action({"action":"select_step","number":2})
@@ -366,13 +363,13 @@ func _journey_frame() -> bool:
             selected_revision = int(state["revision"])
             if int(state["revision"]) <= initial_revision:
                 _fail("Stage change did not prepare new notation")
-                return true
+                return false
             # Slower is a Pause-sheet / shortcut gesture, resolved by Python.
             if app.command_coordinator.state.pending:
                 return false
             if not bool(state.get("controls",{}).get("tempo_down",{}).get("enabled",false)):
                 _fail("Slower unavailable despite ready score")
-                return true
+                return false
             app.send_action({"action":"ui_tempo_down"})
             selected_bpm = float(state["bpm"])
             _advance("tempo_change")
@@ -381,7 +378,7 @@ func _journey_frame() -> bool:
                 return false
             if selected_bpm-float(state["bpm"]) != 5.0 or                     int(state.get("revision",-1)) != selected_revision or                     not _ready_score():
                 _fail("Manual tempo change re-engraved score or changed more than 5 BPM")
-                return true
+                return false
             resumed_bpm = float(state["bpm"])
             app.open_library_piece(EXPECTED_PIECE,true)
             _advance("reopen")
@@ -393,15 +390,15 @@ func _journey_frame() -> bool:
             if int(state.get("lesson_step",-1)) != 2 or \
                     str(state.get("mode","")) != "learn":
                 _fail("Reopening did not return to the selected step at Free")
-                return true
+                return false
             if app.practice_view.stage.score_status_panel.visible:
                 _fail("Reopened score still shows preparation overlay")
-                return true
+                return false
             print("PHASE6_REAL_SCORE_JOURNEY_OK notes=",view.timeline.notes.size(),
                 " revision=",state.get("revision"),
                 " restarted_transport=",restarted_transport,
                 " restored_step=",state.get("lesson_step"),
                 " bpm=",resumed_bpm)
             _finish(0)
-            return true
+            return false
     return false

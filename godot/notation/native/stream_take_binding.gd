@@ -104,9 +104,7 @@ func observe_transport(facts: StreamGeometry, world: float, opening: float,
         withdraw_future.call(facts,"changed_practice_decision")
     elif allow_admission and running_now and phase in [
             "count_in","playing","guided_wait"]:
-        if key != last_take or was_paused or \
-                (arm_acknowledged and not expected_segment.is_empty() and \
-                 armed_segment_id == expected_segment and expected_segment != live_segment_id):
+        if key != last_take or was_paused or expected_segment != live_segment_id:
             live_serial = -1
             if armed_serial >= 0:
                 # An old state poll must never claim an unacknowledged
@@ -130,7 +128,7 @@ func observe_transport(facts: StreamGeometry, world: float, opening: float,
                     expected_segment == live_segment_id:
                 # Resumed in its count-in: the same drawn take continues.
                 live_serial = paused_owner
-            elif key == last_take and not was_paused:
+            elif key == last_take and not was_paused and expected_segment == live_segment_id:
                 var owned: int = Admission.select(
                     queue.online,"bound",opening,world,0.0,0.0,key)
                 if owned >= 0:

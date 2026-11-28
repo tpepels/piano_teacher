@@ -172,19 +172,16 @@ func _finish(code: int) -> void:
         quit(code)
 
 func _process(_delta: float) -> bool:
-    if not _finishing:
-        _journey_frame()
-    return false
-
-func _journey_frame() -> bool:
+    if _finishing:
+        return false
     if app == null or not is_instance_valid(app):
         return false
     if Time.get_ticks_msec()-begun_ms > MAX_MS:
         _fail("Native fake-MIDI journey timed out")
-        return true
+        return false
     if not app.score_error.is_empty():
         _fail("Native notation failed: "+app.score_error)
-        return true
+        return false
     var state: Dictionary = app.current_state()
     var now_ms: int = Time.get_ticks_msec()
     if now_ms-last_heartbeat_ms >= 5000:
@@ -223,12 +220,12 @@ func _journey_frame() -> bool:
     var sampled_flow = app.presentation_session.score_flow
     if absf(float(renderer.stream_world_beat)-float(sampled_flow.beat)) > .002:
         _fail("Presented staff differs from its sampled musical projection")
-        return true
+        return false
     var continuity: String = _check_continuity(
         renderer, state, float(sampled_flow.last_ms), step)
     if not continuity.is_empty():
         _fail(continuity)
-        return true
+        return false
     # The journey stays on one window: once its notes are drawn they may
     # never vanish (Free -> Tempo, Pause/Resume and repeats keep the ink).
     var ink: bool = renderer.native_ready and renderer.retained_ready() and \
@@ -238,7 +235,7 @@ func _journey_frame() -> bool:
     if ink_shown_since >= 0 and not ink and phase not in ["stop_tempo","stopped_stable"]:
         _fail("Drawn notes vanished in phase %s (step %s, revision %s)" % [
             phase, step, str(state.get("revision",""))])
-        return true
+        return false
     match phase:
         "connect":
             if app.command_coordinator.state.pending or not app.score_session.is_ready() or \
@@ -248,11 +245,11 @@ func _journey_frame() -> bool:
                     int(state.get("last_bar",0)) != 1 or
                     str(state.get("hand","")) != "right"):
                 _fail("Opening the real scene selected the wrong practice window")
-                return true
+                return false
             if not renderer.native_ready or not renderer.retained_ready() or \
                     renderer.timeline.notes.is_empty():
                 _fail("First practice score was not visibly compiled")
-                return true
+                return false
             # The ordinary persisted-device scan connected the fake input.
             # Do not issue a mid-Lesson device.select, which intentionally
             # stops an active musical attempt in the real application.
@@ -302,7 +299,7 @@ func _journey_frame() -> bool:
             if int(teaching.get("target_index",-1)) != 0 or \
                     int(state.get("midi_input_count",0)) <= first_midi_input:
                 _fail("Wrong synthetic note gained Free credit or was not received")
-                return true
+                return false
             if wrong_free_at_ms < 0:
                 # The backend already registered the wrong note, so
                 # subsequent frames without MIDI must stay on its held
@@ -314,7 +311,7 @@ func _journey_frame() -> bool:
                 return false
             if absf(renderer.stream_world_beat-wrong_free_world) > .02:
                 _fail("Wrong MIDI or silence advanced the stationary Free score")
-                return true
+                return false
             print("FULL_SCENE_FREE_WRONG_HOLD_OK world=",wrong_free_world)
             if _press_primary():
                 _advance("pause_free")
@@ -333,7 +330,7 @@ func _journey_frame() -> bool:
             if absf(renderer.stream_world_beat-paused_world) > 0.02 or \
                     int(state.get("teaching",{}).get("target_index",-1)) != paused_target:
                 _fail("Pause did not freeze staff or prevent Free MIDI credit")
-                return true
+                return false
             if _press_primary():
                 _advance("resume_free")
         "resume_free":
@@ -358,7 +355,7 @@ func _journey_frame() -> bool:
                     int(state.get("last_bar",0)) != 1 or \
                     int(state.get("bpm",0)) != 40:
                 _fail("Free did not begin first measure Tempo at 50%")
-                return true
+                return false
             # The renderer may have pre-engraved a full piece, but the
             # physically admitted queue must contain ONLY the selected
             # one-bar practice source (plus sounding tails and rests).
@@ -369,7 +366,7 @@ func _journey_frame() -> bool:
                 float(active_source.get("sounding_duration_beats",NAN)))
             if not is_finite(source_bound) or source_bound <= 0.0:
                 _fail("Timed source has no authenticated practice-window duration")
-                return true
+                return false
             var actual_source_count := 0
             var active_take_strips := 0
             var active_key: String = "%s|%d|%d|%s" % [
@@ -386,17 +383,17 @@ func _journey_frame() -> bool:
                 if (float(strip.get("source_floor",-INF)) < -.0001 or
                         float(strip.get("source_ceiling",INF)) > source_bound+.0001):
                     _fail("Native score queue contains measures outside selected passage")
-                    return true
+                    return false
             if actual_source_count == 0 or active_take_strips != 1:
                 _fail("Timed one-bar take has missing or duplicate physically authorized ink")
-                return true
+                return false
             print("FULL_SCENE_SELECTED_WINDOW_OK duration=",source_bound,
                 " admitted_sources=",actual_source_count,
                 " bound_source_strips=",active_take_strips)
             initial_transport = int(state.get("transport_id",-1))
             if initial_transport <= 0:
                 _fail("Tempo has no published transport identity")
-                return true
+                return false
             # Run a real timed Pause/Resume through the same primary button
             # and native immutable queue used by a physical player, before
             # any wrong MIDI can force a retry.
@@ -417,7 +414,7 @@ func _journey_frame() -> bool:
                     absf(renderer.stream_world_beat-tempo_paused_world) > .02 or \
                     renderer.admission_queue_generation() != tempo_paused_generation:
                 _fail("Timed Pause moved the staff, changed the take, or admitted new ink")
-                return true
+                return false
             print("FULL_SCENE_TEMPO_PAUSE_HELD:",tempo_paused_world)
             if _press_primary():
                 _advance("resume_tempo")
@@ -429,13 +426,13 @@ func _journey_frame() -> bool:
                     int(state.get("first_bar",0)) != 1 or \
                     int(state.get("last_bar",0)) != 1:
                 _fail("Timed Resume lost its attempt identity or selected window")
-                return true
+                return false
             print("FULL_SCENE_TEMPO_RESUME_OK transport=",initial_transport)
             _advance("wrong_tempo")
         "wrong_tempo":
             if int(state.get("transport_id",-1)) != initial_transport:
                 _fail("Tempo advanced before receiving a failed MIDI input")
-                return true
+                return false
             if _play_failed_take(state):
                 _advance("repeat")
         "repeat":
@@ -445,7 +442,7 @@ func _journey_frame() -> bool:
                     step != "tempo" or int(state.get("bpm",0)) != 40 or
                     int(state.get("lesson_steps_mastered",0)) != 0):
                 _fail("Wrong MIDI did not cause one failed same-tempo repeat")
-                return true
+                return false
             failed_take_seen = true
             _advance("second_failure")
         "second_failure":
@@ -457,12 +454,12 @@ func _journey_frame() -> bool:
                 if int(state.get("transport_id",-1)) > initial_transport+1 and \
                         mode == "practice" and bool(state.get("running",false)):
                     _fail("Two failed takes at 50% did not return to Free")
-                    return true
+                    return false
                 return false
             if int(state.get("lesson_steps_mastered",0)) != 0 or \
                     bool(state.get("running",false)):
                 _fail("Returning to Free granted credit or kept a take running")
-                return true
+                return false
             var again: Array = state.get("teaching",{}).get("expected_notes",[])
             var held: float = app.presentation_session.score_flow.hold_world
             if again.is_empty() or not is_finite(held) or \
@@ -501,7 +498,7 @@ func _journey_frame() -> bool:
                 return false
             if int(state.get("bpm",0)) != 40:
                 _fail("Tempo after Free did not restart at 50%")
-                return true
+                return false
             # The clean and faster checks count takes from here.
             initial_transport = int(state.get("transport_id",-1))-1
             _advance("clean_repeat")
@@ -528,12 +525,12 @@ func _journey_frame() -> bool:
                     int(state.get("bpm",0)) <= 40 or int(state.get("bpm",0)) > 80 or
                     int(state.get("lesson_steps_mastered",0)) != 0):
                 _fail("Two real MIDI attacks did not produce a clean faster repeat (above 40 BPM)")
-                return true
+                return false
             # Owner rule: a repeat comes from the right. Its notes were
             # drawn ahead and scrolled in; none popped onto the staff.
             if app.score_admission.repeats_from_the_right < 1:
                 _fail("Automatic repeats did not scroll in from the right")
-                return true
+                return false
             if _press_primary():
                 _advance("hitch_pause")
         "hitch_pause":
@@ -552,11 +549,11 @@ func _journey_frame() -> bool:
             var playback: Variant = state.get("playback_timeline")
             if playback is Dictionary and str(playback.get("state","")) == "failed":
                 _fail("A stalled frame turned the resumed take into a failure")
-                return true
+                return false
             if int(state.get("transport_id",-1)) > hitch_transport+1 or \
                     int(state.get("lesson_steps_mastered",-1)) != hitch_mastered:
                 _fail("Unpresented playback advanced or earned credit during frame hitch")
-                return true
+                return false
             if app.score_admission.late_takes_reported < 1 or \
                     not bool(state.get("running",false)) or \
                     not bool(playback.get("presentation_confirmed",false)) or \
@@ -575,14 +572,14 @@ func _journey_frame() -> bool:
             if bool(state.get("running",false)) or bool(state.get("paused",false)) or \
                     state.get("playback_intent") is Dictionary:
                 _fail("Stop left a running take or outstanding native admission")
-                return true
+                return false
             stopped_at_ms = Time.get_ticks_msec()
             _advance("stopped_stable")
         "stopped_stable":
             if bool(state.get("running",false)) or bool(state.get("paused",false)) or \
                     state.get("playback_intent") is Dictionary:
                 _fail("Late native callback restarted playback after Stop")
-                return true
+                return false
             if Time.get_ticks_msec()-stopped_at_ms < 450:
                 return false
             print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo resume_tempo wrong_tempo auto_repeat second_failure free_again clean_tempo frame_hitch stop")

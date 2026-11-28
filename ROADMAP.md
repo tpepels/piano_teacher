@@ -192,6 +192,8 @@ failure. No physical or commercial release acceptance is claimed.
 
 ### Critical native boundary hardening after f20b9283
 
+Follow-up: native presentation receipts are poll-only; stale, expired and wrong-revision receipts cannot authorize a take. An absent renderer reaches a bounded terminal failure rather than generating further attempts. Unconfirmed audio, live grading and settlement are suppressed. Acceptance now rejects leaked audio objects and confirmed missing-score errors in both the native harness and relocated archive checks. Test shutdown waits for the production audio drain without ending the scene tree prematurely. Current-revision native acceptance and package verification remain required.
+
 Owner retest on f20b9283: 386 Python tests passed, 81.7% line and 64.8%
 branch coverage, five Godot suites passed, native recovery passed, all 17
 repertoire journeys passed their musical assertions. Developer-host

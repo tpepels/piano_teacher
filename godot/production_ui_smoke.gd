@@ -67,11 +67,8 @@ func _finish(code: int) -> void:
         quit(code)
 
 func _process(_delta: float) -> bool:
-    if not _finishing:
-        _journey_frame()
-    return false
-
-func _journey_frame() -> bool:
+    if _finishing:
+        return false
     if app == null or not is_instance_valid(app):
         return false
     if Time.get_ticks_msec() - begun_ms > MAX_MS:
@@ -91,7 +88,7 @@ func _journey_frame() -> bool:
         _fail("Production UI timed out phase=%s error=%s pending=%s" % [
             str(state.get("phase","missing")),
             str(app.score_error),str(app.command_coordinator.state.pending)])
-        return true
+        return false
     if not app.native_started:
         return false
     if not requested:
@@ -102,14 +99,14 @@ func _journey_frame() -> bool:
         return false
     if not app.score_error.is_empty():
         _fail("Production UI rejected native score: "+str(app.score_error))
-        return true
+        return false
     if not ready_seen:
         if not app.score_session.is_ready():
             return false
         if not expected_fingerprint.is_empty() and \
                 str(app.current_state().get("piece_fingerprint","")) != expected_fingerprint:
             _fail("Loaded a different MIDI from the requested real score")
-            return true
+            return false
         var chrome = app.practice_view
         if fixture_name == DEFAULT_FIXTURE:
             var selected: Dictionary = app.current_state()
@@ -117,30 +114,30 @@ func _journey_frame() -> bool:
                     int(selected.get("first_bar",0)) != 1 or \
                     int(selected.get("last_bar",0)) != 1:
                 _fail("Fresh default course must open its first measure in Listen")
-                return true
+                return false
             print("PHASE6_DEFAULT_PRACTICE_FLOW_OK")
         var voice = app.get_node_or_null("CountInVoicePlayer")
         if voice == null or not voice.available():
             _fail("Production scene does not own four playable offline voice recordings")
-            return true
+            return false
         if not chrome.stage.count_in.voice_status().get("available",false):
             _fail("Visual countdown has not bound the persistent audio service")
-            return true
+            return false
         var renderer = chrome.stage.renderer
         var notes: int = renderer.timeline.notes.size()
         if not renderer.visible or notes <= 0 or not renderer.retained_ready():
             _fail("Published score has no visible native retained notation")
-            return true
+            return false
         if app.practice_view.stage.score_status_panel.visible:
             _fail("Ready score remains obscured by a preparation overlay")
-            return true
+            return false
         if int(app.score_session.rendered_revision) != int(app.current_state().get("revision",-1)):
             _fail("Rendered score and backend source revisions differ")
-            return true
+            return false
         if str(app.current_screen) != "practice" or \
                 not bool(app.current_state().get("loaded",false)):
             _fail("Startup did not navigate to the loaded practice screen")
-            return true
+            return false
         # Before the first authorized Listen/Play, there is no executable
         # musical tempo. The published held directive must freeze the
         # displayed score, despite its pre-engraved source atlas. An older
@@ -157,7 +154,7 @@ func _journey_frame() -> bool:
                 and not accepted is Dictionary
                 and absf(renderer.stream_world_beat-ready_world_beat) > .02):
             _fail("Unadmitted score moved without an authorized musical epoch")
-            return true
+            return false
         # Practice Flow opens with Listen, which may already be authorized;
         # only ink shown before any authorized segment is a violation.
         var authorized: bool = bool(app.current_state().get("running",false)) \
@@ -166,12 +163,12 @@ func _journey_frame() -> bool:
             if not authorized and str(item.get("kind","source")) == "source" and \
                     bool(item.get("ever_visible",false)):
                 _fail("Pre-authorization score source appeared onscreen")
-                return true
+                return false
         var forward_beats: float = renderer.size.x*(
             1.0-ScoreView.PLAYHEAD_FRACTION)/renderer.timeline.pixels_per_beat
         if forward_beats < 2.0:
             _fail("Engraving leaves under two beats visible ahead of playhead")
-            return true
+            return false
         ready_seen = true
         print("PHASE6_PRODUCTION_NOTATION_READY notes=",notes,
             " visible_heads=",renderer.drawn_noteheads.size(),
@@ -216,7 +213,7 @@ func _journey_frame() -> bool:
                         is_finite(gap) and is_finite(admitted_world) and \
                         is_finite(playhead) and is_finite(viewport_width)):
                     _fail("Authorized source has no immutable admission witness")
-                    return true
+                    return false
                 var bounds: Vector2 = Admission.clip_bounds(
                     item,density,gap,renderer.timeline.duration_beats)
                 var first_pixel: float = playhead + \
@@ -224,7 +221,7 @@ func _journey_frame() -> bool:
                 if first_pixel <= viewport_width and \
                         not bool(item.get("admitted_on_empty_strip",false)):
                     _fail("Authorized source was admitted inside the viewport")
-                    return true
+                    return false
                 ready_pass_serial = int(item["serial"])
                 ready_take_owner = int(item.get("take_owner",ready_pass_serial))
                 ready_world_origin = float(item["world_origin"])
@@ -253,7 +250,7 @@ func _journey_frame() -> bool:
                 if Time.get_ticks_msec()-countin_audio_first_ms < 900:
                     return false
                 _fail("Production countdown had no voice or click cue")
-                return true
+                return false
         initial_transport = int(app.current_state().get("transport_id",-1))
         var original_survived := false
         # The authorized take owns the original immutable source position.
@@ -284,7 +281,7 @@ func _journey_frame() -> bool:
                 "passes":diagnostic
             }))
             _fail("Play shifted its existing world origin or admitted notes onscreen")
-            return true
+            return false
         transport_seen = true
         print("PHASE6_PRODUCTION_TRANSPORT_STARTED transport=",initial_transport)
         return false
@@ -313,10 +310,10 @@ func _journey_frame() -> bool:
         # measure may be admitted and the visible staff must be stationary.
         if absf(renderer.stream_world_beat-paused_world_beat) > .01:
             _fail("Paused staff moved after the acknowledged Pause")
-            return true
+            return false
         if renderer.admission_queue_generation() != paused_pass_serial:
             _fail("Pause spawned another exercise instead of letting previous notes leave")
-            return true
+            return false
         var paused_original_preserved := false
         for item in renderer.diagnostic_stream_snapshot():
             if str(item.get("kind","source")) == "source" and \
@@ -326,7 +323,7 @@ func _journey_frame() -> bool:
         if not paused_original_preserved and \
                 renderer.stream_world_beat < ready_first_expiry_world:
             _fail("Pause withdrew the current unexpired source before Resume")
-            return true
+            return false
         if app.command_coordinator.state.pending:
             return false
         resume_requested = true
@@ -337,7 +334,7 @@ func _journey_frame() -> bool:
         return false
     if int(app.current_state().get("transport_id",-1)) != initial_transport:
         _fail("Resume unexpectedly restarted the graded transport")
-        return true
+        return false
     if resumed_sample_ms < 0:
         resumed_sample_ms = Time.get_ticks_msec()
         resumed_world_beat = renderer.stream_world_beat
@@ -348,7 +345,7 @@ func _journey_frame() -> bool:
     var beat_advance: float = renderer.stream_world_beat-resumed_world_beat
     if beat_advance <= .04:
         _fail("Resume froze or reset the continuously moving staff")
-        return true
+        return false
     # After Resume, the staff must CONTINUE moving. A source inserted
     # outside the right edge may legitimately cross INTO the viewport in the
     # next 450 ms. Checking its current x coordinate would reject correct
@@ -440,14 +437,14 @@ func _journey_frame() -> bool:
             "passes":diagnostics}))
         _fail("Resume changed committed notation, lost a live take, " +
             "or admitted new notes within the viewport")
-        return true
+        return false
     if not is_finite(renderer.timeline.pixels_per_beat) or \
             renderer.timeline.pixels_per_beat <= 0.0:
         _fail("Score horizontal density is invalid")
-        return true
+        return false
     if not renderer.retained_ready():
         _fail("Resume lost the already engraved source notation")
-        return true
+        return false
     print("PHASE6_PRODUCTION_CONTINUOUS_FLOW_OK beat_delta=",beat_advance,
         " admitted_before=",paused_pass_serial,
         " admitted_after=",renderer.admission_queue_generation(),
@@ -455,7 +452,7 @@ func _journey_frame() -> bool:
         " selected_bpm=",app.current_state().get("bpm"))
     print("PHASE6_PRODUCTION_UI_WORKFLOW_OK")
     _finish(0)
-    return true
+    return false
 
 func _fail(message: String) -> void:
     printerr("PHASE6_PRODUCTION_UI_FAILED: ",message)
