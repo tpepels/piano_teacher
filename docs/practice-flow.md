@@ -76,7 +76,8 @@ bar; do not make the learner sit through it.
 
 | Attempt result | Next action |
 | --- | --- |
-| Clean below target | Increase by **10% × (1 + timing quality) × length factor** of target, capped at target |
+| First clean below target after at least two recorded failures at that tempo | Repeat at the same tempo; require another consecutive clean take |
+| Other clean below target | Increase by **10% × (1 + timing quality) × length factor** of target, capped at target |
 | Attempt below the ignored accuracy threshold (5%) | Discard the take from assessment history; repeat at unchanged tempo and progress |
 | Failed attempt with accuracy at or above the recovery threshold (70%) | Repeat at the same tempo; clear consecutive recovery failures |
 | One failed attempt below the recovery threshold | Repeat at the same tempo |
@@ -92,6 +93,8 @@ factor is 8 ÷ attacks, clamped to 1–2.5, so a short window climbs quickly:
 two quarter notes played well reach the target after one take, while a
 16-note window gains 10–20% per clean take. Two clean takes at target still
 complete the window.
+
+Below-target failure history is specific to the source window, hand and exact BPM, survives slower tempo and Free recovery, and is saved with the piece. Ignored attempts do not count. A recorded failure breaks a pending below-target clean streak; changing tempo or returning to Free resets that streak. The two-clean target rule is unchanged.
 
 A slower success is practice, not target-tempo mastery. A failed attempt breaks
 the target clean streak. A clean flow attempt has all required pitches and
@@ -134,6 +137,10 @@ The music list shows how far each practised piece is: the share of its
 windows (and the final test) mastered at target tempo, with the bar being
 learned, for example “38% · bar 12 of 32”, and a thin bar under the title.
 A finished piece reads “Learned”; a piece never practised shows none.
+
+## MIDI connection
+
+Discover MIDI ports periodically even when the app starts with no device selected. Prefer the saved port (including ALSA client-number changes), otherwise choose an unambiguous piano or single non-virtual input. Do not switch away from an active connection. Explicitly choosing no device disables automatic selection until another device is selected or the app restarts. Ambiguous devices require manual selection.
 
 ## Telling the learner
 

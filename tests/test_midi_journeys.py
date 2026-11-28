@@ -263,3 +263,17 @@ def test_unpresented_native_take_expires_without_automatic_retries(practice_sess
         after = session.tick(1)
         assert not after["running"]
         assert after["playback_timeline"]["state"] == "failed"
+
+
+def test_repeated_near_passes_require_two_clean_takes_below_target(practice_session):
+    session = practice_session(bars=1, chords=True)
+    first = tempo(session)
+    assert first["bpm"] == 40
+    state = next_take(first, play(session, first, wrong=(0,)))
+    assert state["bpm"] == 40
+    state = next_take(state, play(session, state, wrong=(0,)))
+    assert state["bpm"] == 40
+    state = next_take(state, play(session, state))
+    assert state["bpm"] == 40 and state["lesson_steps_mastered"] == 0
+    state = next_take(state, play(session, state))
+    assert state["bpm"] > 40 and state["lesson_steps_mastered"] == 0

@@ -155,7 +155,7 @@ def validate_teaching_decision(decision, *, event, state):
         raise ValueError("Unknown teaching source/course")
     p = decision.progress_after
     lower_bpm = 1
-    if any(type(value) is not tuple for value in (p.mastered, p.free_returns)):
+    if any(type(value) is not tuple for value in (p.mastered, p.free_returns, p.tempo_failures)):
         raise ValueError("Mutable teaching progress")
     for value in (p.bpm, p.target_bpm):
         if type(value) not in (int, float) or not isfinite(value) or not lower_bpm <= value <= SETTINGS.maximum_bpm:
@@ -173,6 +173,13 @@ def validate_teaching_decision(decision, *, event, state):
     if decision.definition_after is not state.definition:
         raise ValueError("A teaching decision cannot replace the course")
     available = {step.key for step in chosen.steps}
+    if type(p.tempo_clean) is not int or p.tempo_clean not in (0, 1):
+        raise ValueError("Invalid below-target clean streak")
+    if any(type(entry) is not tuple or len(entry) != 3 or entry[0] not in available
+           or type(entry[1]) is not int or not 1 <= entry[1] < p.target_bpm
+           or type(entry[2]) is not int or entry[2] not in (1, 2)
+           for entry in p.tempo_failures):
+        raise ValueError("Invalid tempo failure history")
     if not set(dict(p.mastered)) <= available:
         raise ValueError("Unknown mastered teaching stage")
     earned = set(dict(p.mastered)) - set(dict(state.progress.mastered))

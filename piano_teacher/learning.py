@@ -31,6 +31,8 @@ class LearningPlan:
         self.failures = 0
         self.mastered: dict[str, int] = {}
         self.free_returns: dict[str, int] = {}
+        self.tempo_failures: dict[tuple[str, int], int] = {}
+        self.tempo_clean = 0
 
     # Stored with saved sessions and evidence; kept for their schema.
     route_version = 3
@@ -48,7 +50,9 @@ class LearningPlan:
     def teaching_progress(self) -> course_policy.PlanProgress:
         return course_policy.PlanProgress(
             self.position, self.bpm, self.target_bpm, self.streak, self.failures,
-            tuple(sorted(self.mastered.items())), tuple(sorted(self.free_returns.items())))
+            tuple(sorted(self.mastered.items())), tuple(sorted(self.free_returns.items())),
+            tuple(sorted((key, bpm, count) for (key, bpm), count in self.tempo_failures.items())),
+            self.tempo_clean)
 
     def course_state(self) -> course_policy.CourseState:
         return course_policy.CourseState(self.piece, self.lesson_definition,
@@ -65,6 +69,8 @@ class LearningPlan:
         self.streak, self.failures = progress.streak, progress.failures
         self.mastered = dict(progress.mastered)
         self.free_returns = dict(progress.free_returns)
+        self.tempo_failures = {(key, bpm): count for key, bpm, count in progress.tempo_failures}
+        self.tempo_clean = progress.tempo_clean
 
     def _install_course(self, course) -> None:
         self.apply_teaching_progress(course.progress, definition=course.definition,

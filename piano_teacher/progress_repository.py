@@ -55,6 +55,9 @@ class ProgressRepository:
             fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
             count INTEGER NOT NULL,
             PRIMARY KEY (fingerprint,stage_key))""")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS flow_tempo_failures (
+            fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL, bpm INTEGER NOT NULL,
+            count INTEGER NOT NULL, PRIMARY KEY (fingerprint,stage_key,bpm))""")
         # What the library shows per piece; rewritten with every save.
         self.db.execute("""CREATE TABLE IF NOT EXISTS piece_progress (
             fingerprint TEXT PRIMARY KEY, mastered INTEGER NOT NULL,
@@ -94,6 +97,10 @@ class ProgressRepository:
         p.free_returns = {key: int(count) for key, count in self.db.execute(
             "SELECT stage_key,count FROM flow_returns WHERE fingerprint=?", (fingerprint,))
             if key in current}
+        p.tempo_failures = {(key, int(bpm)): int(count) for key, bpm, count in self.db.execute(
+            "SELECT stage_key,bpm,count FROM flow_tempo_failures WHERE fingerprint=?", (fingerprint,))
+            if key in current and 1 <= int(bpm) < p.target_bpm and int(count) in (1, 2)}
+        p.tempo_clean = 0
         row = self.db.execute(
             """SELECT step_key, first_bar, hand, bpm, streak FROM strategy_sessions
                WHERE fingerprint=? AND strategy=?""",
@@ -135,6 +142,9 @@ class ProgressRepository:
             for key, count in p.free_returns.items():
                 self.db.execute("INSERT OR REPLACE INTO flow_returns VALUES (?,?,?)",
                                 (fingerprint,key,count))
+            for (key, bpm), count in p.tempo_failures.items():
+                self.db.execute("INSERT OR REPLACE INTO flow_tempo_failures VALUES (?,?,?,?)",
+                                (fingerprint,key,bpm,count))
             self._save_summary(p, fingerprint)
 
     def _save_summary(self, p: LearningPlan, fingerprint: str) -> None:
@@ -156,7 +166,7 @@ class ProgressRepository:
         with sqlite_atomic(self.db):
             for table in ("strategy_sessions", "learner_units", "learner_stages", "repeat_tempo_credit",
                           "stage_tempos", "mastery", "sessions", "flow_returns",
-                          "piece_progress"):
+                          "piece_progress", "flow_tempo_failures"):
                 self.db.execute(f"DELETE FROM {table} WHERE fingerprint=?", (fingerprint,))
             # A reset is historical exposure context, distinct from deletion.
             session = self.db.execute("""SELECT session_id FROM learning_sessions

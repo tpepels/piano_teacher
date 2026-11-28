@@ -73,7 +73,7 @@ def _at_tempo(decision, bpm: int, *, reset: bool = False):
     """Commit one selected tempo to progress and its exact next exposure."""
     progress = decision.progress_after
     if reset or progress.bpm != bpm:
-        progress = replace(progress,bpm=bpm,streak=0,failures=0)
+        progress = replace(progress,bpm=bpm,streak=0,failures=0,tempo_clean=0)
     exposure = decision.next_exposure
     return replace(decision,progress_after=progress,
         next_exposure=replace(exposure,bpm=bpm) if exposure is not None else None)
@@ -117,7 +117,10 @@ def graded_progress(course, *, accepted, quality=0.0, attacks=8,
     state = FlowState(course.key, course.exercise.kind == "perform",
                            Step.TEMPO, int(p.bpm), int(p.target_bpm),
                            failures=p.failures, clean_at_target=p.streak,
-                           free_returns=dict(p.free_returns).get(course.key,0))
+                           free_returns=dict(p.free_returns).get(course.key,0),
+                           tempo_failures=tuple((bpm, count) for key, bpm, count
+                               in p.tempo_failures if key == course.key),
+                           tempo_clean=p.tempo_clean)
     t = take_graded(state, passed=accepted, quality=quality, attacks=attacks,
                     accuracy_percent=accuracy_percent)
     def selected(c, message):
@@ -127,12 +130,17 @@ def graded_progress(course, *, accepted, quality=0.0, attacks=8,
         returns = dict(p.free_returns)
         if t.outcome is Outcome.BACK_TO_FREE:
             returns[course.key] = t.state.free_returns
+        history = {(key, tempo): count for key, tempo, count in p.tempo_failures}
+        history.update({(course.key, tempo): count for tempo, count in t.state.tempo_failures})
         return selected(course.with_progress(bpm=bpm, failures=t.state.failures,
+                                    tempo_clean=t.state.tempo_clean,
+                                    tempo_failures=tuple(sorted((key, tempo, count)
+                                        for (key, tempo), count in history.items())),
                                     streak=t.state.clean_at_target,
                                     free_returns=tuple(sorted(returns.items()))), t.message)
     mastered = dict(p.mastered)
     mastered[course.key] = p.target_bpm
-    course = course.with_progress(streak=0, failures=0,
+    course = course.with_progress(streak=0, failures=0, tempo_clean=0,
                                   mastered=tuple(sorted(mastered.items())))
     if t.outcome is Outcome.PIECE_DONE:
         return selected(course, t.message)

@@ -41,6 +41,8 @@ class PlanProgress:
     failures: int
     mastered: tuple[tuple[str, int], ...]
     free_returns: tuple[tuple[str, int], ...] = ()
+    tempo_failures: tuple[tuple[str, int, int], ...] = ()
+    tempo_clean: int = 0
 
 
 def stage_key(exercise, hand, variant, profile, version):
@@ -135,7 +137,7 @@ def at_position(course, position: int):
     if type(position) is not int or not 0 <= position < len(course.steps):
         raise ValueError("Lesson step out of bounds")
     return course.with_progress(position=position, bpm=course.progress.target_bpm,
-                                streak=0, failures=0)
+                                streak=0, failures=0, tempo_clean=0)
 
 
 def next_unmastered(course) -> int | None:
@@ -183,10 +185,10 @@ def manual_progress(course, action, *, number=None, hand=None, bpm=None):
             raise ValueError(f"BPM must be between 1 and {SETTINGS.maximum_bpm}")
         target = course.piece.bpm
         return course.with_progress(bpm=min(int(bpm), target), target_bpm=target,
-                                    streak=0, failures=0)
+                                    streak=0, failures=0, tempo_clean=0)
     step = SETTINGS.manual_tempo_step_bpm
     if action == "tempo_up" and p.bpm < p.target_bpm:
-        return course.with_progress(bpm=min(p.target_bpm, p.bpm+step), streak=0, failures=0)
+        return course.with_progress(bpm=min(p.target_bpm, p.bpm+step), streak=0, failures=0, tempo_clean=0)
     if action == "tempo_down" and p.bpm > floor_bpm(course):
-        return course.with_progress(bpm=max(floor_bpm(course), p.bpm-step), streak=0, failures=0)
+        return course.with_progress(bpm=max(floor_bpm(course), p.bpm-step), streak=0, failures=0, tempo_clean=0)
     return course

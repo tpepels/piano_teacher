@@ -49,6 +49,8 @@ class FlowState:
     failures: int = 0
     clean_at_target: int = 0
     free_returns: int = 0
+    tempo_failures: tuple[tuple[int, int], ...] = ()
+    tempo_clean: int = 0
 
     @property
     def tempo_percent(self) -> int:
@@ -155,6 +157,11 @@ def take_graded(state: FlowState, *, passed: bool, quality: float = 0.0,
     if not passed:
         if accuracy_percent is not None and accuracy_percent < SETTINGS.ignored_accuracy_below_percent:
             return Transition(state, "Same tempo", Outcome.AGAIN)
+        if state.bpm < state.target_bpm:
+            history = dict(state.tempo_failures)
+            history[state.bpm] = min(2, history.get(state.bpm, 0) + 1)
+            state = replace(state, tempo_failures=tuple(sorted(history.items())))
+        state = replace(state, tempo_clean=0)
         # A near-pass is useful practice at this tempo, not evidence that
         # the learner needs slower work or another untimed preparation.
         # It also breaks a sequence of low-accuracy recovery failures.
@@ -178,9 +185,12 @@ def take_graded(state: FlowState, *, passed: bool, quality: float = 0.0,
                                   free_returns=state.free_returns + 1),
                           "Once more without tempo", Outcome.BACK_TO_FREE)
     if state.bpm < state.target_bpm:
+        if dict(state.tempo_failures).get(state.bpm, 0) >= 2 and state.tempo_clean == 0:
+            return Transition(replace(state, failures=0, tempo_clean=1),
+                              "Clean! Once more at this tempo", Outcome.AGAIN)
         bpm = min(state.target_bpm, state.bpm + tempo_increase(
             state.target_bpm, quality=quality, attacks=attacks))
-        return Transition(replace(state, bpm=bpm, failures=0, clean_at_target=0),
+        return Transition(replace(state, bpm=bpm, failures=0, clean_at_target=0, tempo_clean=0),
                           f"Faster: {bpm} BPM", Outcome.FASTER)
     clean = state.clean_at_target + 1
     if clean < CLEAN_TAKES_AT_TARGET:

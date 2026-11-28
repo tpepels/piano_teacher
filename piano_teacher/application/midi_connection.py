@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import re
 
 from ..hardware_probe import HardwareProbe
 from ..clock import Clock, monotonic
@@ -52,6 +53,7 @@ class MidiConnection:
         self.generation = 0
         self.next_scan_at = 0.0
         self.retry_after = 0.0
+        self.auto_discovery = True
         self.input_count = 0
         self.input_note = None
         self.input_at = None
@@ -114,6 +116,7 @@ class MidiConnection:
     def selecting(self, name: str, *, callback, callback_factory=None):
         if not isinstance(name, str):
             raise ValueError("MIDI input name must be text")
+        self.auto_discovery = bool(name)
         result = DeviceSelection()
         port = self._release("device_changed")
         try:
@@ -150,26 +153,48 @@ class MidiConnection:
 
     def scan_due(self, preferred: str) -> bool:
         now = self._clock()
-        if self.enabled and now >= self.next_scan_at and (self.device or preferred):
+        if self.enabled and self.auto_discovery and now >= self.next_scan_at:
             self.next_scan_at = now+self.SCAN_SECONDS
             return True
         return False
 
+    @staticmethod
+    def _candidate(names: tuple[str, ...], preferred: str) -> str | None:
+        """Prefer the selected device, tolerating ALSA's changing port suffix."""
+        if preferred and preferred in names:
+            return preferred
+        def stable(name):
+            return re.sub(r"\s+\d+:\d+$", "", name).casefold()
+        matches = [name for name in names if preferred and stable(name) == stable(preferred)]
+        if len(matches) == 1:
+            return matches[0]
+        physical = [name for name in names if not any(
+            marker in name.casefold() for marker in (
+                "midi through", "rtmidi", "virtual midi", "system:timer", "system:announce"))]
+        pianos = [name for name in physical if any(
+            marker in name.casefold() for marker in ("kawai", "piano", "digital keyboard"))]
+        if len(pianos) == 1:
+            return pianos[0]
+        return physical[0] if len(physical) == 1 else None
+
     def restore_preferred(self, names: tuple[str, ...], preferred: str, *, callback, callback_factory=None) -> MidiNotice | None:
         now = self._clock()
-        if not (self.enabled and preferred and not self.connected
-                and preferred in names and now >= self.retry_after):
+        if not (self.enabled and self.auto_discovery and not self.connected
+                and now >= self.retry_after):
+            return None
+        name = self._candidate(names, preferred)
+        if name is None:
             return None
         try:
-            port = self._open_input(preferred, callback, callback_factory)
+            port = self._open_input(name, callback, callback_factory)
         except Exception as exc:
             self.retry_after = now+self.RETRY_SECONDS
             return MidiNotice(
-                f"Cannot reconnect MIDI piano {preferred}: {exc}. "
+                f"Cannot reconnect MIDI piano {name}: {exc}. "
                 "Check the cable or Bluetooth, or choose the piano in Settings.",
                 "Switch it on or plug it in again; it is found automatically.")
-        self.port, self.device = port, preferred
-        return MidiNotice(f"Piano connected again: {preferred}.",
+        self.port, self.device = port, name
+        return MidiNotice(f"Piano connected again: {name}.",
             "Press Play when you are ready.", connected=True, sampled_at=now)
 
     def observe(self, message, *, now: float) -> None:
