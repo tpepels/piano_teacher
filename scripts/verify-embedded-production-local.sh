@@ -87,6 +87,11 @@ check() {
       FAILED_CASES+=("$label (Godot script error)")
       return 1
     fi
+    if grep -Eq 'ObjectDB instances were leaked|Leaked instance:|TAKE_WITHOUT_SCORE:' "$case_log"; then
+      printf 'FAIL  %s (resource leak or lost confirmed score)\n' "$label"
+      FAILED_CASES+=("$label (resource leak or lost confirmed score)")
+      return 1
+    fi
     # Source-queue refusal is a fatal production-journey defect even when
     # Godot keeps its event loop alive and the outer script exits zero.
     # Do not let the physical Pathétique admission failure turn CI green.

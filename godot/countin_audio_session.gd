@@ -57,3 +57,12 @@ func click(accent: bool) -> bool:
         return false
     click_cues_total += 1
     return true
+
+
+func shutdown() -> void:
+    if is_instance_valid(player):
+        player.stop()
+        player.stream = null
+    player = null
+    high = null
+    low = null

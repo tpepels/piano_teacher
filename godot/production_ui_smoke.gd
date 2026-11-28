@@ -55,7 +55,23 @@ func _boot() -> void:
         return
     print("PHASE6_PRODUCTION_SCENE_STARTED")
 
+var _finishing := false
+
+func _finish(code: int) -> void:
+    if _finishing:
+        return
+    _finishing = true
+    if is_instance_valid(app):
+        app._shutdown_and_quit(code)
+    else:
+        quit(code)
+
 func _process(_delta: float) -> bool:
+    if not _finishing:
+        _journey_frame()
+    return false
+
+func _journey_frame() -> bool:
     if app == null or not is_instance_valid(app):
         return false
     if Time.get_ticks_msec() - begun_ms > MAX_MS:
@@ -438,9 +454,9 @@ func _process(_delta: float) -> bool:
         " new_source_strips=",copies,
         " selected_bpm=",app.current_state().get("bpm"))
     print("PHASE6_PRODUCTION_UI_WORKFLOW_OK")
-    quit(0)
+    _finish(0)
     return true
 
 func _fail(message: String) -> void:
     printerr("PHASE6_PRODUCTION_UI_FAILED: ",message)
-    quit(1)
+    _finish(1)

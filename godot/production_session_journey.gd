@@ -85,7 +85,7 @@ func _fail(message: String) -> void:
         }
     printerr("PHASE6_REAL_SCORE_FAILED: ", phase, ": ", message,
         " witness=", JSON.stringify(witness))
-    quit(1)
+    _finish(1)
 
 func _ready_score() -> bool:
     if app.score_session == null or not app.score_session.is_ready():
@@ -108,7 +108,23 @@ func _press(button: Button, action: String) -> bool:
     button.pressed.emit()
     return true
 
+var _finishing := false
+
+func _finish(code: int) -> void:
+    if _finishing:
+        return
+    _finishing = true
+    if is_instance_valid(app):
+        app._shutdown_and_quit(code)
+    else:
+        quit(code)
+
 func _process(_delta: float) -> bool:
+    if not _finishing:
+        _journey_frame()
+    return false
+
+func _journey_frame() -> bool:
     if app == null or not is_instance_valid(app):
         return false
     var now := Time.get_ticks_msec()
@@ -386,6 +402,6 @@ func _process(_delta: float) -> bool:
                 " restarted_transport=",restarted_transport,
                 " restored_step=",state.get("lesson_step"),
                 " bpm=",resumed_bpm)
-            quit(0)
+            _finish(0)
             return true
     return false

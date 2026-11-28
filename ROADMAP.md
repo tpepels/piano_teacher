@@ -190,6 +190,43 @@ without reproduction and clean shutdown. Use TMPDIR on a disk-backed filesystem
 for the native verifier's workspace and logs to avoid the previous tmpfs quota
 failure. No physical or commercial release acceptance is claimed.
 
+### Critical native boundary hardening after f20b9283
+
+Owner retest on f20b9283: 386 Python tests passed, 81.7% line and 64.8%
+branch coverage, five Godot suites passed, native recovery passed, all 17
+repertoire journeys passed their musical assertions. Developer-host
+packaging, Debian archive build and relocated archive execution passed.
+The 4/4 Tempo-to-Free continuity assertion still failed (0.067 beats
+observed in 1 ms). The 2/4 14-second intentional hitch advanced several
+unpresented transports before recovery and emitted TAKE_WITHOUT_SCORE.
+Verbose shutdown identified AudioStreamWAV and AudioStreamPlaybackWAV
+leaks. Clean Debian 12 offline CI passed separately on 67fcdb6
+([46153781798](https://github.com/tpepels/piano_teacher/actions/runs/46153781798)).
+
+Hardening changes:
+- Embedded engine requires an exact bound-segment receipt before downbeat.
+  The existing state poll carries the active renderer's identity. Stale,
+  expired and wrong-revision receipts cannot authorize grading. MIDI input,
+  timed settlement and Listen completion are gated; lost presentation
+  recovers through the existing bounded failure/replacement path. Injected
+  headless engine tests explicitly retain their no-renderer adapter.
+- Native continuity compares actual projection sample timestamps,
+  rather than the SceneTree observer's wall-clock timestamps; preparation
+  is completed before sampling, and accepted-state presentation uses the
+  same sampled world. The motion tolerance is unchanged, and the test
+  checks renderer/projected world agreement.
+- All audio owners stop and release playback resources before normal and
+  test shutdown; bounded mixer drain precedes scene teardown. Native
+  acceptance fails on ObjectDB leaks or loss of confirmed score ink.
+- Regression covers late/stale presentation receipts and no grading or
+  successor on an unpresented take. The native hitch test requires exact
+  confirmed replacement without extra automatic attempts.
+
+These changes require current core and full native verification. The
+continuity failure may have included mismatched observation timestamps;
+the prior logs do not independently prove that was its only cause.
+Do not mark native or physical acceptance complete before the new gates pass.
+
 ## Python ONNX fingering (A2, 2026-11-28)
 
 The existing Lumikey 0.3.0 weights run through Python ONNX Runtime 1.30.0 CPU.

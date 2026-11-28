@@ -88,6 +88,8 @@ var inprocess_bus: Node
 var score_runway
 var score_admission
 var native_started := false
+var _quitting := false
+var spoken_countin: Node
 
 var current_screen: String:
     get: return navigation_session.current_screen
@@ -97,6 +99,7 @@ var startup_last_music_checked: bool:
     get: return library_catalog.startup_checked
 
 func _ready() -> void:
+    get_tree().auto_accept_quit = false
     # Let the display pace rendering at its native refresh rate.
     # A fixed 60 Hz cap plus the old 33 ms low-power sleep caused uneven
     # scroll steps, especially on 90/120/144 Hz panels.
@@ -144,7 +147,7 @@ func _ready() -> void:
     # Audio has one root-owned lifetime, including score revisions, Pause,
     # source selection and renderer replacement. The visual countdown merely
     # delegates speech to this service.
-    var spoken_countin := CountInVoicePlayer.new()
+    spoken_countin = CountInVoicePlayer.new()
     spoken_countin.name = "CountInVoicePlayer"
     add_child(spoken_countin)
     practice_view.bind_countin_voice_player(spoken_countin)
@@ -288,12 +291,36 @@ func _button(label: String, callback: Callable, primary := false,
     return button
 
 
+func _stop_audio() -> void:
+    countin_audio.shutdown()
+    if is_instance_valid(spoken_countin):
+        spoken_countin.shutdown()
+    if is_instance_valid(demo_player):
+        demo_player.clear()
+
 func _exit_tree() -> void:
+    _stop_audio()
     if score_session != null:
         score_session.shutdown_preparation()
 
+func _notification(what: int) -> void:
+    if what == NOTIFICATION_WM_CLOSE_REQUEST:
+        _exit_app()
+
 func _exit_app() -> void:
-    get_tree().quit()
+    _shutdown_and_quit(0)
+
+func _shutdown_and_quit(code: int) -> void:
+    if _quitting:
+        return
+    _quitting = true
+    process_mode = Node.PROCESS_MODE_DISABLED
+    _stop_audio()
+    # Let the audio server consume stop commands before its playback
+    # resources are destroyed. Always process this timer during shutdown.
+    var drain: float = clampf(AudioServer.get_output_latency()*2.0,.1,.5)
+    await get_tree().create_timer(drain,true,false,true).timeout
+    get_tree().quit(code)
 
 func _screen(name: String) -> MarginContainer:
     var panel := MarginContainer.new()
@@ -470,7 +497,7 @@ func _process(delta: float) -> void:
                 print("PIANO_PACKAGE_NATIVE_READY")
                 # Exit the bounded package smoke only after real retained ink is published.
                 score_session.score_published.connect(
-                    func(_revision: int): get_tree().quit(), CONNECT_ONE_SHOT)
+                    func(_revision: int): _shutdown_and_quit(0), CONNECT_ONE_SHOT)
             poll_session.poll()
             midi_devices.discover()
             settings_interactions.request_settings()

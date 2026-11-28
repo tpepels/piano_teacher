@@ -25,6 +25,8 @@ var tempo_paused_at_ms := -1
 var tempo_paused_world := NAN
 var tempo_paused_generation := -1
 var stopped_at_ms := -1
+var hitch_transport := -1
+var hitch_mastered := -1
 var failed_take_seen := false
 var played_first := false
 var played_second := false
@@ -87,7 +89,7 @@ func _fail(message: String) -> void:
             "paused":witness.get("paused"),
             "teaching":witness.get("teaching"),
             "score_error":app.score_error if is_instance_valid(app) else ""}))
-    quit(1)
+    _finish(1)
 
 
 func _press_primary() -> bool:
@@ -150,13 +152,31 @@ func _check_continuity(renderer, state: Dictionary, now_ms: float, step: String)
         var moved: float = world-continuity_world
         if moved > allowed or moved < -.002:
             return ("Staff jumped %.3f beats in %.0f ms (allowed %.3f) phase=%s step=%s mode=%s" % [
-                moved, dt*1000.0, allowed, phase, step, str(state.get("mode",""))])
+                moved, dt*1000.0, allowed, phase, step, str(state.get("mode",""))] +
+                " samples=%.3f..%.3f worlds=%.6f..%.6f" % [
+                    continuity_ms,now_ms,continuity_world,world])
     continuity_world = world
     continuity_ms = now_ms
     continuity_bpm = effective_bpm
     return ""
 
+var _finishing := false
+
+func _finish(code: int) -> void:
+    if _finishing:
+        return
+    _finishing = true
+    if is_instance_valid(app):
+        app._shutdown_and_quit(code)
+    else:
+        quit(code)
+
 func _process(_delta: float) -> bool:
+    if not _finishing:
+        _journey_frame()
+    return false
+
+func _journey_frame() -> bool:
     if app == null or not is_instance_valid(app):
         return false
     if Time.get_ticks_msec()-begun_ms > MAX_MS:
@@ -200,8 +220,12 @@ func _process(_delta: float) -> bool:
     var step: String = str(state.get("flow",{}).get("step",""))
     var mode: String = str(state.get("mode",""))
     var renderer = app.practice_view.stage.renderer
+    var sampled_flow = app.presentation_session.score_flow
+    if absf(float(renderer.stream_world_beat)-float(sampled_flow.beat)) > .002:
+        _fail("Presented staff differs from its sampled musical projection")
+        return true
     var continuity: String = _check_continuity(
-        renderer, state, float(Time.get_ticks_usec())*.001, step)
+        renderer, state, float(sampled_flow.last_ms), step)
     if not continuity.is_empty():
         _fail(continuity)
         return true
@@ -520,6 +544,8 @@ func _process(_delta: float) -> bool:
             if not bool(state.get("paused",false)):
                 return false
             if _press_primary():
+                hitch_transport = int(state.get("transport_id",-1))
+                hitch_mastered = int(state.get("lesson_steps_mastered",-1))
                 OS.delay_msec(14000)
                 _advance("hitch_recover")
         "hitch_recover":
@@ -527,8 +553,13 @@ func _process(_delta: float) -> bool:
             if playback is Dictionary and str(playback.get("state","")) == "failed":
                 _fail("A stalled frame turned the resumed take into a failure")
                 return true
+            if int(state.get("transport_id",-1)) > hitch_transport+1 or \
+                    int(state.get("lesson_steps_mastered",-1)) != hitch_mastered:
+                _fail("Unpresented playback advanced or earned credit during frame hitch")
+                return true
             if app.score_admission.late_takes_reported < 1 or \
                     not bool(state.get("running",false)) or \
+                    not bool(playback.get("presentation_confirmed",false)) or \
                     renderer.bound_segment_id() != str(playback.get("segment_id","")):
                 return false
             print("FULL_SCENE_FRAME_HITCH_RECOVERED transport=",state.get("transport_id"))
@@ -555,5 +586,5 @@ func _process(_delta: float) -> bool:
             if Time.get_ticks_msec()-stopped_at_ms < 450:
                 return false
             print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo resume_tempo wrong_tempo auto_repeat second_failure free_again clean_tempo frame_hitch stop")
-            quit(0)
+            _finish(0)
     return false

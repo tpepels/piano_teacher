@@ -96,7 +96,11 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
     # otherwise trap the source world behind its old limit indefinitely.
     score_session.advance_preparation()
     guided.update_hold(state)
-    var frame_ms: float = precise_ms if is_finite(precise_ms) else float(now_ms)
+    # Preparation may take appreciable time. Sample at projection, not
+    # at entry to Main._process before that work.
+    var frame_ms: float = maxf(
+        precise_ms if is_finite(precise_ms) else float(now_ms),
+        float(Time.get_ticks_usec())*.001)
     var beat: float = transport_beat(state,frame_ms)
     var world: float = score_flow.sample(frame_ms)
     feedback.poll(now_ms,score_session.layout_revision
@@ -146,26 +150,27 @@ func accept(state: Dictionary, request_midpoint_ms: int,
     visual_clock.accept(state,request_midpoint_ms,received_ms)
     # Both the source beat and scrolling world must see the same timeline
     # publication. Do not evaluate the new take ID against the old timeline.
-    score_flow.follow(state.get("musical_timeline"),received_ms)
-    var beat: float = transport_beat(state,received_ms)
+    var presentation_ms: float = float(Time.get_ticks_usec())*.001
+    score_flow.follow(state.get("musical_timeline"),presentation_ms)
+    var beat: float = transport_beat(state,presentation_ms)
     guided.update_hold(state)
     var playback: Variant = state.get("playback_timeline")
     var authorized: Variant = playback.get("current") \
         if playback is Dictionary else null
     if authorized is Dictionary:
-        score_flow.sample(received_ms)
+        score_flow.sample(presentation_ms)
     else:
         # This is an uncommitted source's projected BPM. The canonical
         # flow refuses to install it over already-authorized predecessor
         # epochs while the next source is still awaiting physical ACK.
-        score_flow.sample_uncommitted(received_ms,_source_rate(state,beat))
+        score_flow.sample_uncommitted(presentation_ms,_source_rate(state,beat))
     if runway != null:
         runway.preserve_unprepared_revision(state)
     if demo_player != null and bool(state.get("loaded",false)):
         demo_player.synchronize(state,beat)
     score_session.update_context(state,received_ms)
     if bool(state.get("loaded",false)) and practice_view.stage.renderer != null:
-        var world: float = score_flow.project(received_ms)
+        var world: float = score_flow.beat
         var current_renderer = practice_view.stage.renderer
         current_renderer.present(
             state,beat,world-float(current_renderer.runway_origin_beat))
@@ -188,6 +193,6 @@ func accept(state: Dictionary, request_midpoint_ms: int,
         # owner NOW, in this same accepted-state transaction, so there is
         # never a frame with a running transport and missing source ink.
         # The later process-frame projection remains idempotent.
-        present_frame(state,beat,score_flow.project(received_ms))
+        present_frame(state,beat,score_flow.beat)
     elif admission != null:
         admission.observe(state,received_ms)

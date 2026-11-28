@@ -53,6 +53,19 @@ The disk-quota failure is addressed operationally with a disk-backed TMPDIR;
 the successful local Debian-built archive result remains valid for its
 recorded revision.
 
+### Boundary hardening checkpoint
+
+Owner retest of f20b9283 passed 386 Python tests, all five Godot suites,
+both release builds and relocated execution. The 4/4 native continuity
+failure persisted; the 2/4 hitch recovered only after unpresented takes
+advanced; audio leak types were identified. Clean Debian 12 offline
+verification subsequently passed on 67fcdb6. The follow-up restores an
+exact-segment presentation confirmation gate before timed MIDI or
+settlement, uses actual projection sample times for native continuity,
+and makes audio teardown and lost confirmed score ink strict acceptance
+gates. See ROADMAP.md for the exact verification record. No new native,
+performance or physical acceptance is claimed yet.
+
 ## 1. Purpose and constraints
 
 Identify external runtimes, redundant transformations, obsolete interfaces, unnecessary runtime assets and duplicated responsibilities. A dependency must have an explicit owner, a current product requirement and a demonstrated reason to remain. Do not remove a dependency just because another language/library could perform a similar task.

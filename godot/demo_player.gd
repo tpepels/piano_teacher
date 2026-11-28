@@ -145,9 +145,9 @@ func _downloaded(code: int, body: PackedByteArray) -> void:
     prepared.emit(token, revision)
 
 func clear() -> void:
-    if request != null:
+    if is_instance_valid(request):
         request.cancel_request()
-    if player != null:
+    if is_instance_valid(player):
         player.stop()
         player.stream = null
     if not audio_path.is_empty() and audio_path.begins_with("user://"):
@@ -162,3 +162,7 @@ func clear() -> void:
     last_start_offset_s = 0.0
     last_sync_probe_ms = 0
     sync_monitor.reset_session()
+
+
+func _exit_tree() -> void:
+    clear()

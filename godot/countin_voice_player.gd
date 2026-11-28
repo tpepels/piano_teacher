@@ -87,3 +87,13 @@ func speak_beat(number: int) -> bool:
     last_spoken_number = number
     spoken_cues_total += 1
     return true
+
+
+func shutdown() -> void:
+    if is_instance_valid(_voice_player):
+        _voice_player.stop()
+        _voice_player.stream = null
+    _streams.clear()
+
+func _exit_tree() -> void:
+    shutdown()
