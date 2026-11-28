@@ -123,7 +123,8 @@ verify_bridge() {
 }
 make_fixture() {
   "$PYTHON" "$ROOT/scripts/release/make-fixtures.py"
-}verify_fixture_ui() {
+}
+verify_fixture_ui() {
   set_case fixture
   seed phase6_native_fixture.mid
   timeout 105s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \

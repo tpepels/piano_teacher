@@ -24,7 +24,7 @@ verify_archive() {
   ln -s "$(command -v bash)" "$(command -v dirname)" "$package_tools"
   local release="${launcher%/*}"
   local -a packaged=(env -i HOME="$clean_home" PATH="$package_tools"
-    PIANO_PYTHON="$release/runtime/python/bin/python3" PYTHONNOUSERSITE=1
+    PIANO_PYTHON="$release/runtime/python/bin/python3" PYTHONDONTWRITEBYTECODE=1 PYTHONNOUSERSITE=1
     PIANO_TEACHER_PYTHON_HOME="$release/runtime/python" PYTHONHOME="$release/runtime/python"
     LD_LIBRARY_PATH="$release/runtime/python/lib" PYTHONPATH="$release")
   test ! -e "$release/bin/node"
@@ -67,7 +67,7 @@ assert {note["hand"] for note in plan["assignments"].values()
         if note["finger"] is not None} == {"left", "right"}, plan["status"]
 PY
   "${packaged[@]}" "$release/runtime/python/bin/python3" -P "$ROOT/scripts/release/verify-relocated.py" "$WORK"
-  if [[ -f "$sample_bank" ]]; then
+  if [[ -n "$sample_bank" && -f "$sample_bank" ]]; then
     "${packaged[@]}" PIANO_TEACHER_SOUNDFONT="$sample_bank" \
       "$release/runtime/python/bin/python3" -P "$ROOT/scripts/release/verify-relocated.py" "$WORK"
   fi
