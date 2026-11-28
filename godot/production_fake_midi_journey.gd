@@ -40,6 +40,11 @@ var ink_shown_since := -1
 
 var _finishing := false
 var _visual_capture = VISUAL_CAPTURE.new()
+var _visual_section := false
+var _section_take := -1
+var _section_revision := -1
+var _section_step := -1
+var _section_stage_key := ""
 
 func _initialize() -> void:
     call_deferred("_boot")
@@ -59,6 +64,7 @@ func _boot() -> void:
     app = scene.instantiate()
     root.add_child(app)
     _visual_capture.start(app,root)
+    _visual_section = OS.get_environment("PIANO_VISUAL_SECTION") == "1"
     _advance("connect")
 
 
@@ -182,7 +188,8 @@ func _process(_delta: float) -> bool:
         return false
     if app == null or not is_instance_valid(app):
         return false
-    if Time.get_ticks_msec()-begun_ms > MAX_MS:
+    var limit: int = 320000 if _visual_section else MAX_MS
+    if Time.get_ticks_msec()-begun_ms > limit:
         _fail("Native fake-MIDI journey timed out")
         return false
     if not app.score_error.is_empty():
@@ -588,6 +595,60 @@ func _process(_delta: float) -> bool:
                 return false
             if Time.get_ticks_msec()-stopped_at_ms < 450:
                 return false
-            print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo resume_tempo wrong_tempo auto_repeat second_failure free_again clean_tempo frame_hitch stop")
-            _finish(0)
+            if _visual_section:
+                if _press_primary():
+                    _section_revision = int(state.get("revision",-1))
+                    _section_step = int(state.get("lesson_step",-1))
+                    _section_stage_key = str(state.get("stage_key",""))
+                    _section_take = -1
+                    played_first = false
+                    played_second = false
+                    _advance("section_mastery")
+                return false
+            _success()
+        "section_mastery":
+            _master_section(state,step,mode)
+        "section_choice":
+            if _press_primary():
+                _advance("section_next")
+        "section_next":
+            if not app.command_coordinator.state.pending and app.score_session.is_ready() and \
+                    int(state.get("revision",-1)) > _section_revision and \
+                    (int(state.get("lesson_step",-1)) != _section_step or \
+                    str(state.get("stage_key","")) != _section_stage_key):
+                if step == "section_choice":
+                    _fail("Next section left the old section choice active")
+                else:
+                    print("FULL_SCENE_VISUAL_SECTION_ADVANCED")
+                    _success()
     return false
+
+func _master_section(state: Dictionary, step: String, mode: String) -> void:
+    if step == "section_choice":
+        if int(state.get("lesson_steps_mastered",0)) < 1:
+            _fail("Section choice was reached without mastery")
+            return
+        _advance("section_choice")
+        return
+    if mode != "practice" or not bool(state.get("running",false)):
+        return
+    var playback: Variant = state.get("playback_timeline")
+    if not playback is Dictionary or not bool(playback.get("presentation_confirmed",false)):
+        return
+    var transport_id: int = int(state.get("transport_id",-1))
+    if transport_id != _section_take:
+        _section_take = transport_id
+        played_first = false
+        played_second = false
+    var beat: float = _current_take_beat(state)
+    if not played_first and beat >= 0.0 and beat < .10:
+        _strike(72)
+        played_first = true
+    if played_first and not played_second and beat >= SECOND_BEAT and beat < SECOND_BEAT+.10:
+        _strike(79)
+        played_second = true
+
+func _success() -> void:
+    print("FULL_SCENE_MIDI_SUCCESS: wrong_free pause_free resume_free pause_tempo " +
+        "resume_tempo wrong_tempo auto_repeat second_failure free_again clean_tempo frame_hitch stop")
+    _finish(0)

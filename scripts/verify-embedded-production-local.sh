@@ -88,7 +88,11 @@ check() {
   # native case hangs or the verifier is interrupted before its exit.
   # The underlying Godot/package commands retain their stricter timeouts.
   printf 'RUN   %s\n' "$label"
-  if timeout --signal=TERM --kill-after=5s 600s \
+  local case_budget=600s
+  if [[ "$MODE" == --visual-only ]]; then
+    case_budget=900s
+  fi
+  if timeout --signal=TERM --kill-after=5s "$case_budget" \
       bash -Eeuo pipefail -c '"$@"' _ "$@" 2>&1 | tee -a "$LOG" "$case_log"; then
     # Godot can exit successfully after reporting a GDScript runtime error.
     # Reject that broken player journey instead of counting it as passed.
@@ -157,8 +161,15 @@ run_player() {
       --require-step listen_playback --require-step stage_change --require-step reopen) ;;
     fixture) required=(--require-step fixture) ;;
   esac
+  local section=0
+  if [[ "$name" == fake-midi-two-four ]]; then
+    section=1
+    budget=330s
+    required+=(--require-step section_mastery --require-step section_choice --require-step section_next)
+  fi
   mkdir -p "$capture" "$output"
-  timeout "$budget" env PIANO_VISUAL_CAPTURE_DIR="$capture" LIBGL_ALWAYS_SOFTWARE=1 \
+  timeout "$budget" env PIANO_VISUAL_SECTION="$section" \
+    PIANO_VISUAL_CAPTURE_DIR="$capture" LIBGL_ALWAYS_SOFTWARE=1 \
     xvfb-run -a -s '-screen 0 1600x1000x24' "$GODOT_BIN" \
     --display-driver x11 --rendering-method gl_compatibility --audio-driver Dummy \
     --path godot "$@" 2>&1 | tee "$output/journey.log" || status=$?

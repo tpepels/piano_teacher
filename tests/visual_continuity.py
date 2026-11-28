@@ -167,6 +167,7 @@ def compare(before, after, previous, current):
 def records(folder):
     """Read bounded length-prefixed PNGs paired with one metadata line each."""
     count = 0
+    previous_engine_frame = None
     with (folder/"frames.bin").open("rb") as frames, (folder/"frames.jsonl").open() as metadata:
         for index,line in enumerate(metadata):
             length = frames.read(4)
@@ -181,6 +182,10 @@ def records(folder):
             meta = json.loads(line)
             if meta["frame"] != index:
                 raise ValueError("Missing or duplicate rendered frame")
+            engine_frame = meta["engine_frame"]
+            if previous_engine_frame is not None and engine_frame != previous_engine_frame+1:
+                raise ValueError("A rendered engine frame was not captured exactly once")
+            previous_engine_frame = engine_frame
             count += 1
             with Image.open(io.BytesIO(data)) as img:
                 yield meta,img.convert("RGB")
@@ -221,7 +226,9 @@ class Review:
     def consume(self, meta, image):
         self.coverage["frames"] += 1
         last = self.history[-1] if self.history else None
-        navigating = last is None or meta["screen"] != last[0]["screen"] or meta["piece"] != last[0]["piece"]
+        navigating = (last is None or meta["screen"] != last[0]["screen"]
+                      or (meta["piece"] != last[0]["piece"]
+                          and (not self.armed or meta["step"] == "reopen")))
         if navigating:
             self.armed = False
         self.armed |= meta["ready"] and meta["screen"] == "practice"

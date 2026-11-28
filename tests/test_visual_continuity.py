@@ -1,11 +1,13 @@
 """Fault injection for the visual acceptance detector (not a fake renderer test)."""
 
+import io
+import json
+import struct
 from copy import deepcopy
 
 import pytest
 from PIL import Image, ImageDraw
-
-from visual_continuity import compare
+from visual_continuity import analyze, compare
 
 
 def frame(dx=0, *, notes=True, dy=0, fill=(15,45,35), cue=False, extra=False):
@@ -77,3 +79,38 @@ def test_score_only_flash_is_detected():
     after = before.copy()
     ImageDraw.Draw(after).rectangle((0,100,639,299),fill=(220,220,220))
     assert "large_score_flash" in compare(before,after,old,new)[0]
+
+
+def test_capture_detects_single_frame_flash_and_saves_surrounding_frames(tmp_path):
+    capture = tmp_path/"capture"
+    capture.mkdir()
+    old,_ = metadata()
+    old.update(screen="practice",piece="fixture",ready=True,mode="practice",
+               phase="playing",step="tempo")
+    with (capture/"frames.bin").open("wb") as images, (capture/"frames.jsonl").open("w") as records:
+        for index in range(9):
+            meta = deepcopy(old)
+            meta.update(frame=index,engine_frame=100+index,time_ms=index*33)
+            meta["world"] = meta["layers"][0]["world"] = index*.05
+            image = (Image.new("RGB",(640,400),"white") if index == 4
+                     else frame(-8*index))
+            encoded = io.BytesIO()
+            image.save(encoded,format="PNG")
+            data = encoded.getvalue()
+            images.write(struct.pack("<I",len(data))+data)
+            records.write(json.dumps(meta)+"\n")
+    (capture/"complete.json").write_text(json.dumps({"frames":9,"success":True}))
+    output = tmp_path/"report"
+    assert not analyze(capture,output)
+    report = json.loads((output/"report.json").read_text())
+    assert any(item.get("frame") == 4 and "large_background_or_screen_flash" in item["reasons"]
+               for item in report["failures"])
+    witness = output/"failure-000004"
+    assert (witness/"frame-000001.png").is_file()
+    assert (witness/"frame-000004.json").is_file()
+    assert (witness/"frame-000007.png").is_file()
+    # A seemingly clean recording without a complete end marker must fail.
+    (capture/"complete.json").write_text(json.dumps({"frames":8,"success":True}))
+    assert not analyze(capture,tmp_path/"truncated")
+    incomplete = json.loads((tmp_path/"truncated/report.json").read_text())
+    assert any("invalid_capture" in item["reasons"] for item in incomplete["failures"])

@@ -246,7 +246,8 @@ Pathétique II source and physical acceptance remain pending.
 Owner authorized rendered-frame continuity testing. Add a test-only
 Window capture after each rendered frame, run production journeys under
 Xvfb/Mesa, and analyze scroll-compensated ink, stationary staff and
-background offline. Fault injection exercises disappearance, insertion,
+background offline. The two-four visual journey additionally completes a
+real section through synthetic physical MIDI and selects Next section. Fault injection exercises disappearance, insertion,
 jump, vertical shift, flash and normal motion. Failure evidence contains
 surrounding rendered frames and timeline state. See
 [rendered visual continuity](docs/development.md#rendered-visual-continuity).

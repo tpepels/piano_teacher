@@ -5,6 +5,8 @@ const PLAYHEAD_FRACTION := preload("res://notation/shared/spacing_policy.gd").PL
 const WIDTH := 640
 const HEIGHT := 400
 const MAX_FRAMES := 14000
+const MAX_CAPTURE_BYTES := 1073741824
+const MAX_METADATA_BYTES := 268435456
 
 var step := "boot"
 var _app: Node
@@ -70,7 +72,8 @@ func _sample() -> Dictionary:
     var world: float = float(flow.beat)
     if not is_finite(world):
         world = 0.0
-    return {"frame":_count,"time_ms":float(Time.get_ticks_usec())*.001,
+    return {"frame":_count,"engine_frame":Engine.get_frames_drawn(),
+        "time_ms":float(Time.get_ticks_usec())*.001,
         "sample_ms":float(flow.last_ms),"world":world,"step":step,
         "screen":str(_app.current_screen),"piece":str(state.get("piece_fingerprint","")),
         "ready":_app.score_session.is_ready(),"score":_rect(stage.score_frame,size),
@@ -103,9 +106,14 @@ func _capture() -> void:
     if png.is_empty():
         _error("Cannot encode rendered frame")
         return
+    var line: String = JSON.stringify(meta)
+    if _frames.get_position()+png.size()+4 > MAX_CAPTURE_BYTES or \
+            _metadata.get_position()+line.to_utf8_buffer().size()+1 > MAX_METADATA_BYTES:
+        _error("Rendered-frame capture exceeded its storage bound")
+        return
     _frames.store_32(png.size())
     _frames.store_buffer(png)
-    _metadata.store_line(JSON.stringify(meta))
+    _metadata.store_line(line)
     if _frames.get_error() != OK or _metadata.get_error() != OK:
         _error("Cannot write rendered frame")
     _count += 1

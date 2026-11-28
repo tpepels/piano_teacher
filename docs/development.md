@@ -232,8 +232,10 @@ Install Xvfb, xvfb-run, xauth and Mesa OpenGL first (Arch: xorg-server-xvfb,
 xorg-xauth, mesa; Debian/Ubuntu: xvfb, xauth, libgl1-mesa-dri). The full
 manually dispatched CI suite runs this check and uploads its reports.
 The visual suite repeats the fixture, both 4/4 and 2/4 fake MIDI journeys,
-and Moonlight retry/Listen/stage navigation. It checks required journey
-steps and actual moving frame coverage. It captures every rendered frame
+and Moonlight retry/Listen/stage navigation. The two-four journey also
+plays clean timed takes to a genuine mastered-section choice and activates
+Next section. It checks required journey steps, contiguous engine draw
+numbers, actual visible staff/ink and moving frame coverage. It captures every rendered frame
 at a test-only 30 FPS cap via Window texture readback after frame_post_draw;
 640×400 lossless captures are analyzed offline. It is not a frame-rate
 benchmark or proof of physical display/driver behaviour.
@@ -257,7 +259,8 @@ Results default to `~/piano-teacher-results/visual-<timestamp>/` or
 coverage, expected pixel displacement and all failures. Up to eight
 failure sequences retain the preceding three frames, offending frame,
 following three frames, metadata (backend state/timeline) and an ink
-residual heatmap. Use a disk-backed TMPDIR. Raw captures are temporary
+residual heatmap. Use a disk-backed TMPDIR. Each capture is limited to 1 GiB of image data and 256 MiB of metadata;
+an exceeded bound is a failure, never a silently skipped frame. Raw captures are temporary
 unless `PIANO_KEEP_VISUAL_CAPTURE=1` is set for failed journeys. No visual
 test assets or capture hooks are reachable from the released application.
 
