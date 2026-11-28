@@ -83,7 +83,13 @@ func _process(_delta: float) -> void:
             ready_error = error
             push_error("Embedded Python: " + error)
         return
-    for reply in native.call("take_responses"):
+    var profile: bool = OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
+    var began: int = Time.get_ticks_usec() if profile else 0
+    var responses: Array = native.call("take_responses")
+    if profile and Time.get_ticks_usec()-began >= 8000:
+        print("NATIVE_RESPONSE_DRAIN:",JSON.stringify({"at_ms":float(began)*.001,
+            "elapsed_ms":float(Time.get_ticks_usec()-began)*.001,"count":responses.size()}))
+    for reply in responses:
         if not reply is Dictionary:
             continue
         var identifier := int(reply.get("id", -1))
@@ -103,6 +109,11 @@ func _process(_delta: float) -> void:
         pending.erase(identifier)
         var requester: Variant = handle.get_ref() if handle != null else null
         if requester != null and is_instance_valid(requester):
+            var dispatch_start: int = Time.get_ticks_usec() if profile else 0
             requester.complete(identifier,
                 int(reply.get("status", 3)),
                 reply.get("body", PackedByteArray()))
+            if profile and Time.get_ticks_usec()-dispatch_start >= 8000:
+                print("NATIVE_RESPONSE_DISPATCH:",JSON.stringify({"at_ms":float(dispatch_start)*.001,
+                    "elapsed_ms":float(Time.get_ticks_usec()-dispatch_start)*.001,
+                    "id":identifier,"bytes":reply.get("body",PackedByteArray()).size()}))

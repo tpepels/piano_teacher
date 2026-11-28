@@ -22,6 +22,9 @@ var _clock_offset_ms := 0.0
 func _backend_ms(at_ms: float) -> float:
     return float(at_ms)-_clock_offset_ms
 
+func diagnostic_backend_sample_ms() -> float:
+    return _backend_ms(last_ms)
+
 ## Adopt the published timeline. A new run continues from the current
 ## world; when the run ends the world stands where the run left it.
 func follow(published: Variant, at_ms: float) -> void:

@@ -83,7 +83,6 @@ func record_notehead(event: Dictionary, point: Vector2, viewport_width: float,
     # head mask, ink and staff space used for it. Status ink recolors this
     # head in place inside the same retained strip; it never re-derives it.
     drawn_note_instances.append({"event_id":id,"source_id":event.get("source_id"),
-        "pitch":int(event.get("pitch",-1)),
         "pass_index":pass_index,"instance_id":"%d:%s" % [pass_index,id],"position":point,
         "head":("head_whole" if kind == "whole" else
             "head_half" if kind == "half" else "head_black"),

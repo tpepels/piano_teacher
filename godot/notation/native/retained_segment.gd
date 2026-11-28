@@ -60,6 +60,7 @@ func sync_note_status(take_key: String, source, visible_ink: bool,
 func _draw() -> void:
     if not compile_enabled:
         return
+    var began: int = Time.get_ticks_usec() if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1" else 0
     compiled = false
     note_instances.clear()
     instances_by_event.clear()
@@ -86,6 +87,10 @@ func _draw() -> void:
     else:
         painter.paint_retained_rest(self)
     compiled = true
+    if began > 0 and Time.get_ticks_usec()-began >= 8000:
+        print("RETAINED_DRAW_WORK:",JSON.stringify({"at_ms":float(began)*.001,
+            "elapsed_ms":float(Time.get_ticks_usec()-began)*.001,
+            "kind":kind,"notes":note_instances.size(),"generation":compile_generation}))
     # The parent may already have projected this frame before our first draw.
     # Update notehead hit regions on the next frame, once, without rebuilding ink.
     var canvas = _canvas_ref.get_ref()

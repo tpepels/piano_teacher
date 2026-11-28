@@ -56,8 +56,7 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
             var nearest := INF
             for head in renderer.drawn_note_instances:
                 var source: String = str(head.get("source_id",""))
-                if int(head.get("pitch",source_pitches.get(source,-1))) != pitch and \
-                        int(source_pitches.get(source,-1)) != pitch:
+                if int(source_pitches.get(source,-1)) != pitch:
                     continue
                 var distance: float = absf(float(head["position"].x)-renderer.size.x*PLAYHEAD_FRACTION)
                 if distance < nearest:
@@ -232,7 +231,8 @@ func _sample() -> Dictionary:
         world = 0.0
     return {"frame":_count,"engine_frame":Engine.get_frames_drawn(),
         "time_ms":float(Time.get_ticks_usec())*.001,
-        "sample_ms":float(flow.last_ms),"world":world,"step":step,
+        "sample_ms":float(flow.last_ms),"backend_sample_ms":flow.diagnostic_backend_sample_ms(),
+        "world":world,"motion_world":float(staff.stream_world_beat),"step":step,
         "timing_version":1,"fps":_fps,"capture_cost_ms":_previous_capture_ms,
         "run_offset":float(flow.run_offset),"following":bool(flow.following),
         "events":_events.duplicate(true),"feedback_version":2,

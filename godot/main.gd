@@ -486,6 +486,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+    var profile: bool = OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
+    var began: int = Time.get_ticks_usec() if profile else 0
     if not native_started and inprocess_bus != null:
         var native_error: String = str(inprocess_bus.get("ready_error"))
         if not native_error.is_empty():
@@ -507,6 +509,12 @@ func _process(delta: float) -> void:
     var frame_ms: float = float(Time.get_ticks_usec()) * .001
     presentation_session.advance(state_inbox.current,state_inbox.tick_ms,
         int(frame_ms),delta,command_coordinator.state.pending,current_screen,frame_ms)
+    if profile and Time.get_ticks_usec()-began >= 8000:
+        print("MAIN_FRAME_WORK:",JSON.stringify({"at_ms":float(began)*.001,
+            "elapsed_ms":float(Time.get_ticks_usec()-began)*.001,
+            "presentation_ms":float(Time.get_ticks_usec())*.001-frame_ms,
+            "screen":current_screen,"phase":state_inbox.current.get("phase",""),
+            "revision":state_inbox.current.get("revision",-1)}))
 
 func current_state() -> Dictionary:
     return state_inbox.current.duplicate(true)

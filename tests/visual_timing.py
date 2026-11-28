@@ -16,6 +16,17 @@ TRANSITION_SLACK_BEATS = 1.5
 TRANSITION_SLACK_MS = 1200
 
 
+def _musical_ms(meta):
+    wall=meta.get("backend_sample_ms")
+    if wall is None:
+        return None
+    musical=wall
+    for start,length in (meta.get("timeline") or {}).get("holds_ms",[]):
+        if wall>start:
+            musical-=min(wall-start,float("inf") if length is None else length)
+    return musical
+
+
 def _segment(meta):
     timeline = meta.get("timeline") or {}
     world = meta["world"]-meta.get("run_offset",0)
@@ -24,26 +35,56 @@ def _segment(meta):
         return None
     if timeline.get("end_world") is not None and world >= timeline["end_world"]-.001:
         return None
+    musical=_musical_ms(meta)
     for segment in reversed(segments):
-        if world >= segment["world_start"]-.0001:
+        if segment["beats"]<=1e-8 and segment["kind"]!="hold":
+            continue
+        if musical is not None:
+            if musical >= segment["start_ms"]:
+                return segment
+        elif world >= segment["world_start"]-.0001:
             return segment
     return None
+
+
+def _span_seconds(length,a,b,used):
+    if used<=0 or length<=0:
+        return 0.
+    if abs(a-b)<1e-8:
+        return used*60/a
+    if used>=length:
+        return length*60/math.sqrt(a*b)
+    return (120*length/(math.pi*math.sqrt(a*b)) *
+            math.atan(math.sqrt(b/a)*math.tan(math.pi*used/(2*length))))
 
 
 def _span(meta):
     segment = _segment(meta)
     if not segment or segment["kind"] == "hold" or meta.get("paused"):
         return None
+    timeline=meta.get("timeline") or {}
     local = meta["world"]-meta.get("run_offset",0)-segment["world_start"]
-    # Only stable constant spans can be judged by the constant rate test;
-    # easing boundaries and authored tempo changes have their own gross cap.
+    musical=_musical_ms(meta)
+    elapsed=None if musical is None else (musical-segment["start_ms"])/1000
+    remaining=segment["beats"]
     for index,(beats,a,b) in enumerate(segment["spans"]):
-        if local < beats or index == len(segment["spans"])-1:
+        used=min(beats,remaining)
+        duration=_span_seconds(beats,a,b,used)
+        if used>0 and ((elapsed is not None and 0<=elapsed<duration) or
+                      (elapsed is None and 0<=local<used)):
             if abs(a-b) > .001:
                 return None
-            key = ((meta.get("timeline") or {}).get("run"),segment["start_ms"],index)
+            # A publication can cut or replace a span at the same start
+            # instant. Never join samples from different timing contracts.
+            key = (timeline.get("run"),meta.get("run_offset",0),
+                   tuple(tuple(h) for h in timeline.get("holds_ms",[])),
+                   segment["start_ms"],segment["world_start"],segment["beats"],
+                   tuple(tuple(s) for s in segment["spans"]),index)
             return key,float(a),segment["kind"]
-        local -= beats
+        remaining-=used
+        local-=used
+        if elapsed is not None:
+            elapsed-=duration
     return None
 
 
@@ -65,15 +106,24 @@ def _policy_rate(meta):
     index = segments.index(current)
     if not index:
         return None
-    previous = segments[index-1]
-    following = segments[index+1] if index+1 < len(segments) else None
+    # Cut-at-Resume leaves a zero-length placeholder; it is not a
+    # tempo owner. Find the preceding real segment or Free hold.
+    previous = next((s for s in reversed(segments[:index])
+                     if s["kind"]=="hold" or s["beats"]>1e-8),None)
+    following = next((s for s in segments[index+1:]
+                      if s["kind"]=="hold" or s["beats"]>1e-8),None)
+    if previous is None:
+        return None
     if previous["kind"] == "hold" and following and following["kind"] == "hold":
         # Inter-target Free movement policy: 1.5-second target travel,
         # but no artificial acceleration beyond 80 BPM.
         base = max(1.,float(meta.get("bpm") or 0))
         return max(base,min(80.,current["beats"]*40.))
-    if previous["kind"] in ("take","count_in") and (not following or following["kind"]!="hold"):
-        # A silent tail continues at the outgoing sounding tempo.
+    if previous["kind"] in ("take","count_in","hold","rest") and following and following["kind"]=="count_in":
+        # A rest leading to a timed count-in continues the real outgoing
+        # rate, including a Free hold cut at the mode boundary.
+        return _rate_at(previous,previous["beats"])
+    if previous["kind"] in ("take","count_in") and not following:
         return _rate_at(previous,previous["beats"])
     return None
 
@@ -183,7 +233,7 @@ class TimingReview:
             elif a[2] in ("take","rest","count_in"):
                 sample_dt = new["sample_ms"]-old["sample_ms"]
                 if sample_dt > 0:
-                    delta = new["world"]-old["world"]
+                    delta = new.get("motion_world",new["world"])-old.get("motion_world",old["world"])
                     self.motion.append((sample_dt,delta,a[1],a[2]))
                     while len(self.motion)>1 and sum(x[0] for x in self.motion)-self.motion[0][0]>=WINDOW_MS:
                         self.motion.popleft()
@@ -329,4 +379,6 @@ class TimingReview:
                 failures.append({"reasons":["missing_retry_timing_coverage"]})
             if self.tempo_windows < 1 and ("wrong_free" in required or "retry_wait" in required):
                 failures.append({"reasons":["missing_sustained_tempo_coverage"]})
+            if self.policy_windows < 1 and ("wrong_free" in required or "retry_wait" in required):
+                failures.append({"reasons":["missing_independent_velocity_policy_coverage"]})
         return summary,failures

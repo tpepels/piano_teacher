@@ -124,3 +124,26 @@ def test_required_timing_probes_cannot_be_omitted():
     reasons=[reason for f in failures for reason in f["reasons"]]
     assert "missing_timing_probe_coverage" in reasons
     assert "missing_retry_timing_coverage" in reasons
+
+
+def test_zero_length_cut_does_not_hide_rest_policy():
+    m=meta(100,1.2,40,"rest",80)
+    s=m["timeline"]["segments"][0]
+    s.update(world_start=1,beats=2,spans=[[2,80,80]])
+    m["timeline"]["segments"]=[
+        {"kind":"hold","world_start":1,"start_ms":-1000,"beats":0,"spans":[[0,40,40]]},
+        {"kind":"rest","world_start":1,"start_ms":0,"beats":0,"spans":[[8,40,40]]},s,
+        {"kind":"count_in","world_start":3,"start_ms":1500,"beats":4,"spans":[[4,40,40]]}]
+    assert _policy_rate(m)==40
+
+
+def test_span_uses_sample_time_and_rejects_boundary():
+    from visual_timing import _span
+    m=meta(100,0)
+    m["backend_sample_ms"]=-1
+    assert _span(m) is None
+    m["backend_sample_ms"]=100
+    assert _span(m)[1]==40
+    before=_span(m)
+    m["timeline"]["segments"][0]["beats"]=10
+    assert _span(m)!=before
