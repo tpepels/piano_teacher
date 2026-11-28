@@ -33,7 +33,8 @@ RUNTIME_FILES = (
     Path("scripts/verify-native-bridge.sh"),
     Path("scripts/dev_runtime_state.py"),
 )
-PACKAGES = ("mido", "python-rtmidi", "music21", "verovio", "CairoSVG", "Pillow")
+PACKAGES = ("mido", "python-rtmidi", "music21", "verovio", "CairoSVG", "Pillow",
+            "onnxruntime", "numpy")
 
 
 def _hash_file(path: Path) -> str:
@@ -124,7 +125,7 @@ def runtime_signature(godot: Path, root: Path = ROOT) -> str:
     """Only verified input changes invalidate the previous Godot smoke."""
     files = list(RUNTIME_FILES)
     for relative_dir, endings in (
-        ("piano_teacher", (".py", ".json", ".cjs")),
+        ("piano_teacher", (".py", ".json", ".onnx", ".sf2")),
         ("godot", (".gd", ".gdextension", ".tscn", ".tres", ".gdshader", ".gd.uid")),
     ):
         directory = root / relative_dir

@@ -47,17 +47,10 @@ def _page_fragments(pages, pending):
             if node.get("opacity") == "0.48":
                 del node.attrib["opacity"]
         for anchor, item in groups.items():
-            ids = item["group_ids"]
-            if anchor not in geometry.elements:
+            selected = _group_elements(anchor, item, geometry, by_id, parents, ledgers)
+            if selected is None:
                 continue
             x, y, system = geometry.elements[anchor]
-            if not all(identifier in geometry.elements and geometry.elements[identifier][2] == system
-                       for identifier in ids):
-                continue
-            selected = {by_id[slur] for slur in item["slur_ids"]}
-            if not all(_slur_on_system(node, parents, system) for node in selected):
-                continue
-            selected.update(_ornament_nodes(ids, by_id, parents, ledgers))
             lines = geometry.staff_systems[system]["staff_lines"]
             fragment = local_vector_art(isolate_elements(root, selected), lines[1]-lines[0],
                                         (x, y), "verovio-engraved-graces")
@@ -65,6 +58,21 @@ def _page_fragments(pages, pending):
                 fragments[anchor] = fragment
                 del pending[anchor]
     return fragments
+
+
+def _group_elements(anchor, item, geometry, by_id, parents, ledgers):
+    ids = item["group_ids"]
+    if anchor not in geometry.elements:
+        return None
+    system = geometry.elements[anchor][2]
+    if not all(identifier in geometry.elements and geometry.elements[identifier][2] == system
+               for identifier in ids):
+        return None
+    selected = {by_id[slur] for slur in item["slur_ids"]}
+    if not all(_slur_on_system(node, parents, system) for node in selected):
+        return None
+    selected.update(_ornament_nodes(ids, by_id, parents, ledgers))
+    return selected
 
 
 def _ornament_nodes(ids, by_id, parents, ledgers):

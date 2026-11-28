@@ -178,10 +178,8 @@ def _matches_endpoints(cut, rect, size, first, last, space):
         return False
     start_y=top+(start_box[1]+start_box[3])*.5
     end_y=top+(end_box[1]+end_box[3])*.5
-    if (abs(start_y-y0*height)>pxspace*7.0 or
-            abs(end_y-y1*height)>pxspace*7.0):
-        return False
-    return True
+    return not (abs(start_y-y0*height)>pxspace*7.0 or
+                abs(end_y-y1*height)>pxspace*7.0)
 
 
 def _fragment(pair, matched, first_point, last_point, space):

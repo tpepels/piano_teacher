@@ -129,10 +129,10 @@ jobs:
           # wheel exists. The ALSA and JACK headers are build prerequisites,
           # not packaged/runtime dependencies.
           sudo apt-get update -qq
-          sudo apt-get install -y libasound2-dev libjack-jackd2-dev pkg-config
+          sudo apt-get install -y libasound2-dev libjack-jackd2-dev pkg-config cmake
           python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
-          .venv/bin/python -m pip install -e '.[godot,test]' numpy scons
+          .venv/bin/python -m pip install -c scripts/release/binary-constraints.txt -e '.[godot,test]' scons
           curl --fail --location --silent --show-error --retry 2 --max-time 90 \
             'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
             -o "$RUNNER_TEMP/godot.zip"

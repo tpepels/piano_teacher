@@ -40,9 +40,9 @@ by the scripts. Use the actual Godot project in [godot/](../godot/).
 ## CI coverage
 
 The local and [GitHub CI](../.github/workflows/ci.yml) entry point is
-[test.sh](../scripts/test.sh). Since 2026-11-22, GitHub Tests runs only
-when manually dispatched from Actions → Tests with `core` or `full` (`full`
-also runs native-production). Pushes and pull requests do not start CI.
+[test.sh](../scripts/test.sh). Main-branch pushes run core CI automatically.
+Actions → Tests can also be dispatched manually with `core` or `full`;
+`full` additionally runs native-production and the relocated package verifier.
 For same-HEAD local acceptance, run the core suite and strict native verifier
 after development is complete; the last green run on an older SHA does not
 verify subsequent source edits. The 2026-11-22 native binder, Python

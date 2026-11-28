@@ -632,13 +632,13 @@ func _forget_template_images(prefix: String) -> void:
             template_images.erase(key)
     _head_masks.clear_templates()
 
-func chord_heads(key: String) -> Array:
+func _chord_heads(key: String) -> Array:
     return chord_metadata.get(key,{}).get("head_positions",[])
 
 func head_cutout(source: String, key: String, index: int, head: String) -> Texture2D:
     return _head_masks.cutout(source,key,index,head,
         template_images.get(source+":"+key),head_images.get(head),
-        template_box(source,key),bounds.get(head,[]),chord_heads(key))
+        template_box(source,key),bounds.get(head,[]),_chord_heads(key))
 
 func install_head_interior(head: String, texture: Texture2D) -> bool:
     return head_images.has(head) and _head_masks.install_interior(head,texture)
