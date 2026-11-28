@@ -17,6 +17,26 @@
 | A7 · Score commands | Godot and the player journeys use `score.bundle` for bound semantic and layout data. The two partial operations have been removed from routing, native classification and the child. |
 | A8 · Packaging | The Linux builder stages reachable application code, records wheel and ELF dependencies, and hashes fonts, models and the SF2. The release includes notices and rebuildable FluidSynth source, plus a companion archive of library sources. The Debian 12 target is gated by the offline [release verification workflow](../.github/workflows/linux-release.yml); record its actual outcome separately from historical developer-host results. Commercial rights for the trained fingering weights remain unresolved. [Model provenance](../piano_teacher/fingering/THIRD_PARTY_NOTICES.md) |
 
+### Verification checkpoint (2026-11-28, 7b1adb8)
+
+| Finding | Remaining acceptance / action |
+| --- | --- |
+| A1 | Direct import and authored marks implemented, including cross-measure slurs and anchored grace groups. Run the full current native repertoire and confirm notation at the piano. Codex reported coverage of 75 cross-measure and 80 same-measure slurs; that report is historical, not a fresh independent run on 7b1adb8. |
+| A2 | Node removal implemented, historical exact parity on 64,771 assignments, current fingering CI passed. Current relocated archive inference remains to be verified. Commercial rights for the original trained weights are a separate open gate. |
+| A3 | Source/command isolation implemented and previously measured. Full current native integration and physical MIDI responsiveness remain open. |
+| A4 | Rendering optimizations implemented; final comparative performance acceptance open. Earlier Bach/Hanon cold and warm opening regressions must be remeasured. No automated comparative benchmark runner is checked in. |
+| A5 | Bundled sampled Listen implemented for Linux releases; basic offline synthesis is deliberately retained for source installations lacking FluidSynth. Verify the current archive audio path and actual speakers. |
+| A6–A7 | Production research separation and single score bundle implemented; historical equivalence and current Godot/fingering checks recorded. Await the full current Python/native results. |
+| A8 | Debian 12 build succeeded, 171,687,950-byte desktop archive. Clean offline target execution blocked by archive mount permissions before application startup. Resolve the CI access issue and repeat. Desktop isolation remains the approved scope; iPad is excluded. Commercial redistribution clearance remains open. |
+
+[Exact core run](https://github.com/tpepels/piano_teacher/actions/runs/46150153844):
+quality, Godot and fingering passed; full Python pending at checkpoint.
+[Exact release run](https://github.com/tpepels/piano_teacher/actions/runs/46150153849):
+build passed, offline execution failed at archive access. See the
+[roadmap checkpoint](../ROADMAP.md#follow-up-release-verification-2026-11-28)
+for the blocker and follow-up. No physical acceptance, latest-revision
+performance improvement or sale readiness is claimed.
+
 ## 1. Purpose and constraints
 
 Identify external runtimes, redundant transformations, obsolete interfaces, unnecessary runtime assets and duplicated responsibilities. A dependency must have an explicit owner, a current product requirement and a demonstrated reason to remain. Do not remove a dependency just because another language/library could perform a similar task.

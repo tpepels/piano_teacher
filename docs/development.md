@@ -220,6 +220,37 @@ Pause/Resume, no new source admission while paused, exact one-to-four-bar
 visible windows, preserved long ties and barlines, speakers/count-in and
 actual piano input. Headless software acceptance does not certify those.
 
+## Local automated verification
+
+Run these from the repository root after checking the working tree and
+recording the exact revision. This sequence requires no live keyboard input.
+Use the development environment described above, including CPython 3.14,
+Godot 4.7.2 and release-builder prerequisites.
+
+```bash
+git status --short --branch
+git log -1 --oneline
+.venv/bin/python -m pip install -c scripts/release/binary-constraints.txt -e '.[godot,test]' scons
+bash scripts/test.sh --coverage
+bash scripts/verify-embedded-production-local.sh
+```
+
+The full native verifier includes the developer-host relocated package check.
+For the independent Debian-built artifact, also run:
+
+```bash
+bash scripts/build-linux-release.sh dist
+bash scripts/release/verify-archive.sh dist/piano-teacher-linux-x86_64.tar.gz
+```
+
+The latter verifies on the current host; it does not establish clean Debian
+compatibility unless executed in that target environment. Keep logs for each
+command, the exact revision, environment and coverage outputs. Run
+performance measurements separately from the tests to avoid contention.
+The repository has frame and worker diagnostics but no dedicated automated
+comparative benchmark runner; defer interactive piano measurements until the
+physical acceptance session. Current result status belongs in ROADMAP.md.
+
 ## Standalone Linux package
 
 Build the distributable with Docker Buildx from the repository root:

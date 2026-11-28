@@ -104,14 +104,33 @@ import and cache restore matched across all 22 MIDI and MusicXML fixtures.
 
 ### Follow-up release verification (2026-11-28)
 
-- [Core CI for 2644068](https://github.com/tpepels/piano_teacher/actions/runs/46149754201)
-  passed quality, Godot and fingering; Python coverage was still running when
-  this record was prepared.
-- The Debian 12 builder is paired with a separate offline target-container
-  verifier. Both local and target verification use the existing player
-  fixtures, exact archive launch, sampled Listen, MusicXML import, progress
-  restore, two-hand inference and worker recovery. No target result is claimed
-  until the actual job completes.
+- Codex's final notation/audio/release changes reached main through eddc6d3.
+  Commit 2644068 corrected three blocking quality findings, included ONNX
+  Runtime, NumPy and model/instrument assets in developer runtime fingerprints,
+  and aligned the full CI package prerequisites with release constraints.
+- The release-verification follow-up is implemented through
+  [7b1adb8](https://github.com/tpepels/piano_teacher/commit/7b1adb82226a4d4bdf13c2c97b449a024b468f7e).
+  Both local and target verification use the existing player fixtures, exact
+  archive launch, sampled Listen, MusicXML import, progress restore, two-hand
+  inference and worker recovery. No distributables are published by CI.
+- [Core CI on 7b1adb8](https://github.com/tpepels/piano_teacher/actions/runs/46150153844):
+  quality (including native mailbox), Godot syntax/behaviour and fingering
+  passed; the full Python coverage job was still in progress at this checkpoint.
+  Full native-production was skipped because this was a core run.
+- [Debian 12 release CI on 7b1adb8](https://github.com/tpepels/piano_teacher/actions/runs/46150153849):
+  the build and inventory completed, producing a 171,687,950-byte desktop
+  archive; the separate target image also built. Offline execution failed
+  before launching Piano Teacher: the unprivileged container user could not
+  resolve the mounted archive (realpath: Permission denied). Correct the
+  archive mount ownership/access or run the verifier under the runner's
+  numeric UID/GID, preserving unprivileged execution and read-only mounts.
+  Re-run the exact artifact offline; this is a verification-environment blocker,
+  not evidence that the application passed or failed at runtime.
+- Local automated verification is requested before the next physical test.
+  See [developer commands](docs/development.md#local-automated-verification).
+  Local logs and any remaining Codex working-tree changes are not available
+  in this checkpoint. Do not promote historical benchmark or test results
+  to the latest revision.
 - The final rendering changes require repeated paired measurements; faster
   fragment extraction alone does not resolve the earlier Bach/Hanon startup
   regressions.
