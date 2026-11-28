@@ -18,6 +18,7 @@ PLACEMENT_KEYS = frozenset({
     "placement_revision", "ink_ahead_beats", "free_travel_beats",
     "reusable_rest_beats", "opening_header_beats", "presented_segment",
     "placement_transport", "placement_segment", "placement_renderer",
+    "placement_generation",
     "placement_sample_us", "placement_clock_ms",
 })
 PLACEMENT_FRESH_SECONDS = .75
@@ -34,6 +35,7 @@ class TransportTiming:
         self.midi_input = midi_input
         self._placement = None
         self._last_placement_sample = -1
+        self._last_placement_renderer = (-1, -1)
 
     def presentation_bpm(self) -> float:
         pending = self.take.pending
@@ -173,7 +175,7 @@ class TransportTiming:
 
     def _placement_identity(self):
         return (self.lesson.revision, self.transport.transport_id,
-                self.transport.active_segment_id)
+                self.transport.active_segment_id, self.transport.admission_generation)
 
     def update_placement_facts(self, kwargs: dict) -> None:
         """Accept one source-bound measurement; legacy clients cannot reuse silence."""
@@ -182,22 +184,26 @@ class TransportTiming:
         ahead, travel = kwargs.get("ink_ahead_beats"), kwargs.get("free_travel_beats")
         if ahead is None and travel is None:
             return
-        stamp_keys = ("placement_transport", "placement_segment", "placement_renderer",
-                      "placement_sample_us", "placement_clock_ms")
+        stamp_keys = ("placement_transport", "placement_segment", "placement_generation",
+                      "placement_renderer", "placement_sample_us", "placement_clock_ms")
         stamped = any(k in kwargs for k in stamp_keys)
         token = None
         now = self.clock()
         if stamped:
-            epoch, segment, renderer, sample, clock_ms = (kwargs.get(k) for k in stamp_keys)
+            epoch, segment, generation, renderer, sample, clock_ms = (kwargs.get(k) for k in stamp_keys)
             if (type(epoch) is not int or type(segment) is not str
-                    or type(renderer) is not int or renderer < 0
+                    or type(generation) is not int or generation < 0
+                    or not isinstance(renderer, (list, tuple)) or len(renderer) != 2
+                    or any(type(v) is not int or v < 0 for v in renderer)
                     or type(sample) is not int or sample < 0
                     or type(clock_ms) not in (int, float) or not math.isfinite(clock_ms)):
                 raise ValueError("Incomplete placement identity")
-            identity = (kwargs["placement_revision"], epoch, segment)
+            identity = (kwargs["placement_revision"], epoch, segment, generation)
+            renderer = tuple(renderer)
             if (identity != self._placement_identity()
                     or sample <= self._last_placement_sample
-                    or not 0 <= now-clock_ms/1000 <= PLACEMENT_FRESH_SECONDS):
+                    or renderer < self._last_placement_renderer
+                    or not -1e-6 <= now-clock_ms/1000 <= PLACEMENT_FRESH_SECONDS):
                 return
             token = (identity, renderer, now, clock_ms/1000)
         # Validate all measurements before installing any of them.
@@ -214,6 +220,7 @@ class TransportTiming:
             self.transport.report_free_travel(travel)
         if stamped:
             self._last_placement_sample = sample
+            self._last_placement_renderer = renderer
 
     def count_in_clearance(self, beats: float) -> float:
         """Consume the discount once, only on the current, recently observed take."""
@@ -222,8 +229,9 @@ class TransportTiming:
             identity, renderer, received, clock = token
             now = self.clock()
             if (identity == self._placement_identity()
+                    and renderer == self._last_placement_renderer
                     and 0 <= now-received <= PLACEMENT_FRESH_SECONDS
-                    and 0 <= now-clock <= PLACEMENT_FRESH_SECONDS):
+                    and -1e-6 <= now-clock <= PLACEMENT_FRESH_SECONDS):
                 return self.transport.count_in_clearance(beats)
         return self.transport.ink_ahead_beats
 

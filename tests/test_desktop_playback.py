@@ -302,7 +302,8 @@ def test_retry_count_in_reuses_only_measured_silence(practice_session, reusable,
     placement = dict(placement_revision=before["revision"],
         placement_transport=before["transport_id"],
         placement_segment=before["playback_timeline"]["segment_id"],
-        placement_renderer=1, placement_sample_us=1,
+        placement_generation=before["playback_timeline"]["generation"],
+        placement_renderer=[1,1], placement_sample_us=1,
         placement_clock_ms=before["clock_sampled_at_ms"],
         ink_ahead_beats=3.5, reusable_rest_beats=reusable, opening_header_beats=.75)
     # Exercise the same polling boundary used by the native client.

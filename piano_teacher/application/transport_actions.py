@@ -139,19 +139,20 @@ class PlaybackAuthorization:
                    and not self.transport.paused
                    and not (self._replaced is not None and self._replaced[0] == key
                             and now - self._replaced[1] < self.REPLACE_AGAIN_AFTER_SECONDS))
-        self.transport.fail(notify_failure=(
-            self.on_replaced_failure if replace else self.on_playback_failure), **values)
-        if replace:
-            # fail() above is the identity/revocation boundary. A delayed
-            # report for a previous take must never modify current geometry.
-            # The old take has now stopped, so install the fresh clearance
-            # before requesting the one permitted replacement.
+        def replace_failed(reason):
+            # Called only after fail() authenticates and revokes this take,
+            # but before lifecycle.stop invalidates its generation. Its full
+            # measured clearance survives; the discount does not.
             if isinstance(placement, dict):
                 try:
                     self.transport_timing.update_placement_facts(placement)
                 except (ValueError, TypeError, OverflowError):
-                    # Malformed measurement cannot undo the committed stop.
                     pass
+            self.on_replaced_failure(reason)
+
+        self.transport.fail(notify_failure=(
+            replace_failed if replace else self.on_playback_failure), **values)
+        if replace:
             self._replaced = (key, now)
             self.transport.clear_failure()
             self.transport_timing.request_playback(

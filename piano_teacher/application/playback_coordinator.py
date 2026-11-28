@@ -566,7 +566,8 @@ class PlaybackCoordinator:
             "count_in_plan": intent.count_in.snapshot(),
             "status": observed.value,
         }
-        timeline = {"state": observed.value, "take_id": self.active_take_id,
+        timeline = {"state": observed.value, "generation": self.generation,
+                    "take_id": self.active_take_id,
                     "segment_id": self.active_segment_id,
                     "deadline_ms": self.active_deadline_ms,
                     "current": dict(self.active_segment) if self.active_segment else None,

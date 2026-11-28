@@ -13,7 +13,10 @@ def authorization():
     transport.paused = False
     timing = Mock()
     calls = []
-    transport.fail.side_effect = lambda **kw: calls.append("failed")
+    def fail(**kw):
+        calls.append("failed")
+        kw["notify_failure"](kw["reason"])
+    transport.fail.side_effect = fail
     timing.update_placement_facts.side_effect = lambda facts: calls.append(("geometry", facts))
     transport.clear_failure.side_effect = lambda: calls.append("cleared")
     timing.request_playback.side_effect = lambda **kw: calls.append("replacement")
@@ -23,6 +26,8 @@ def authorization():
         transport=transport, transport_timing=timing, timed_start=None,
         pause_resume=None, lifecycle=None, listen=None, presentation=None,
         notices=None, clock=lambda: 10.)
+    owner.on_replaced_failure = Mock()
+    owner.on_playback_failure = Mock()
     return owner, calls
 
 

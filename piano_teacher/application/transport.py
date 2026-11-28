@@ -235,6 +235,10 @@ class Transport:
         return self._admission.intent
 
     @property
+    def admission_generation(self) -> int:
+        return self._admission.generation
+
+    @property
     def active_segment_id(self) -> str:
         return self._admission.active_segment_id
 

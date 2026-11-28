@@ -120,7 +120,7 @@ func run() -> void:
             "Unexpected display sizes are witnessed without synchronous allocation")
         for stem in view.glyphs.note_stem_textures.values():
             if stem is Texture2D:
-                check(stem.get_image().has_mipmaps(),
+                check(bool(stem.get_meta("verovio_mipmapped",false)),
                     "Variable-sized stems have a filtered source prepared before playback")
         var original = view.engraving
         var selected: Dictionary = state(2)

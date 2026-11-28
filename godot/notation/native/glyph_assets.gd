@@ -204,7 +204,9 @@ func upload_step(budget_usec: int = 2000) -> bool:
         if texture == null and not font_key.is_empty():
             texture = _font_raster_cache.get(font_key)
         if texture == null:
-            texture = ImageTexture.create_from_image(_mipmapped_images.get(id,image))
+            var upload: Image = _mipmapped_images.get(id,image)
+            texture = ImageTexture.create_from_image(upload)
+            texture.set_meta("verovio_mipmapped",upload.has_mipmaps())
         if not font_key.is_empty():
             _font_raster_cache[font_key] = texture
         _uploaded_images[id] = texture

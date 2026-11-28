@@ -208,8 +208,10 @@ func continuation_geometry(include_presentation: bool = false) -> Dictionary:
     var facts: Dictionary = _renderer.placement_facts()
     facts["placement_revision"] = revision
     facts["placement_transport"] = int(_state.get("transport_id",-1))
-    facts["placement_segment"] = str(_state.get("playback_timeline",{}).get("segment_id",""))
-    facts["placement_renderer"] = _renderer.retained_generation()
+    var playback: Dictionary = _state.get("playback_timeline",{})
+    facts["placement_segment"] = str(playback.get("segment_id",""))
+    facts["placement_generation"] = int(playback.get("generation",-1))
+    facts["placement_renderer"] = [_generation,_renderer.retained_generation()]
     facts["placement_sample_us"] = Time.get_ticks_usec()
     # Echo the backend clock sample instead of comparing unrelated clocks.
     facts["placement_clock_ms"] = float(_state.get("clock_sampled_at_ms",-1.0))
