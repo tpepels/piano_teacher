@@ -277,3 +277,19 @@ def test_repeated_near_passes_require_two_clean_takes_below_target(practice_sess
     assert state["bpm"] == 40 and state["lesson_steps_mastered"] == 0
     state = next_take(state, play(session, state))
     assert state["bpm"] > 40 and state["lesson_steps_mastered"] == 0
+
+
+
+def test_repeated_tempo_failure_history_survives_saved_reopening(practice_session):
+    session = practice_session(bars=1, chords=True)
+    first = tempo(session)
+    state = next_take(first, play(session, first, wrong=(0,)))
+    state = next_take(state, play(session, state, wrong=(0,)))
+    assert state["bpm"] == 40
+    session.open()
+    session.finish_free()
+    reopened = session.ready_score()
+    assert reopened["bpm"] == 40
+    clean = next_take(reopened, play(session, reopened))
+    assert clean["bpm"] == 40
+    assert next_take(clean, play(session, clean))["bpm"] > 40

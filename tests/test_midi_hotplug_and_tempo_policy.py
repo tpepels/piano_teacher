@@ -23,7 +23,8 @@ class Backend:
 def test_discovery_without_preference_and_reconnect_with_renumbered_alsa_port():
     clock, backend = InputClock(), Backend()
     midi = MidiConnection(clock=clock, backend=backend)
-    callback = lambda message: None
+    def callback(message):
+        pass
     assert midi.scan_due("")
     assert midi.restore_preferred(midi.scan().names, "", callback=callback) is None
     clock.at += midi.SCAN_SECONDS
@@ -72,3 +73,30 @@ def test_single_failure_and_target_mastery_rules_unchanged():
     first = take_graded(target, passed=True)
     assert first.outcome is Outcome.CLEAN_ONCE
     assert take_graded(first.state, passed=True).outcome is Outcome.STAGE_DONE
+
+
+
+def test_adaptive_increase_cannot_skip_repeatedly_failed_tempo():
+    state = FlowState("stage", False, Step.TEMPO, 50, 100,
+                      tempo_failures=((60, 2),))
+    climbed = take_graded(state, passed=True, quality=1, attacks=2)
+    assert climbed.state.bpm == 60
+    first = take_graded(climbed.state, passed=True, quality=1, attacks=2)
+    assert first.state.bpm == 60
+    assert take_graded(first.state, passed=True, quality=1, attacks=2).state.bpm == 100
+
+
+def test_auto_selection_prefers_piano_and_preserves_active_connection():
+    clock, backend = InputClock(), Backend()
+    midi = MidiConnection(clock=clock, backend=backend)
+
+    def callback(message):
+        pass
+
+    backend.names += ["External MIDI interface", "Kawai CA49 24:0"]
+    assert midi.restore_preferred(midi.scan().names, "", callback=callback).connected
+    assert midi.device == "Kawai CA49 24:0"
+    backend.names.append("Another piano")
+    assert midi.restore_preferred(midi.scan().names, "Another piano", callback=callback) is None
+    assert backend.opened == ["Kawai CA49 24:0"]
+    assert midi._candidate(tuple(backend.names), "") is None

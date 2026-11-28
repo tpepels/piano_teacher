@@ -175,11 +175,17 @@ def validate_teaching_decision(decision, *, event, state):
     available = {step.key for step in chosen.steps}
     if type(p.tempo_clean) is not int or p.tempo_clean not in (0, 1):
         raise ValueError("Invalid below-target clean streak")
-    if any(type(entry) is not tuple or len(entry) != 3 or entry[0] not in available
+    if any(type(entry) is not tuple or len(entry) != 3 or type(entry[0]) is not str
+           or entry[0] not in available
            or type(entry[1]) is not int or not 1 <= entry[1] < p.target_bpm
            or type(entry[2]) is not int or entry[2] not in (1, 2)
            for entry in p.tempo_failures):
         raise ValueError("Invalid tempo failure history")
+    history = {(key, bpm): count for key, bpm, count in p.tempo_failures}
+    if len(history) != len(p.tempo_failures):
+        raise ValueError("Duplicate tempo failure history")
+    if p.tempo_clean and (p.bpm >= p.target_bpm or history.get((chosen.key, p.bpm), 0) < 2):
+        raise ValueError("Below-target clean streak has no failed tempo")
     if not set(dict(p.mastered)) <= available:
         raise ValueError("Unknown mastered teaching stage")
     earned = set(dict(p.mastered)) - set(dict(state.progress.mastered))
@@ -202,6 +208,8 @@ def validate_teaching_decision(decision, *, event, state):
         raise ValueError("Ignored take cannot alter learning progress")
     if decision.invalidate_failed_streak != bool(full_target and not passed and not ignored):
         raise ValueError("Invalid failed-streak checkpoint")
+    if (not full_target or passed or ignored) and p.tempo_failures != state.progress.tempo_failures:
+        raise ValueError("Only recorded full-take failures can change tempo failure history")
     if not full_target and (p.streak > state.progress.streak or earned or decision.invalidate_failed_streak):
         raise ValueError("Partial teaching event cannot earn full-target credit")
     if decision.continuation not in {"continue", "repeat", "reintegrate", "advance", "guided", "stop", "pause"}:

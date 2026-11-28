@@ -4680,3 +4680,8 @@ bash scripts/package-inprocess.sh
 
 ## Sight-reading mode (2026-11-26)
 Implemented generated fixed-tempo 16-bar rounds from Settings, with five cumulative levels, truncated Gaussian melodic motion, inversion-aware chord voicing, major/minor functional progressions and normal native playback/grading. Pending local Python/Godot CI and physical acceptance; check all five levels, range, written accidentals, chord inversions, fixed tempo, Pause/Resume and round completion. No new renderer or clock.
+
+
+## MIDI hot-plug and difficult-tempo consolidation (2026-11-28)
+
+MIDI discovery now polls without a saved device, excludes common virtual inputs from automatic choice, tolerates ALSA port renumbering and preserves explicit deselection for the running session. The settings label follows the committed connection snapshot. Below-target tempo history is owned by the lesson progress and saved transactionally per source, stage and BPM. After two recorded failures, two consecutive accepted full takes are required at that tempo; adaptive increases cannot skip it. Ignored takes, recovery thresholds and target mastery retain their existing rules. Added reducer, fake-device and real-engine journey coverage including saved reopening. New regression, native and display-backed acceptance are pending execution; physical hot-plug requires the owner's instrument.

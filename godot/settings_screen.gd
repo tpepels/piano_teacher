@@ -499,6 +499,9 @@ func begin_editing(state: Dictionary) -> void:
     tempo_setting.set_value_no_signal(float(state.get("target_bpm", 40)))
 
 func present_practice(state: Dictionary, editing: bool = false) -> void:
+    # The committed backend snapshot owns the device label, including hot-plug.
+    var connected: String = str(state.get("device", ""))
+    device_button.text = connected if not connected.is_empty() else "Choose piano"
     var age = state.get("midi_input_age")
     var recent: bool = age != null and float(age) < 1.5
     if recent:

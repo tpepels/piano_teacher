@@ -94,7 +94,7 @@ two quarter notes played well reach the target after one take, while a
 16-note window gains 10–20% per clean take. Two clean takes at target still
 complete the window.
 
-Below-target failure history is specific to the source window, hand and exact BPM, survives slower tempo and Free recovery, and is saved with the piece. Ignored attempts do not count. A recorded failure breaks a pending below-target clean streak; changing tempo or returning to Free resets that streak. The two-clean target rule is unchanged.
+Adaptive increases cannot skip a repeatedly failed BPM on the way back up. Below-target failure history is specific to the source window, hand and exact BPM, survives slower tempo and Free recovery, and is saved with the piece. Ignored attempts do not count. A recorded failure breaks a pending below-target clean streak; changing tempo or returning to Free resets that streak. The two-clean target rule is unchanged.
 
 A slower success is practice, not target-tempo mastery. A failed attempt breaks
 the target clean streak. A clean flow attempt has all required pitches and

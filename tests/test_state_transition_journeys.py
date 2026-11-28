@@ -388,3 +388,31 @@ def test_real_midi_release_setting_changes_tempo_credit(
     report = session.ask("learning.statistics",scope="full")["assessments"]
     assert report["accepted"] == int(accepted) and report["rejected"] == int(not accepted)
     assert changed["mastered"] == 0
+
+
+
+def test_real_session_auto_selects_a_piano_connected_after_startup(practice_session):
+    names = ["Midi Through:Midi Through Port-0 14:0"]
+    session = practice_session(bars=1, midi_names=names)
+    assert not session.snapshot()["device"]
+    names.append("Kawai CA49:Kawai CA49 MIDI 24:0")
+    connected = session.tick(4)
+    assert connected["device"] == names[-1]
+    session.finish_listen()
+    session.finish_free()
+    active = session.ready_score()
+    assert active["running"]
+    retired = session.engine.midi.port
+    names.pop()
+    lost = session.tick(4)
+    assert not lost["device"] and not lost["running"]
+    assert lost["lesson_steps_mastered"] == 0 and retired.closed
+    names.append("Kawai CA49:Kawai CA49 MIDI 28:0")
+    reconnected = session.tick(8)
+    assert reconnected["device"] == names[-1] and not reconnected["running"]
+    count = reconnected["midi_input_count"]
+    retired.send(72)
+    assert session.snapshot()["midi_input_count"] == count
+    session.strike(72)
+    assert session.snapshot()["midi_input_count"] == count + 1
+    assert session.snapshot()["lesson_steps_mastered"] == 0

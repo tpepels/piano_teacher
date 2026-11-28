@@ -190,6 +190,9 @@ def take_graded(state: FlowState, *, passed: bool, quality: float = 0.0,
                               "Clean! Once more at this tempo", Outcome.AGAIN)
         bpm = min(state.target_bpm, state.bpm + tempo_increase(
             state.target_bpm, quality=quality, attacks=attacks))
+        # Adaptive increases cannot leap over an unconsolidated difficult rung.
+        bpm = min((tempo for tempo, count in state.tempo_failures
+                   if count >= 2 and state.bpm < tempo < bpm), default=bpm)
         return Transition(replace(state, bpm=bpm, failures=0, clean_at_target=0, tempo_clean=0),
                           f"Faster: {bpm} BPM", Outcome.FASTER)
     clean = state.clean_at_target + 1

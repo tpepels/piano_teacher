@@ -115,8 +115,10 @@ def take(state):
 
 
 class PracticeSession:
-    def __init__(self, directory, monkeypatch, musicxml=False, source=None, **midi_options):
+    def __init__(self, directory, monkeypatch, musicxml=False, source=None,
+                 midi_names=None, **midi_options):
         self.clock = InputClock()
+        self.midi_names = midi_names
         self.music = directory/"music"
         self.music.mkdir(parents=True)
         if source is not None:
@@ -145,13 +147,15 @@ class PracticeSession:
         if self.engine is not None:
             self.close()
         monkeypatch = self.monkeypatch
-        monkeypatch.setattr(mido, "get_input_names", lambda: ["Test piano"])
+        monkeypatch.setattr(mido, "get_input_names", lambda: (
+            ["Test piano"] if self.midi_names is None else list(self.midi_names)))
         monkeypatch.setattr(mido, "open_input", lambda name, callback: InputPort(callback))
         self.engine = PracticeEngine(self.data, clock=self.clock)
         self.commands = EngineCommands(engine=self.engine)
         self.receipt = None
         self.ask("settings.update", music_dir=str(self.music))
-        self.ask("midi.device.select", name="Test piano")
+        if self.midi_names is None:
+            self.ask("midi.device.select", name="Test piano")
         return self.ask("library.open", id=self.path.name)
 
     def ask(self, operation, **payload):
