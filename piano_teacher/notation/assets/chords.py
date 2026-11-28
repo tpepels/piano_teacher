@@ -466,8 +466,8 @@ def _white(alpha, bbox) -> str:
 def _cut(root, parents, chord, geometry, names, kind, box) -> dict:
     """One instance asset, in 250 units per staff space, origin at the
     centre of the lowest head (template note 0)."""
-    from .vector_art import svg_alpha
     from .glyphs import native_glyphs
+    from .vector_art import svg_alpha
     bx, by, width, height = box
     scale = _PAGE_PIXELS/width
     anchor = geometry.elements[names[0]]

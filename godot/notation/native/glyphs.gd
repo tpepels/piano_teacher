@@ -6,7 +6,12 @@ const Assets := preload("res://notation/native/glyph_assets.gd")
 const REQUIRED = Assets.REQUIRED
 const NOTE_TEMPLATES = Assets.NOTE_TEMPLATES
 const RASTER_SCALE = Assets.RASTER_SCALE
-var _assets := Assets.new()
+# One prepared set per head and screen scale. The worker owns its images
+# through upload. Only the main thread attaches them to their source texture.
+static var _last_head_sizes: Dictionary = {}
+static var _head_size_lock := Mutex.new()
+
+static var _display_cache: Dictionary = {}
 var textures: Dictionary:
     get: return _assets.textures
 var bounds: Dictionary:
@@ -60,6 +65,9 @@ var head_images: Dictionary:
 var template_images: Dictionary:
     get: return _assets.template_images
 
+var _assets := Assets.new()
+var _prepared_head_sizes: Dictionary = {}
+
 func prepare_head_interiors() -> void:
     _assets.prepare_head_interiors()
 
@@ -68,12 +76,6 @@ func begin_upload() -> void:
 
 func rewind_upload() -> void:
     _assets.rewind_upload()
-
-# One prepared set per head and screen scale. The worker owns its images
-# through upload. Only the main thread attaches them to their source texture.
-static var _last_head_sizes: Dictionary = {}
-static var _head_size_lock := Mutex.new()
-var _prepared_head_sizes: Dictionary = {}
 
 func prepare_status_sizes(gap: float, screen_scale: Vector2) -> void:
     var scales: Array = [1.0,StatusInk.CORE_INNER[0]]
@@ -383,8 +385,6 @@ func paint_head(canvas: CanvasItem, instance: Dictionary, color: Color,
     draw_fit(canvas,texture,Rect2(
         point + (top_left-point)*scale,original_size*scale),false,color)
     return true
-
-static var _display_cache: Dictionary = {}
 
 static func prune_display_cache() -> void:
     for key in _display_cache.keys():

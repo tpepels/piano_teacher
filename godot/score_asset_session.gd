@@ -15,6 +15,7 @@ signal action_requested(command: Dictionary)
 const RETAINED_INK_TIMEOUT_MS := 45000
 const DETACHED_PREPARATION_TIMEOUT_MS := 45000
 const SLOW_PREPARATION_MS := 10000
+const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 const ScorePreparationJob := preload("res://score_preparation_job.gd")
 
 var revision := -1
@@ -352,7 +353,7 @@ func _start_worker_if_possible() -> void:
             _renderer.size,float(_renderer.configured_density))
     else:
         _worker.refit(_renderer.size,float(_renderer.configured_density))
-    _worker.screen_scale = _renderer.glyphs.screen_scale_for(_renderer)
+    _worker.screen_scale = VerovioGlyphs.screen_scale_for(_renderer)
     _queued.clear()
     _worker_id = WorkerThreadPool.add_task(_worker.run,false,"Prepare authentic score")
     if _worker_id < 0:
