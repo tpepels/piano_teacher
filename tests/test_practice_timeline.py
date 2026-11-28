@@ -192,11 +192,11 @@ def test_free_holds_where_godot_can_draw_its_first_target(practice_session, trav
     assert movement["kind"] == "rest"
     assert movement["beats"] == pytest.approx(max(bar, travel))
     assert hold["world_start"] == pytest.approx(movement["world_start"]+movement["beats"])
-    # It arrives after the travel at the piece's tempo, but within a few
-    # seconds: on a long or slow travel the staff moves faster.
+    # A long occupied runway is no longer compressed into three seconds.
+    # The normal tempo is preserved for this 80 BPM fixture.
     deadline = state["playback_timeline"]["guided"]["deadline_at_ms"]/1000
     assert deadline-session.clock.at == pytest.approx(
-        min(max(bar, travel)*60/state["bpm"], 3.0), abs=.01)
+        max(bar, travel)*60/state["bpm"], abs=.01)
 
 
 def test_a_return_to_free_uses_the_placement_facts_of_the_latest_poll(practice_session):

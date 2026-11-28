@@ -54,9 +54,10 @@ window to an earlier two-bar guided unit.
 - The next target waits at the playhead. The axis stays still while thinking.
 - Keys count from 250 ms before the target's scheduled arrival at the playhead.
   Earlier keys earn nothing and a short message asks the learner to wait.
-  The staff still follows its declared travel and hold timeline. The target travels in from beyond the
-  right edge and stops exactly at the playhead, within about three seconds
-  (on a slow piece the staff moves faster than the tempo to get there).
+  The staff still follows its declared travel and hold timeline. The target uses the nearest safe future slot on an empty staff, otherwise
+  enters from beyond the right edge. It stops exactly at the playhead.
+  Short travel can be accelerated on slow pieces; long occupied runways
+  are not compressed into a three-second sprint.
 - A correct note turns green; the staff moves to the next target.
 - A wrong note turns the intended note red, shows the keyboard hint and waits
   for the correct key.

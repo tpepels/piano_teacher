@@ -327,9 +327,8 @@ func free_travel_beats() -> float:
     if not native_ready or not retained_ready():
         return 0.0
     var facts = _stream_facts(stream_world_beat)
-    var opening: float = Admission.earliest_opening(_stream_controller.queue.online,
-        facts.world,_stream_right_beats(),_stream_header_beats(0.0),
-        facts.density,facts.gap,facts.duration)
+    var opening: float = _stream_controller.free_opening(
+        facts,_stream_right_beats(),_stream_header_beats(0.0))
     if not is_finite(opening):
         return 0.0
     return clampf(opening-facts.world+FREE_TRAVEL_HEADROOM_BEATS,0.0,256.0)

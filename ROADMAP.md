@@ -4685,3 +4685,8 @@ Implemented generated fixed-tempo 16-bar rounds from Settings, with five cumulat
 ## MIDI hot-plug and difficult-tempo consolidation (2026-11-28)
 
 MIDI discovery now polls without a saved device, excludes common virtual inputs from automatic choice, tolerates ALSA port renumbering and preserves explicit deselection for the running session. The settings label follows the committed connection snapshot. Below-target tempo history is owned by the lesson progress and saved transactionally per source, stage and BPM. After two recorded failures, two consecutive accepted full takes are required at that tempo; adaptive increases cannot skip it. Ignored takes, recovery thresholds and target mastery retain their existing rules. Added reducer, fake-device and real-engine journey coverage including saved reopening. New regression, native and display-backed acceptance are pending execution; physical hot-plug requires the owner's instrument.
+
+
+## Both-hand review and Free runway continuity (2026-11-28)
+
+After four recorded failures without tempo advancement at a routine two-hand window, review right then left at the recovery BPM, with two consecutive accepted full takes per hand; return to the same two-hand window. Review carries no new mastery and its progress is persisted. Free's renderer geometry now measures the same safe empty-strip slot used at admission, including peer clearance and removable suffixes; occupied runways retain offscreen append safety. Long Free travel no longer compresses into three seconds. Added real-engine hand recovery and timeline coverage. Native, visual and physical acceptance remain unverified.

@@ -417,6 +417,11 @@ func allocate_source(facts: StreamGeometry, source_beat: float, start_world: flo
     append_source(facts,source_beat,start_world,from_beat,take_key,empty_strip,false,display_context,leading_rest_beats)
     return last_admitted if serial > before else -1
 
+func free_opening(facts: StreamGeometry, right: float, header: float) -> float:
+    var preview: Dictionary = queue.preview_tail_withdrawal(
+        facts.world,facts.density,facts.gap,facts.duration,facts.width,facts.playhead)
+    return float(RecoveryPlanner.free_slot(queue,facts,preview["remaining"],right,header)["start"])
+
 func schedule_recovery(facts: StreamGeometry, world: float, source_opening: float,
         graded_deadline_world: float, right: float, header: float,
         plan_id: String = "",

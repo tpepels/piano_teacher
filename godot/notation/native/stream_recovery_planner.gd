@@ -35,6 +35,24 @@ func diagnose(identity: String, outcome: String, deadline_world: float,
     row.merge(extra,true)
     print("SCORE_PLAN_QUEUE:",JSON.stringify(row))
 
+## Use the same physical clearance for measurement and exact admission.
+## An empty strip can receive future ink close to the playhead; an occupied
+## strip still requires the ordinary offscreen append boundary.
+static func free_slot(queue, facts: StreamGeometry, remaining: Array,
+        right: float, header: float) -> Dictionary:
+    var density: float = maxf(1.0,facts.density)
+    var lead: float = maxf(.25,header+Admission.OFFSCREEN_MARGIN_BEATS)
+    var close: float = Admission.empty_strip_start(remaining,facts.world,
+        lead,header,queue.minimum_peer_opening(density,facts.width,facts.playhead,true,"source"),
+        density,facts.gap,facts.duration,
+        queue.minimum_peer_opening(density,facts.width,facts.playhead,true,"rest"))
+    if is_finite(close):
+        return {"start":close,"empty":true}
+    var far: float = Admission.earliest_opening(remaining,facts.world,right,
+        header,density,facts.gap,facts.duration)
+    far = maxf(far,queue.minimum_peer_opening(density,facts.width,facts.playhead)+header)
+    return {"start":far,"empty":false}
+
 func prepare(queue, facts: StreamGeometry, source_opening: float,
         graded_deadline_world: float, right: float, header: float,
         plan_id: String, allow_count_in: bool, count_in_beats: float,
@@ -78,14 +96,11 @@ func prepare(queue, facts: StreamGeometry, source_opening: float,
         facts.gap,facts.duration)
     var on_empty := false
     if untimed:
-        # Untimed guided Learn grades no deadline: the learner plays each
-        # note when ready. Open the passage at the first append-only slot
-        # that starts offscreen, never before the engine's announcement.
-        var earliest: float = Admission.position(remaining,
-            facts.world,right,
-            header,NAN,0.0,
-            facts.density,facts.gap,facts.duration)
-        checked = maxf(graded_deadline_world,earliest) if is_finite(earliest) else NAN
+        # Never shift an authorized Free opening: the backend holds there.
+        # Use the same empty-strip decision as the reported travel geometry.
+        var slot: Dictionary = free_slot(queue,facts,remaining,right,header)
+        checked = graded_deadline_world if graded_deadline_world >= float(slot["start"])-.0001 else NAN
+        on_empty = bool(slot["empty"]) and is_finite(checked)
     elif not is_finite(checked) and allow_count_in:
         # The initial command or an already announced backend continuation
         # may use the empty-staff slot; source/rest/peer physical clearance

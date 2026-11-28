@@ -37,6 +37,8 @@ class ScoreStatePublisher:
     # Free's first target travels in untimed: on a slow piece it moves
     # faster than the tempo rather than taking many seconds to arrive.
     MAX_FREE_TRAVEL_SECONDS = 3.0
+    # Never squeeze a long, physically occupied runway into three seconds.
+    MIN_FREE_TRAVEL_BPM_LIMIT = 80.0
 
     def __init__(self):
         self.guided_deadline: float | None = None
@@ -67,7 +69,8 @@ class ScoreStatePublisher:
         if self.guided_deadline is None or state.get("phase") == "introducing":
             self.guided_travel_beats = max(1.0, facts.next_count_in_beats, facts.free_travel_beats)
             self.guided_deadline = SCHEDULER.guided(
-                max_lead_seconds=self.MAX_FREE_TRAVEL_SECONDS,
+                max_lead_seconds=max(self.MAX_FREE_TRAVEL_SECONDS,
+                    self.guided_travel_beats*60.0/max(facts.bpm,self.MIN_FREE_TRAVEL_BPM_LIMIT)),
                 now=now, previous_deadline=self.guided_deadline,
                 duration_beats=max(.25,facts.duration_beats),
                 # At least one bar, and long enough for the target to come
