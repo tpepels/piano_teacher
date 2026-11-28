@@ -52,7 +52,7 @@ static func clip_bounds(item: Dictionary, density: float,
         float(item["source_floor"]),float(item["source_ceiling"]),
         density,gap,score_duration)
 
-static func _occupied_end(passes: Array, world: float,
+static func occupied_end(passes: Array, world: float,
         density: float, gap: float, score_duration: float) -> float:
     var last := -INF
     for item in passes:
@@ -68,7 +68,7 @@ static func _future_start(passes: Array, world: float,
         density: float, gap: float, score_duration: float) -> float:
     var start: float = world + maxf(MIN_READING_BEATS,
         right_beats + header_beats + OFFSCREEN_MARGIN_BEATS)
-    var occupied: float = _occupied_end(
+    var occupied: float = occupied_end(
         passes,world,density,gap,score_duration)
     if is_finite(occupied):
         start = maxf(start,occupied + REST_GAP_BEATS + header_beats)

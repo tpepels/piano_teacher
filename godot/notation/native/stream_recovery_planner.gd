@@ -172,7 +172,7 @@ func prepare(queue, facts: StreamGeometry, source_opening: float,
     for index in range(remaining.size(),queue.online.size()):
         saved_suffix.append(queue.online[index].duplicate())
     return {"identity":identity,"start":checked,"empty":on_empty,
-        "remaining_count":remaining.size(),"saved_suffix":saved_suffix}
+        "remaining_count":remaining.size(),"saved_suffix":saved_suffix,"withdrawal":preview}
 
 func opening(identity: String) -> float:
     return float(_openings.get(identity,NAN))

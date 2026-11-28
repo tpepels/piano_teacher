@@ -439,8 +439,10 @@ func schedule_recovery(facts: StreamGeometry, world: float, source_opening: floa
     var checked: float = float(prepared["start"])
     var on_empty: bool = bool(prepared["empty"])
     var prior_live: int = _binding.live_owner()
-    trim(facts,"recovery_replan")
-    if queue.online.size() != int(prepared["remaining_count"]):
+    var withdrawal: Dictionary = queue.apply_withdrawal(canvas(),prepared["withdrawal"],"recovery_replan")
+    if not withdrawal["removed"].is_empty():
+        _binding.reconcile()
+    if not bool(withdrawal["complete"]) or queue.online.size() != int(prepared["remaining_count"]):
         # The archive may refuse one of several suffix withdrawals after
         # earlier owners were already removed. Restore ONLY the missing
         # original tail; re-enqueueing the still-online survivors would

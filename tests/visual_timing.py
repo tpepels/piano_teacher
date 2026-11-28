@@ -292,7 +292,7 @@ class TimingReview:
 
     def finish(self,required_steps=()):
         pacing,failures = self.pacing.finish()
-        failures.extend(self.midi.finish("wrong_free" in required_steps))
+        failures.extend(self.midi.finish(self.active and "wrong_free" in required_steps))
         completed = self.completed + self.midi.completed
         if self.pending:
             failures.append({"reasons":["unfinished_timing_probes"],"probes":[p["label"] for p in self.pending]})

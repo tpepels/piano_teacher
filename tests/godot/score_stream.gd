@@ -232,7 +232,13 @@ func run() -> void:
     var preview: Array = trim_queue.preview_timed_withdrawal(0.0,100.0,20.0,4.0,1000.0,330.0)
     check(preview.size() == trim_queue.online.size()-1 and str(preview[-1]["slot_id"]) == source_slot,
         "Preview drops only unseen trailing silence")
-    var removed: Array[int] = trim_queue.withdraw_timed_tail(trim_canvas,0.0,100.0,20.0,4.0,1000.0,330.0,"resume")
+    var plan: Dictionary = trim_queue.preview_tail_withdrawal(0.0,100.0,20.0,4.0,1000.0,330.0,-1,false,-1,null,true)
+    check(plan["remaining"] == preview and plan["operations"].size() == 1,
+        "The shared withdrawal planner describes exactly the measured retained prefix")
+    var result: Dictionary = trim_queue.apply_withdrawal(trim_canvas,plan,"resume")
+    var removed: Array = result["removed"]
+    check(bool(result["complete"]) and trim_queue.online == preview,
+        "Applying the measured plan produces exactly its retained prefix")
     check(removed.size() == 1 and str(trim_queue.online[-1]["slot_id"]) == source_slot,
         "Withdrawal matches preview and keeps the source identity")
     check(trim_queue.has_take(int(source["take_owner"])), "Rest removal cannot discard its source take")

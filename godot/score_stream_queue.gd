@@ -281,11 +281,7 @@ func _unexposed(item: Dictionary, world: float, density: float,
     return playhead+(float(item["world_origin"])-world)*density+bounds.x > width
 
 func occupied_end(passes: Array, density: float, gap: float, duration: float) -> float:
-    var end := -INF
-    for item in passes:
-        var bounds: Vector2 = Admission.clip_bounds(item,density,gap,duration)
-        end = maxf(end,float(item["world_origin"])+bounds.y/maxf(1.0,density))
-    return end
+    return Admission.occupied_end(passes,-INF,maxf(1.0,density),gap,duration)
 
 # Takes that sounded: the playhead reached their first note while live.
 var sounded: Dictionary = {}

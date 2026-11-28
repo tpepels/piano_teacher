@@ -91,7 +91,10 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
     # Apply it on EVERY displayed frame. A Resume intent can be admitted
     # before the next state receipt; a one-time paused-state hold would
     # otherwise trap the source world behind its old limit indefinitely.
+    var profile: bool = OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
+    var started: int = Time.get_ticks_usec() if profile else 0
     score_session.advance_preparation()
+    var prepared: int = Time.get_ticks_usec() if profile else 0
     guided.update_hold(state)
     # Preparation may take appreciable time. Sample at projection, not
     # at entry to Main._process before that work.
@@ -103,7 +106,9 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
     feedback.poll(now_ms,score_session.layout_revision
         if score_session.layout_revision == score_session.revision else -1)
     metronome.update(state,state_tick_ms,beat,now_ms)
+    var clocked: int = Time.get_ticks_usec() if profile else 0
     present_frame(state,beat,world)
+    var presented: int = Time.get_ticks_usec() if profile else 0
     var arrivals: Array = frames.advance(state,beat,world,now_ms,delta,busy,
         screen,score_ready(),source_groups,frame_diagnostics,listen_diagnostics,smoke,frame_ms,
         runway.staff_renderer() if runway != null else null)
@@ -111,6 +116,17 @@ func advance(state: Dictionary, state_tick_ms: int, now_ms: int,
         score_effects.record_preview(arrivals,practice_view.stage)
     if runway != null:
         runway.present_frame(state,world)
+    if profile:
+        var finished: int = Time.get_ticks_usec()
+        if finished-started >= 8000:
+            print("PRESENTATION_FRAME_WORK ",JSON.stringify({
+                "start_us":started,"end_us":finished,
+                "preparation_us":prepared-started,
+                "clock_feedback_us":clocked-prepared,
+                "presentation_us":presented-clocked,
+                "effects_us":finished-presented
+            }))
+
 
 func _source_rate(state: Dictionary, beat: float) -> float:
     var nominal: float = float(state.get("bpm",40.0))

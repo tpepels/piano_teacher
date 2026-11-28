@@ -4,6 +4,7 @@ extends SceneTree
 const Session := preload("res://score_asset_session.gd")
 const Native := preload("res://notation/native/view.gd")
 const Meter := preload("res://moving_meter_grid.gd")
+const StreamQueue := preload("res://score_stream_queue.gd")
 var failures := 0
 var fixture: Dictionary
 var view
@@ -84,6 +85,10 @@ func run() -> void:
     if session.is_ready():
         check(view.glyphs.textures.values()[0] is Texture2D,
             "Published glyphs have completed their texture upload")
+        check(view.engraving.stream_source_key == StreamQueue.source_identity(view.timeline.model),
+            "Worker source identity must match the installed model after refit")
+        check(view.glyphs._prepared_head_sizes.is_empty(),
+            "Prepared status upload work must be finished before publication")
         var original = view.engraving
         var selected: Dictionary = state(2)
         var target: Dictionary = {}
