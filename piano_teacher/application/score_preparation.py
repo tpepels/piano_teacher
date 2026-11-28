@@ -34,7 +34,8 @@ def assemble_layout(source_score, *,
     from ..notation.assets.chords import chord_templates
     # Variable chord shapes are pre-engraved individually and
     # reused via a disk cache.
-    layout["native_note_templates"] = note_templates(cache)
+    layout["native_note_templates"] = note_templates(
+        cache, slashed_graces=any(note["slashed"] for note in notation_model.get("grace_notes", ())))
     # Missing required Verovio assets cannot be published as a partially
     # usable native score. The caller retries the same selected source.
     try:

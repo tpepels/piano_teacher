@@ -2,6 +2,7 @@ extends RefCounted
 
 # Score loading's authentic Verovio asset boundary. Installation happens
 # before semantic-score rendering, never by approximating missing glyphs.
+const GlyphAssets := preload("res://notation/native/glyph_assets.gd")
 const ASSET_KEYS := [
     "native_glyphs", "native_note_templates", "native_tie_templates",
     "native_chord_templates", "native_beam_fragments",
@@ -37,6 +38,15 @@ static func bundle_error(bundle: Variant, expected: Dictionary) -> String:
         for entry in layout[name].values():
             if not entry is Dictionary:
                 return "Score bundle has a malformed %s entry" % name
+    var graces: Variant = model.get("grace_notes", [])
+    if not graces is Array:
+        return "Score bundle has a malformed grace-note list"
+    for grace in graces:
+        if not grace is Dictionary:
+            return "Score bundle has a malformed grace note"
+        if (grace.get("slashed", false) and
+                not layout["native_note_templates"].has_all(GlyphAssets.GRACE_TEMPLATES)):
+            return "Score bundle lacks slashed grace-note ink"
     for name in ["native_required_slur_pairs","native_required_beam_groups"]:
         if not layout.get(name) is Array:
             return "Score bundle has a malformed %s list" % name

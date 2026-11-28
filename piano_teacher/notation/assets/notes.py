@@ -26,8 +26,12 @@ XML_DIVISIONS = 10080
 
 def keys() -> tuple[str, ...]:
     return ("whole",) + tuple(
-        f"{kind}_{direction}" for kind in (*KINDS[1:], "grace_slash_eighth", "grace_slash_16th")
+        f"{kind}_{direction}" for kind in KINDS[1:]
         for direction in ("up", "down"))
+
+
+GRACE_KEYS = tuple(f"grace_slash_{kind}_{direction}" for kind in ("eighth", "16th")
+                   for direction in ("up", "down"))
 
 
 def _one_note_xml(kind: str, direction: str) -> str:
@@ -193,8 +197,8 @@ def _render_template(toolkit, kind: str, direction: str,
     return result
 
 
-def _validate(items: dict) -> bool:
-    if not isinstance(items, dict) or set(items) != set(keys()):
+def _validate(items: dict, names: tuple[str, ...]) -> bool:
+    if not isinstance(items, dict) or set(items) != set(names):
         return False
     for name, item in items.items():
         if (not isinstance(item, dict)
@@ -217,7 +221,7 @@ def _validate(items: dict) -> bool:
 
 
 @lru_cache(maxsize=2)
-def _generate(font: str) -> dict:
+def _generate(font: str, names: tuple[str, ...]) -> dict:
     import verovio
     from .runtime import create_verovio_toolkit
     from .glyphs import native_glyphs
@@ -232,7 +236,7 @@ def _generate(font: str) -> dict:
     }):
         raise RuntimeError("Verovio rejected note-template engraving options")
     result = {}
-    for name in keys():
+    for name in names:
         kind, direction = (("whole", "up") if name == "whole"
                            else name.rsplit("_", 1))
         head = atlas["head_" + (kind if kind in {"whole", "half"} else "black")]["bounds"]
@@ -243,20 +247,27 @@ def _generate(font: str) -> dict:
     return result
 
 
-def note_templates(cache=None) -> dict:
+def note_templates(cache=None, *, slashed_graces=False) -> dict:
+    regular = _template_set(cache, keys())
+    if slashed_graces:
+        return {**regular, **_template_set(cache, GRACE_KEYS)}
+    return regular
+
+
+def _template_set(cache, names) -> dict:
     """Disk-versioned and per-process cached isolated authentic notes."""
     import verovio
     from .glyphs import native_glyphs
     font = native_glyphs()["head_black"]["font"]
     version = getattr(verovio, "__version__", "unknown")
-    key = (cache.key("verovio-note-templates", TEMPLATE_VERSION, font, version)
+    key = (cache.key("verovio-note-templates", TEMPLATE_VERSION, font, version, names)
            if cache is not None else None)
     if key is not None:
         stored = cache.read_json("verovio-notes", key)
-        if _validate(stored):
+        if _validate(stored, names):
             return stored
-    templates = _generate(font)
-    if not _validate(templates):
+    templates = _generate(font, names)
+    if not _validate(templates, names):
         raise RuntimeError("Generated Verovio note atlas is incomplete")
     if key is not None:
         cache.write_json("verovio-notes", key, templates)

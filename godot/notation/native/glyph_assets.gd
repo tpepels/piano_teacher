@@ -42,6 +42,8 @@ const NOTE_TEMPLATES := [
     "16th_up", "16th_down",
     "32nd_up", "32nd_down",
     "64th_up", "64th_down", "128th_up", "128th_down",
+]
+const GRACE_TEMPLATES := [
     "grace_slash_eighth_up", "grace_slash_eighth_down",
     "grace_slash_16th_up", "grace_slash_16th_down",
 ]
@@ -285,18 +287,21 @@ static func brace_image() -> Image:
     return image
 
 func note_ready() -> bool:
-    return note_textures.size() == NOTE_TEMPLATES.size() and \
-        note_stem_textures.size() == NOTE_TEMPLATES.size()-1
+    return note_textures.has_all(NOTE_TEMPLATES) and \
+        note_stem_textures.size() == note_textures.size()-1
 
 func load_note_templates(items: Dictionary) -> bool:
-    if note_ready():
+    var names := NOTE_TEMPLATES.duplicate()
+    if items.has(GRACE_TEMPLATES[0]):
+        names.append_array(GRACE_TEMPLATES)
+    if note_ready() and note_textures.has_all(names):
         return true
     var new_textures: Dictionary = {}
     var new_bounds: Dictionary = {}
     var stems: Dictionary = {}
     var stem_boxes: Dictionary = {}
     _forget_template_images("note:")
-    for name in NOTE_TEMPLATES:
+    for name in names:
         var item: Dictionary = items.get(name, {})
         if str(item.get("source", "")) != "verovio-engraved-note" or \
                 int(item.get("units_per_space", 0)) != 250:
