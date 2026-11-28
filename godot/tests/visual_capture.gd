@@ -86,6 +86,7 @@ func _strips(view, viewport_size: Vector2) -> Array:
             "left":(x+bounds.x)/viewport_size.x,"right":(x+bounds.y)/viewport_size.x,
             "gutter":(origin_x+29.0)/viewport_size.x,
             "visible":is_instance_valid(clip) and clip.is_visible_in_tree(),
+            "ever_visible":bool(item.get("ever_visible",false)),
             "authorized":authorized.has(owner),
             "admitted_inside":is_finite(admitted_world) and first_x <= admitted_width
                 and (kind == "rest" or bool(item.get("admitted_on_empty_strip",false))),

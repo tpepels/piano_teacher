@@ -50,9 +50,18 @@ def strip_witnesses(before, after, shape, crop_x, width):
     old,new = _records(before),_records(after)
     layers = {layer["id"]:layer for layer in after.get("layers",[])}
     for key,(_,strip) in new.items():
-        if key in old or not (strip["visible"] and strip["authorized"]
-                              and strip["admitted_inside"] and strip["future"]):
+        # Compiling a genuinely new retained buffer can complete one
+        # frame after admission. Allow its first presentation only, using
+        # the same immutable slot and admission witness from the prior frame.
+        if not (strip["visible"] and strip["authorized"]
+                and strip["admitted_inside"] and strip["future"]):
             continue
+        if key in old:
+            prior = old[key][1]
+            if (prior["visible"] or not prior["authorized"] or
+                    not prior["admitted_inside"] or not prior["future"] or
+                    prior.get("ever_visible",False)):
+                continue
         lo = max(0,math.floor(strip["left"]*width)-crop_x-2)
         hi = min(shape[1],math.ceil(strip["right"]*width)-crop_x+2)
         if hi > lo:

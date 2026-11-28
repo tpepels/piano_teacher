@@ -390,6 +390,61 @@ func withdraw_tail(owner: Control, world: float, density: float,
             Lifecycle.retire(owner,item)
     return withdrawn
 
+## A committed replacement may leave the already-exposed leading rest
+## behind when the entire source and trailing rest are still unseen.
+## Other transactions (especially rollback) retain full-batch semantics.
+func _timed_suffix_size(passes: Array, world: float, density: float,
+        gap: float, duration: float, width: float, playhead: float) -> int:
+    if passes.is_empty():
+        return 0
+    var serial: int = owner_id(passes[-1])
+    var first: int = passes.size()-1
+    while first > 0 and owner_id(passes[first-1]) == serial:
+        first -= 1
+    var rest: Dictionary = passes[first]
+    if str(rest.get("rest_position","")) != "before" or \
+            str(rest.get("kind","")) != "rest" or first+1 >= passes.size():
+        return 0
+    # Leave the printed rest at its exact location, and use the same
+    # safe-tail geometry rule for every remaining slot of this batch.
+    # A small lookahead also covers the command/publication interval.
+    var suffix: Array = passes.slice(first+1)
+    if not _is_safe_tail(suffix,serial,world+.25,density,gap,duration,width,playhead):
+        return 0
+    return suffix.size()
+
+func preview_timed_withdrawal(world: float, density: float, gap: float,
+        duration: float, width: float, playhead: float) -> Array:
+    var preview: Dictionary = preview_tail_withdrawal(
+        world,density,gap,duration,width,playhead)
+    var remaining: Array = preview["remaining"]
+    var count: int = _timed_suffix_size(remaining,world,density,gap,duration,width,playhead)
+    return remaining.slice(0,remaining.size()-count) if count > 0 else remaining
+
+func withdraw_timed_tail(owner: Control, world: float, density: float,
+        gap: float, duration: float, width: float, playhead: float,
+        reason: String) -> Array[int]:
+    var removed: Array[int] = withdraw_tail(owner,world,density,gap,duration,
+        width,playhead,reason)
+    var count: int = _timed_suffix_size(online,world,density,gap,duration,width,playhead)
+    if count <= 0:
+        return removed
+    var first: int = online.size()-count
+    var serial: int = owner_id(online[-1])
+    var snapshot: Array = []
+    for index in range(first,online.size()):
+        snapshot.append(source_record(online[index]))
+    # The source is archived once, separately from its retained silent
+    # leading rest. If journaling fails, leave the entire suffix intact.
+    if not _archive.record("withdrawn",serial,snapshot,reason,0,_writer_id):
+        return removed
+    online[first-1]["detached_leading_rest"] = true
+    for _index in range(count):
+        var item: Dictionary = online.pop_back()
+        removed.append(int(item["serial"]))
+        Lifecycle.retire(owner,item)
+    return removed
+
 func withdraw_take_tail(owner: Control, take_owner: int, world: float,
         density: float, gap: float, duration: float,
         viewport_width: float, playhead_x: float, reason: String) -> Array[int]:
@@ -432,7 +487,7 @@ func expire_front(owner: Control, world: float, density: float,
             break
         var last_of_owner: bool = (online.size() == 1 or
             owner_id(online[1]) != owner_id(item))
-        if last_of_owner and not _archive.record("completed",
+        if last_of_owner and not bool(item.get("detached_leading_rest",false)) and not _archive.record("completed",
                 owner_id(item),[source_record(item)],
                 "invalid" if invalid else "expired",0,
                 _writer_id):
@@ -455,6 +510,10 @@ func reset(owner: Control) -> bool:
         while cursor < online.size() and owner_id(online[cursor]) == first_owner:
             specs.append(source_record(online[cursor]))
             cursor += 1
+        # A detached count-in rest has already archived its unseen source.
+        # Reset must not recreate a second offline copy of that source.
+        if bool(online[cursor-specs.size()].get("detached_leading_rest",false)):
+            continue
         # A remaining written rest still preserves its original source batch.
         var complete: Array = _archive.original_plan(first_owner,_writer_id)
         batches.append({"owner":first_owner,
@@ -471,7 +530,8 @@ func reset(owner: Control) -> bool:
 
 func has_take(take_serial: int) -> bool:
     for item in online:
-        if int(item.get("take_owner",owner_id(item))) == take_serial:
+        if int(item.get("take_owner",owner_id(item))) == take_serial and \
+                not bool(item.get("detached_leading_rest",false)):
             return true
     return false
 

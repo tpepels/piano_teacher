@@ -165,6 +165,35 @@ func run() -> void:
         and fixed_music(abandon_controller.online_snapshot()).slice(0,retained.size()) == retained,
         "The committed successor follows the visible abandoned take")
     abandon_canvas.free()
+
+    # An already printed leading count-in rest does not force an unseen
+    # abandoned measure and its following rest to scroll through at 22 BPM.
+    var slow := Controller.new()
+    var slow_pool := Pool.new()
+    var slow_canvas := Control.new()
+    root.add_child(slow_canvas)
+    slow_pool.install(slow_canvas,windows)
+    slow.bind_surface(slow_canvas,slow_pool,
+        func(_beat: float) -> Array[Vector2]: return windows)
+    check(not slow.place_timeline_take(geometry(0.0),0.0,10.0,6.7,0.4,4.0).is_empty(),
+        "Slow transport admits a count-in and future source")
+    acknowledge(slow,0.0,"piece|7|10|practice","slow")
+    var leading: Dictionary = slow.queue.online[0]
+    check(str(leading.get("rest_position","")) == "before",
+        "Fixture includes a leading count-in rest")
+    leading["ever_visible"] = true
+    var before_clearance: float = float(leading["world_origin"])+float(leading["source_ceiling"])
+    check(absf(slow.ink_end(geometry(0.0))-before_clearance) < .0001,
+        "Timed clearance excludes the still-unseen source behind a printed rest")
+    var preserved_slot: String = str(leading["slot_id"])
+    check(not slow.place_timeline_take(geometry(0.0),0.0,before_clearance+4.0,6.7,0.4,4.0).is_empty(),
+        "Retry is placed after the preserved rest rather than an unseen abandoned passage")
+    check(str(slow.queue.online[0]["slot_id"]) == preserved_slot and
+        bool(slow.queue.online[0].get("detached_leading_rest",false)),
+        "The original rest stays at its immutable world position")
+    check(not slow.queue.has_take(1),"Detached rest cannot attest an old graded take")
+    slow_canvas.free()
+
     # Free (owner report 2026-11-25): Python holds the staff at the target
     # it schedules from the view's reported travel distance; the passage
     # must be drawn exactly there, on an empty staff and after a take.

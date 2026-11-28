@@ -168,3 +168,17 @@ def test_complete_layer_loss_and_hidden_existing_strip_fail():
     new["layers"][0]["world"] = .05
     new["layers"][0]["strips"][0]["visible"] = False
     assert "visible_strip_retired_before_exit" in compare(frame(),frame(-8),old,new)[0]
+
+
+
+def test_first_presentation_one_frame_after_admission_is_allowed():
+    old,new = metadata()
+    slot = {"id":"new","left":.44,"right":.51,"gutter":.04,
+            "visible":False,"authorized":True,"admitted_inside":True,"future":True}
+    old["layers"][0]["strips"] = [slot]
+    new["layers"][0]["strips"] = [dict(slot,visible=True)]
+    assert compare(frame(),frame(-8,extra=True),old,new)[0] == []
+    assert "visible_ink_disappeared" in compare(
+        frame(),frame(-8,notes=False,extra=True),old,new)[0]
+    slot["ever_visible"] = True
+    assert "unexpected_interior_ink" in compare(frame(),frame(-8,extra=True),old,new)[0]

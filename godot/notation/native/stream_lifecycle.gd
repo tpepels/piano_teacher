@@ -99,9 +99,19 @@ static func admit(owner: Control, passes: Array, specs: Array,
         var role: String = str(spec["kind"])
         var pool: Array = source_pool if role == "source" else rest_pool
         var choice: Node2D = null
-        if role == "source" and first_source != null and \
-                is_instance_valid(first_source) and not used.has(first_source):
-            choice = first_source
+        if role == "source":
+            var first: float = float(spec.get("clip_floor",spec["source_floor"]))
+            var last: float = float(spec.get("clip_ceiling",spec["source_ceiling"]))
+            for candidate in [first_source]+source_pool:
+                if candidate != null and is_instance_valid(candidate) and \
+                        not used.has(candidate) and bool(candidate.get("compiled")) and \
+                        absf(float(candidate.get("source_floor"))-first) < .00001 and \
+                        absf(float(candidate.get("source_ceiling"))-last) < .00001:
+                    choice = candidate
+                    break
+            if choice == null and first_source != null and \
+                    is_instance_valid(first_source) and not used.has(first_source):
+                choice = first_source
         if choice == null:
             for segment in pool:
                 if segment != null and is_instance_valid(segment) and \

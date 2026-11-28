@@ -240,16 +240,24 @@ func _process(_delta: float) -> bool:
     if not continuity.is_empty():
         _fail(continuity)
         return false
-    # The journey stays on one window: once its notes are drawn they may
-    # never vanish (Free -> Tempo, Pause/Resume and repeats keep the ink).
+    # During a revision handoff the outgoing renderer owns the old ink
+    # while the incoming renderer compiles. Readiness of the incoming
+    # atlas is not evidence that the screen lost its notes. The captured
+    # frame verifier checks physical continuity across all actual layers.
     var ink: bool = renderer.native_ready and renderer.retained_ready() and \
         not renderer.timeline.notes.is_empty()
     if ink and ink_shown_since < 0 and phase not in ["boot","connect"]:
         ink_shown_since = now_ms
-    if ink_shown_since >= 0 and not ink and phase not in ["stop_tempo","stopped_stable"]:
-        _fail("Drawn notes vanished in phase %s (step %s, revision %s)" % [
+    if ink_shown_since >= 0 and not ink and phase not in [
+            "stop_tempo","stopped_stable","section_next"]:
+        _fail("Selected score assets vanished in phase %s (step %s, revision %s)" % [
             phase, step, str(state.get("revision",""))])
         return false
+    if phase == "section_next" and not ink:
+        var retained_staff = app.score_runway.staff_renderer()
+        if not is_instance_valid(retained_staff) or not retained_staff.is_visible_in_tree():
+            _fail("Section transition lost its outgoing staff before publication")
+            return false
     match phase:
         "connect":
             if app.command_coordinator.state.pending or not app.score_session.is_ready() or \
@@ -633,6 +641,13 @@ func _process(_delta: float) -> bool:
                 if step == "section_choice":
                     _fail("Next section left the old section choice active")
                 else:
+                    # Observe the committed replacement instead of ending
+                    # the capture at the first new asset-ready poll.
+                    var playback: Dictionary = state.get("playback_timeline",{})
+                    if not bool(state.get("running",false)) or \
+                            not bool(playback.get("presentation_confirmed",false)) or \
+                            renderer.bound_segment_id() != str(playback.get("segment_id","")):
+                        return false
                     print("FULL_SCENE_VISUAL_SECTION_ADVANCED")
                     _success()
     return false

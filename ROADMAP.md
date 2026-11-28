@@ -4700,3 +4700,10 @@ After four recorded failures without tempo advancement at a routine two-hand win
 - Added deterministic detector, native queue and backend timeline regressions. Fresh Godot/Xvfb and physical keyboard acceptance remain required; the original capture was from before these changes.
 
 The production fake-MIDI journey now verifies both required successful recovery-tempo attempts and checks the exact committed segment binding before proceeding. Detector coverage also includes hidden or entirely missing retained layers. The Python visual detector passed its initial 13 fault-injection tests against byte-identical committed files; replay of the old failure witnesses still detects both major ink losses and the approximately 259 BPM Free scroll, while rejecting the isolated playhead-glow artifacts. Fresh rendering remains unverified.
+
+
+### Follow-up: rendered capture 2026-11-28 16:47
+- The fixture and 4/4 journeys passed; the remaining 2/4 failure was a first-presentation delay followed by an incoming-renderer readiness assertion at section handoff. Moonlight Retry waited over 35 seconds at 22 BPM.
+- Timed replacement now releases an entirely unseen source/trailing-rest suffix behind an already-exposed leading rest, preserving the latter at the original world coordinates and archiving the source only once. Physical clearance uses the matching preview; unrelated rollback transactions remain full-batch.
+- Prefer exact precompiled source windows during admission. Track delayed first visibility without exempting reappearance of previously exposed ink. Section acceptance observes the retained staff and the actual bound successor before ending.
+- Fresh application, native queue, and rendered acceptance still required.

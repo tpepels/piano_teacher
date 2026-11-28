@@ -361,7 +361,10 @@ func place_timeline_take(facts: StreamGeometry, opening: float,
         start_world: float, right: float, header: float,
         count_in_beats: float) -> Dictionary:
     # The exposure rule applies to every take, including unplayed takes.
-    trim(facts,"timeline_replaces_unseen")
+    if not queue.withdraw_timed_tail(canvas(),facts.world,facts.density,
+            facts.gap,facts.duration,facts.width,facts.playhead,
+            "timeline_replaces_unseen").is_empty():
+        _binding.reconcile()
     # Print the count-in bar as a rest where no earlier ink fills it.
     var before: float = maxf(facts.world,ink_end(facts))
     var leading_rest: float = clampf(start_world-header-before-
@@ -391,10 +394,10 @@ func withdraw_predicted_take(facts: StreamGeometry, owner_serial: int) -> void:
 ## World beat where the ink that cannot be withdrawn ends (this layer and
 ## live peer layers), or -INF when the staff ahead is empty.
 func ink_end(facts: StreamGeometry) -> float:
-    var preview: Dictionary = queue.preview_tail_withdrawal(facts.world,
+    var remaining: Array = queue.preview_timed_withdrawal(facts.world,
         facts.density,facts.gap,facts.duration,facts.width,facts.playhead)
     var end := -INF
-    for item in preview.get("remaining",[]):
+    for item in remaining:
         var bounds: Vector2 = Admission.clip_bounds(
             item,facts.density,facts.gap,facts.duration)
         end = maxf(end,float(item["world_origin"])+bounds.y/maxf(1.0,facts.density))
@@ -516,8 +519,8 @@ func acknowledge_arm() -> bool:
 func observe_state(facts: StreamGeometry, state: Dictionary, graded_beat: float,
         allow_admission: bool) -> void:
     _binding.observe_state(facts,state,graded_beat,allow_admission,trim,cancel_arm)
-    # A take has sounded once the playhead reached its first note while it
-    # was the live take; only takes that never sounded may be withdrawn.
+    # Sounding evidence remains distinct from physical ink exposure;
+    # only the exposure-safe queue may withdraw an unseen suffix.
     var live: int = _binding.live_owner()
     if live >= 0 and not bool(state.get("paused",false)):
         queue.mark_sounded(live,facts.world)
