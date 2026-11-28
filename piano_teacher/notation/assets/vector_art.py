@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 from io import BytesIO
 import math
+import sys
 
 from PIL import Image
 
@@ -80,17 +81,19 @@ def local_vector_art(svg, staff_space, origin, source):
     context.scale(scale, scale)
     context.set_source_surface(recording.cairo, 0, 0)
     context.paint()
-    buffer = BytesIO()
-    bitmap.write_to_png(buffer)
-    with Image.open(BytesIO(buffer.getvalue())) as raw:
-        image = raw.convert('RGBA')
-    bbox = image.getchannel('A').getbbox()
+    # Cairo stores native-endian premultiplied ARGB. Only coverage is
+    # published: the retained scene supplies the final ink colour.
+    bitmap.flush()
+    alpha_offset = 3 if sys.byteorder == "little" else 0
+    alpha_bytes = memoryview(bitmap.get_data())[alpha_offset::4].tobytes()
+    alpha = Image.frombytes("L", (w, h), alpha_bytes, "raw", "L", bitmap.get_stride() // 4)
+    bbox = alpha.getbbox()
     if bbox is None:
         return None
     a, b, c, d = bbox
-    clipped = image.crop(bbox)
-    white = Image.new('RGBA', clipped.size, (255, 255, 255, 255))
-    white.putalpha(clipped.getchannel('A'))
+    clipped = alpha.crop(bbox)
+    white = Image.new("RGBA", clipped.size, (255, 255, 255, 255))
+    white.putalpha(clipped)
     encoded = BytesIO()
     white.save(encoded, format='PNG', optimize=True)
     return {'source': source, 'units_per_space': 250,
