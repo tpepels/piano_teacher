@@ -85,8 +85,8 @@ func _exercise() -> void:
     var before_open: Dictionary = await _request("performance.diagnostics")
     var selected: Dictionary = await _request("library.open",{"id":"phase6_native_fixture.mid"})
     var after_open: Dictionary = await _request("performance.diagnostics")
-    _check(int(after_open.get("engine_tick",{}).get("samples",0)) >=
-        int(before_open.get("engine_tick",{}).get("samples",0))+3,
+    _check(int(after_open.get("engine_tick",{}).get("total",0)) >=
+        int(before_open.get("engine_tick",{}).get("total",0))+3,
         "Musical ticks stopped while source preparation waited for real fingering inference")
     var identity := _identity(selected,1)
     _check(_bound(await _request("score.bundle",identity),identity),
@@ -99,8 +99,8 @@ func _exercise() -> void:
     var before: Dictionary = await _request("performance.diagnostics")
     await create_timer(0.85).timeout
     var during: Dictionary = await _request("performance.diagnostics")
-    _check(int(during.get("engine_tick",{}).get("samples",0)) >
-        int(before.get("engine_tick",{}).get("samples",0)),
+    _check(int(during.get("engine_tick",{}).get("total",0)) >
+        int(before.get("engine_tick",{}).get("total",0)),
         "Musical ticks stopped while notation could not answer")
     _check(not replies.has(old_id),"A stopped notation worker returned a score")
     var saturated := 0

@@ -70,5 +70,5 @@ class PracticeSession:
         try:
             return self.apply(ClockAdvanced())
         finally:
-            self.runtime_timings.tick_ms.append(
+            self.runtime_timings.record_tick(
                 (time.perf_counter()-began)*1000.0)

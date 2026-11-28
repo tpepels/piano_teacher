@@ -14,6 +14,11 @@ class RuntimeTimings:
         self.midi_ms: deque[float] = deque(maxlen=256)
         self.state_ms: deque[float] = deque(maxlen=128)
         self.tick_ms: deque[float] = deque(maxlen=256)
+        self.total_ticks = 0
+
+    def record_tick(self, elapsed_ms: float) -> None:
+        self.tick_ms.append(elapsed_ms)
+        self.total_ticks += 1
 
     @staticmethod
     def _describe(values: deque[float]) -> dict:
@@ -32,7 +37,7 @@ class RuntimeTimings:
         return {
             "midi_callback": self._describe(self.midi_ms),
             "full_state": self._describe(self.state_ms),
-            "engine_tick": self._describe(self.tick_ms),
+            "engine_tick": {**self._describe(self.tick_ms), "total": self.total_ticks},
             "score_generation": "supervised subprocess",
             "midi_visual_delivery": "in-process bounded event ring",
             "measurement": "embedded Python processing time; excludes Bluetooth input and display latency",
