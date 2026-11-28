@@ -5,6 +5,7 @@ chosen source, its exact authored tempo map and the established
 PlaybackSession/VisualTransport state for command or read-side use.
 """
 from __future__ import annotations
+import math
 from .playback_facts import PlaybackSourceFacts, PlaybackRuntimeFacts
 from .musical_scheduler import SCHEDULER
 from .musical_timeline import TakeSpec, take_spans, rest_to_barline
@@ -12,6 +13,14 @@ from .musical_timeline import TakeSpec, take_spans, rest_to_barline
 
 
 NO_PIANO = "Connect your MIDI piano to play in tempo."
+# Commands and regular state polls share this wire contract.
+PLACEMENT_KEYS = frozenset({
+    "placement_revision", "ink_ahead_beats", "free_travel_beats",
+    "reusable_rest_beats", "opening_header_beats", "presented_segment",
+    "placement_transport", "placement_segment", "placement_renderer",
+    "placement_sample_us", "placement_clock_ms",
+})
+PLACEMENT_FRESH_SECONDS = .75
 
 class TransportTiming:
     def __init__(self, *, lesson, transport, score, attempt_progression, take,
@@ -23,6 +32,8 @@ class TransportTiming:
         self.take = take
         self.clock = clock
         self.midi_input = midi_input
+        self._placement = None
+        self._last_placement_sample = -1
 
     def presentation_bpm(self) -> float:
         pending = self.take.pending
@@ -160,19 +171,61 @@ class TransportTiming:
     def next_count_in_meter(self) -> list[int]:
         return list(self.next_count_in()[1])
 
+    def _placement_identity(self):
+        return (self.lesson.revision, self.transport.transport_id,
+                self.transport.active_segment_id)
+
     def update_placement_facts(self, kwargs: dict) -> None:
-        """Godot's measurement sent with a command: the beats of printed ink
-        still ahead of its playhead, which a new run's count-in follows."""
+        """Accept one source-bound measurement; legacy clients cannot reuse silence."""
         if kwargs.get("placement_revision") != self.lesson.revision:
             return
-        ahead = kwargs.get("ink_ahead_beats")
+        ahead, travel = kwargs.get("ink_ahead_beats"), kwargs.get("free_travel_beats")
+        if ahead is None and travel is None:
+            return
+        stamp_keys = ("placement_transport", "placement_segment", "placement_renderer",
+                      "placement_sample_us", "placement_clock_ms")
+        stamped = any(k in kwargs for k in stamp_keys)
+        token = None
+        now = self.clock()
+        if stamped:
+            epoch, segment, renderer, sample, clock_ms = (kwargs.get(k) for k in stamp_keys)
+            if (type(epoch) is not int or type(segment) is not str
+                    or type(renderer) is not int or renderer < 0
+                    or type(sample) is not int or sample < 0
+                    or type(clock_ms) not in (int, float) or not math.isfinite(clock_ms)):
+                raise ValueError("Incomplete placement identity")
+            identity = (kwargs["placement_revision"], epoch, segment)
+            if (identity != self._placement_identity()
+                    or sample <= self._last_placement_sample
+                    or not 0 <= now-clock_ms/1000 <= PLACEMENT_FRESH_SECONDS):
+                return
+            token = (identity, renderer, now, clock_ms/1000)
+        # Validate all measurements before installing any of them.
+        if travel is not None:
+            travel = float(travel)
+            if not math.isfinite(travel) or not 0 <= travel <= 256:
+                raise ValueError("Invalid Free travel measurement")
         if ahead is not None:
             self.transport.report_ink_ahead(ahead,
-                reusable_rest=kwargs.get("reusable_rest_beats", 0.0),
-                opening_header=kwargs.get("opening_header_beats", 0.0))
-        travel = kwargs.get("free_travel_beats")
+                reusable_rest=kwargs.get("reusable_rest_beats", 0.0) if token else 0.0,
+                opening_header=kwargs.get("opening_header_beats", 0.0) if token else 0.0)
+            self._placement = token
         if travel is not None:
             self.transport.report_free_travel(travel)
+        if stamped:
+            self._last_placement_sample = sample
+
+    def count_in_clearance(self, beats: float) -> float:
+        """Consume the discount once, only on the current, recently observed take."""
+        token, self._placement = self._placement, None
+        if token is not None:
+            identity, renderer, received, clock = token
+            now = self.clock()
+            if (identity == self._placement_identity()
+                    and 0 <= now-received <= PLACEMENT_FRESH_SECONDS
+                    and 0 <= now-clock <= PLACEMENT_FRESH_SECONDS):
+                return self.transport.count_in_clearance(beats)
+        return self.transport.ink_ahead_beats
 
     def musical_seconds(self, at: float) -> float:
         """Graded musical time of wall instant ``at``, in seconds since run_at.

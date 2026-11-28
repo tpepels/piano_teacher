@@ -299,8 +299,15 @@ def test_retry_count_in_reuses_only_measured_silence(practice_session, reusable,
     assert before["running"] and before["bpm"] == 80
     timeline = session.engine.transport.musical_timeline
     world = timeline.world_at(session.clock())
-    after = session.command("restart", placement_revision=before["revision"],
+    placement = dict(placement_revision=before["revision"],
+        placement_transport=before["transport_id"],
+        placement_segment=before["playback_timeline"]["segment_id"],
+        placement_renderer=1, placement_sample_us=1,
+        placement_clock_ms=before["clock_sampled_at_ms"],
         ink_ahead_beats=3.5, reusable_rest_beats=reusable, opening_header_beats=.75)
+    # Exercise the same polling boundary used by the native client.
+    session.ask("state.snapshot", **placement)
+    after = session.command("restart", **dict(placement, placement_sample_us=2))
     after = session.ready_score(state=after)
     retry = after["playback_timeline"]["current"]
     assert retry["take_id"] != take["take_id"]

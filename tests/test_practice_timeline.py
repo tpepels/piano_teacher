@@ -292,3 +292,35 @@ def test_invalid_reusable_silence_cannot_change_clearance():
     with pytest.raises(ValueError):
         transport.report_ink_ahead(2, reusable_rest=3)
     assert transport.count_in_clearance(4) == 4
+
+
+def test_stamped_placement_rejects_stale_epoch_and_consumes_discount_once(practice_session):
+    session = practice_session(bars=1)
+    state = session.snapshot()
+    timing = session.engine.transport_timing
+    payload = dict(placement_revision=state["revision"],
+        placement_transport=state["transport_id"],
+        placement_segment=state["playback_timeline"]["segment_id"],
+        placement_renderer=3, placement_sample_us=100,
+        placement_clock_ms=state["clock_sampled_at_ms"],
+        ink_ahead_beats=3.5, reusable_rest_beats=3., opening_header_beats=.75)
+    session.ask("state.snapshot", **payload)
+    assert timing.count_in_clearance(4) == pytest.approx(.5)
+    assert timing.count_in_clearance(4) == pytest.approx(3.5)
+    session.ask("state.snapshot", **dict(payload, placement_sample_us=101))
+    session.ask("state.snapshot", **dict(payload, placement_sample_us=99, ink_ahead_beats=90.))
+    assert timing.count_in_clearance(4) == pytest.approx(.5)
+    session.ask("state.snapshot", **dict(payload, placement_sample_us=102))
+    session.clock.at += 1.
+    assert timing.count_in_clearance(4) == pytest.approx(3.5)
+    session.ask("state.snapshot", **dict(payload, placement_sample_us=103,
+        placement_transport=state["transport_id"]-1, ink_ahead_beats=80.))
+    assert timing.count_in_clearance(4) == pytest.approx(3.5)
+
+
+def test_legacy_placement_cannot_authorize_silence_reuse(practice_session):
+    session = practice_session(bars=1)
+    state = session.snapshot()
+    session.ask("state.snapshot", placement_revision=state["revision"],
+        ink_ahead_beats=3.5, reusable_rest_beats=3., opening_header_beats=.75)
+    assert session.engine.transport_timing.count_in_clearance(4) == pytest.approx(3.5)

@@ -63,7 +63,7 @@ class PlaybackAuthorization:
             elif not timeline.open:
                 timeline.reset()
             placed = timeline.start_after(
-                take, now=now, rest_beats=self.transport.count_in_clearance(plan.bar_beats),
+                take, now=now, rest_beats=self.transport_timing.count_in_clearance(plan.bar_beats),
                 bar_beats=plan.bar_beats, meter=plan.meter, bpm=intent.bpm)
         timeline.next_take = None
         try:

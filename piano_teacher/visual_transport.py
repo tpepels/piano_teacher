@@ -104,6 +104,9 @@ class VisualTransport:
         self.continuation_pending = False
         self.pending_rewind = None
         self.play_from_beat = 0.0
+        # Retain full clearance for physical handoff, never the silence discount.
+        self.reusable_rest_beats = 0.0
+        self.opening_header_beats = 0.0
         if preserve_musical and now is not None and self.musical.open:
             self.musical.bridge_to_rest(now)
         else:
