@@ -254,3 +254,15 @@ def test_return_to_free_preserves_projection_until_publication(outgoing, incomin
     assert timeline.hold_open_at() == pytest.approx(arrival)
     assert timeline.world_at(arrival) == pytest.approx(world + travel)
     assert timeline.world_at(arrival + 10.0) == pytest.approx(world + travel)
+
+
+
+def test_free_long_inter_target_gap_is_not_compressed_into_a_sprint():
+    from piano_teacher.application.musical_timeline import MusicalTimeline
+    timeline = MusicalTimeline()
+    timeline.start_free(now=10.0, travel_beats=4.0, bpm=40.0)
+    arrival = timeline.hold_open_at()
+    timeline.move_hold(now=arrival, beats=12.0, bpm=40.0)
+    movement = timeline.segments[-2]
+    assert movement.end_bpm <= 80.0
+    assert timeline.hold_open_at()-arrival >= 9.0

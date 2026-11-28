@@ -28,6 +28,7 @@ var ready_source_floor := 0.0
 var ready_pass_serial := -1
 var ready_take_owner := -1
 var ready_world_origin := NAN
+var ready_was_exposed := false
 var ready_world_beat := NAN
 var ready_first_expiry_world := NAN
 var resumed_sample_ms := -1
@@ -326,6 +327,7 @@ func _process(_delta: float) -> bool:
                     int(item.get("take_owner",item["serial"])) == ready_take_owner:
                 paused_original_preserved = paused_original_preserved or \
                     is_equal_approx(float(item["world_origin"]),ready_world_origin)
+                ready_was_exposed = ready_was_exposed or bool(item.get("ever_visible",false))
         if not paused_original_preserved and \
                 renderer.stream_world_beat < ready_first_expiry_world:
             _fail("Pause withdrew the current unexpired source before Resume")
@@ -423,7 +425,7 @@ func _process(_delta: float) -> bool:
     # A visible count-in passage is retained too, even if it never sounded.
     var original_legitimately_retired: bool = \
         not original_present and (
-            renderer.stream_world_beat >= ready_first_expiry_world-.00001)
+            renderer.stream_world_beat >= ready_first_expiry_world-.00001 or not ready_was_exposed)
     if not original_unchanged or \
             not (original_present or original_legitimately_retired) or \
             not future_only_at_enqueue or not has_transport_binding:

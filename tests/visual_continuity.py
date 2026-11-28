@@ -10,6 +10,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFilter
+from visual_motion import scroll_velocity, strip_witnesses
 
 MAX_EVIDENCE = 8
 
@@ -59,7 +60,10 @@ def score_features(image, meta):
     valid = np.ones_like(ink)
     valid[:, :16] = False  # Fixed brace/gutter at half-resolution.
     cursor = round(meta["playhead"]*w)-x0
-    valid[:, max(0,cursor-14):max(0,cursor+15)] = False
+    # The glow has a thin high-contrast edge about 17 px from the
+    # cursor at 640x400. Mask the fixed overlay, not moving notation.
+    radius = max(14, round(.035*w))
+    valid[:, max(0,cursor-radius):max(0,cursor+radius+1)] = False
     if meta.get("count_in"):
         a,b,c,d = rectangle(meta, "count_in", (h,w))
         valid[max(0,b-y0-4):max(0,d-y0+4), max(0,a-x0-4):max(0,c-x0+4)] = False
@@ -89,7 +93,7 @@ def staff_change(ra, rb, metrics):
     return max(lost_rows,new_rows) >= 3 and (lost_rows > .35*ra.sum() or new_rows > .35*rb.sum())
 
 
-def ink_change(a, va, b, vb, shifts, metrics):
+def ink_change(a, va, b, vb, shifts, metrics, allowed=None):
     # A deliberate long hitch may leave no common written ink. The
     # stationary staff and background checks still apply.
     margin = max(abs(dx) for dx in shifts)+4
@@ -110,8 +114,12 @@ def ink_change(a, va, b, vb, shifts, metrics):
         valid[:, -margin:] = False
     lost = a & backwards & ~dilate(reverse)
     added = b & shared & ~dilate(expected)
+    # A witnessed new future strip can add ink, but never excuse loss
+    # of previously printed ink (including during the same transition).
+    added_valid = shared if allowed is None else shared & ~allowed
+    added &= added_valid
     old_count = int((a & backwards).sum())
-    new_count = int((b & shared).sum())
+    new_count = int((b & added_valid).sum())
     metrics.update(lost_pixels=int(lost.sum()),added_pixels=int(added.sum()),
                    old_ink=old_count,new_ink=new_count)
     reasons = []
@@ -160,7 +168,15 @@ def compare(before, after, previous, current):
         metrics["hand_focus_changed"] = True
     elif staff_change(ra,rb,metrics):
         reasons.append("staff_disappeared_or_shifted")
-    more, residual = ink_change(a,va,b,vb,shifts,metrics)
+    velocity = scroll_velocity(previous,current,metrics)
+    if velocity:
+        reasons.append(velocity)
+    allowed, retired = strip_witnesses(previous,current,a.shape,rect0[0],w)
+    metrics["admitted_interior_columns"] = int(allowed.any(axis=0).sum())
+    if retired:
+        metrics["prematurely_retired_strips"] = retired
+        reasons.append("visible_strip_retired_before_exit")
+    more, residual = ink_change(a,va,b,vb,shifts,metrics,allowed)
     return reasons+more, metrics, residual
 
 

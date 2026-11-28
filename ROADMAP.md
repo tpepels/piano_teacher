@@ -4690,3 +4690,11 @@ MIDI discovery now polls without a saved device, excludes common virtual inputs 
 ## Both-hand review and Free runway continuity (2026-11-28)
 
 After four recorded failures without tempo advancement at a routine two-hand window, review right then left at the recovery BPM, with two consecutive accepted full takes per hand; return to the same two-hand window. Review carries no new mastery and its progress is persisted. Free's renderer geometry now measures the same safe empty-strip slot used at admission, including peer clearance and removable suffixes; occupied runways retain offscreen append safety. Long Free travel no longer compresses into three seconds. Added real-engine hand recovery and timeline coverage. Native, visual and physical acceptance remain unverified.
+
+
+## Rendered continuity fixes following 2026-11-28 capture
+
+- Removed visible speculative repeat allocation from the admission gateway. Only an authenticated committed timeline take may publish new timed notation. Keep any already-visible abandoned source/rest at its original position until it exits; clearance and actual withdrawal share the same geometric preview.
+- Free long inter-target movements no longer compress into a 1.5-second sprint; their acceleration is bounded by 80 BPM or the selected tempo. The initial entry also retains the earlier runway distance limit.
+- Visual capture records the actual retained strip identities, bounds and admission witnesses; detect early retirement, permit new authorized future ink only in its own slot, never exempt simultaneous ink loss, and independently verify scroll velocity. Corrected the fixed glow exclusion and extended basic fixture observation.
+- Added deterministic detector, native queue and backend timeline regressions. Fresh Godot/Xvfb and physical keyboard acceptance remain required; the original capture was from before these changes.

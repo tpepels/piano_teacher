@@ -114,3 +114,43 @@ def test_capture_detects_single_frame_flash_and_saves_surrounding_frames(tmp_pat
     assert not analyze(capture,tmp_path/"truncated")
     incomplete = json.loads((tmp_path/"truncated/report.json").read_text())
     assert any("invalid_capture" in item["reasons"] for item in incomplete["failures"])
+
+
+
+def test_motion_compensation_cannot_hide_a_scroll_sprint():
+    old,new = metadata()
+    old.update(time_ms=1000,bpm=80,mode="learn")
+    new.update(time_ms=1035,bpm=80,mode="learn",world=.15)
+    new["layers"][0]["world"] = .15
+    reasons,metrics,_ = compare(frame(),frame(-24),old,new)
+    assert "excessive_scroll_velocity" in reasons
+    assert metrics["scroll_bpm"] > 250
+
+
+def test_ordinary_motion_with_timestamps_passes():
+    old,new = metadata()
+    old.update(time_ms=1000,bpm=90,mode="practice")
+    new.update(time_ms=1033.333,bpm=90,mode="practice")
+    assert compare(frame(),frame(-8),old,new)[0] == []
+
+
+def test_new_admission_allows_only_added_ink_in_its_own_future_slot():
+    old,new = metadata()
+    old["layers"][0]["strips"] = []
+    new["layers"][0]["strips"] = [{"id":"new","left":.44,"right":.51,
+        "gutter":.04,"visible":True,"authorized":True,"admitted_inside":True,"future":True}]
+    assert compare(frame(),frame(-8,extra=True),old,new)[0] == []
+    assert "visible_ink_disappeared" in compare(
+        frame(),frame(-8,notes=False,extra=True),old,new)[0]
+    new["layers"][0]["strips"][0]["authorized"] = False
+    assert "unexpected_interior_ink" in compare(frame(),frame(-8,extra=True),old,new)[0]
+
+
+def test_visible_strip_retirement_is_detected_even_with_small_ink_loss():
+    old,new = metadata()
+    old["layers"][0]["strips"] = [{"id":"visible","left":.5,"right":.7,
+        "gutter":.04,"visible":True,"authorized":True,"admitted_inside":True,"future":True}]
+    new["layers"][0]["strips"] = []
+    assert "visible_strip_retired_before_exit" in compare(frame(),frame(-8),old,new)[0]
+    old["layers"][0]["strips"][0].update(left=.01,right=.041)
+    assert "visible_strip_retired_before_exit" not in compare(frame(),frame(-8),old,new)[0]

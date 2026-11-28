@@ -49,6 +49,49 @@ func _rect(control: Control, viewport_size: Vector2) -> Array:
     return [rect.position.x/viewport_size.x,rect.position.y/viewport_size.y,
         rect.size.x/viewport_size.x,rect.size.y/viewport_size.y]
 
+const Admission := preload("res://score_stream_admission.gd")
+
+func _strips(view: Control, viewport_size: Vector2) -> Array:
+    # A physical witness from the actual retained queue, not from the
+    # teaching mode or a guessed time window around a transition.
+    var snapshot: Array = view.diagnostic_stream_snapshot()
+    var authorized: Dictionary = {}
+    for item in snapshot:
+        if str(item.get("kind","source")) == "source":
+            var key: String = str(item.get("take_key",""))
+            var owner: int = int(item.get("take_owner",item["serial"]))
+            if not key.is_empty() and key not in ["prepared","predicted"]:
+                authorized[owner] = true
+    var result: Array = []
+    var density: float = float(view.timeline.pixels_per_beat)
+    var gap: float = float(view.staff_gap())
+    var duration: float = float(view.timeline.sounding_duration_beats)
+    var origin_x: float = view.get_global_rect().position.x
+    var playhead: float = view.size.x*PLAYHEAD_FRACTION
+    for item in snapshot:
+        var clip = item.get("clip")
+        var owner: int = int(item.get("take_owner",item["serial"]))
+        var kind: String = str(item.get("kind","source"))
+        var bounds: Vector2 = Admission.clip_bounds(item,density,gap,duration)
+        var origin: float = float(item["world_origin"])
+        var x: float = origin_x+playhead+(origin-float(view.stream_world_beat))*density
+        var admitted_density: float = float(item.get("admitted_density",density))
+        var admitted_gap: float = float(item.get("admitted_staff_gap",gap))
+        var admitted_world: float = float(item.get("admitted_world",INF))
+        var admitted_x: float = float(item.get("admitted_playhead_x",playhead))
+        var admitted_width: float = float(item.get("admitted_viewport_width",view.size.x))
+        var admitted_bounds: Vector2 = Admission.clip_bounds(item,admitted_density,admitted_gap,duration)
+        var first_x: float = admitted_x+(origin-admitted_world)*admitted_density+admitted_bounds.x
+        result.append({"id":str(item.get("slot_id",str(item["serial"])+":"+kind)),
+            "left":(x+bounds.x)/viewport_size.x,"right":(x+bounds.y)/viewport_size.x,
+            "gutter":(origin_x+29.0)/viewport_size.x,
+            "visible":is_instance_valid(clip) and clip.is_visible_in_tree(),
+            "authorized":authorized.has(owner),
+            "admitted_inside":is_finite(admitted_world) and first_x <= admitted_width
+                and (kind == "rest" or bool(item.get("admitted_on_empty_strip",false))),
+            "future":is_finite(admitted_world) and origin+float(item.get("source_floor",0.0)) > admitted_world})
+    return result
+
 func _layers(stage, viewport_size: Vector2) -> Array:
     var result: Array = []
     for child in stage.score_frame.get_children():
@@ -56,7 +99,8 @@ func _layers(stage, viewport_size: Vector2) -> Array:
                 child.is_visible_in_tree():
             result.append({"id":child.get_instance_id(),
                 "world":float(child.stream_world_beat),
-                "density":float(child.timeline.pixels_per_beat)/viewport_size.x})
+                "density":float(child.timeline.pixels_per_beat)/viewport_size.x,
+                "strips":_strips(child,viewport_size)})
     return result
 
 func _sample() -> Dictionary:
@@ -84,6 +128,7 @@ func _sample() -> Dictionary:
         "transport":state.get("transport_id",-1),"hand":state.get("hand",""),
         "running":state.get("running",false),"paused":state.get("paused",false),
         "clock_beat":state.get("clock_beat",0.0),"bpm":state.get("bpm",0.0),
+        "target_bpm":state.get("target_bpm",0.0),
         "flow_step":state.get("flow",{}).get("step","") if state.get("flow") is Dictionary else "",
         "playback":state.get("playback_timeline"),
         "timeline":state.get("musical_timeline")}

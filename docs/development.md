@@ -464,3 +464,6 @@ Notehead interior masks are now derived from the original CPU Images on the scor
 Core CI runs on every push to main again, with Python and Godot verification reported separately even if the Python tests fail; real CPU ONNX fingering has a dedicated job. Full embedded/package verification remains available through manual dispatch. The Godot readiness scenario now generates an authentic Verovio score bundle and drives the actual worker, upload and retained draw lifecycle, superseding a pending job and retrying the selected source.
 
 The automatic workflow runs Python, Godot, and fingering checks in independent jobs, so a failing or long Python suite cannot hide notation failures. A separate least-privilege reporter records all three exact-commit outcomes through GitHub commit statuses, including links to the Actions run. All Godot player scenarios run even when an earlier scenario fails.
+
+
+The visual continuity verifier also checks world-beat velocity separately from motion compensation and checks retained strip identities against physical exit. Interior additions are allowed only where a new authorized future strip has an actual admission witness; this never exempts disappearance of previous notation. The basic visual fixture observes resumed scrolling longer than the headless smoke test.
