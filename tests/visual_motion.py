@@ -59,11 +59,12 @@ def strip_witnesses(before, after, shape, crop_x, width):
             allowed[:,lo:hi] = True
     retired = []
     for key,(layer,strip) in old.items():
-        if key in new or not strip["visible"]:
+        if not strip["visible"] or (key in new and new[key][1]["visible"]):
             continue
-        # An older capture has no strip witness schema; never infer
-        # retirement from its absence. New capture records all layers.
-        if not any("strips" in item for item in after.get("layers",[])):
+        # New capture records every layer, even when the entire layer
+        # disappeared. Old captures cannot provide this witness.
+        if not (after.get("strip_witness_version") == 1 or
+                any("strips" in item for item in after.get("layers",[]))):
             continue
         successor = layers.get(layer["id"])
         delta = (successor["world"]-layer["world"] if successor is not None

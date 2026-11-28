@@ -31,6 +31,7 @@ var hitch_mastered := -1
 var failed_take_seen := false
 var played_first := false
 var played_second := false
+var clean_passes_after_recovery := 0
 # Continuity invariant (owner report 2026-11-24): the staff may never jump.
 var continuity_world := NAN
 var continuity_ms := -1.0
@@ -512,8 +513,12 @@ func _process(_delta: float) -> bool:
             if int(state.get("bpm",0)) != 40:
                 _fail("Tempo after Free did not restart at 50%")
                 return false
-            # The clean and faster checks count takes from here.
+            # Two failures at a sub-target tempo require two clean passes
+            # there even after the untimed recovery.
             initial_transport = int(state.get("transport_id",-1))-1
+            clean_passes_after_recovery = 0
+            played_first = false
+            played_second = false
             _advance("clean_repeat")
         "clean_repeat":
             if int(state.get("transport_id",-1)) <= initial_transport:
@@ -529,20 +534,29 @@ func _process(_delta: float) -> bool:
             if played_second:
                 _advance("faster")
         "faster":
-            if int(state.get("transport_id",-1)) <= initial_transport+1:
+            var expected_transport: int = initial_transport+2+clean_passes_after_recovery
+            if int(state.get("transport_id",-1)) < expected_transport:
                 return false
-            if (int(state.get("transport_id",-1)) != initial_transport+2 or
-                    not failed_take_seen or not played_first or not played_second or
-                    # A clean take is faster: the step grows with timing
-                    # quality and shrinks with the window's attack count.
-                    int(state.get("bpm",0)) <= 40 or int(state.get("bpm",0)) > 80 or
-                    int(state.get("lesson_steps_mastered",0)) != 0):
-                _fail("Two real MIDI attacks did not produce a clean faster repeat (above 40 BPM)")
+            if int(state.get("transport_id",-1)) != expected_transport or \
+                    not failed_take_seen or not played_first or not played_second or \
+                    int(state.get("lesson_steps_mastered",0)) != 0:
+                _fail("The clean recovery take did not repeat without granting mastery")
                 return false
-            # The repeat must be admitted from the actual settled timeline,
-            # not an earlier guess that could be withdrawn while visible.
-            if app.score_admission.committed_successors < 1:
-                _fail("Automatic repeat did not admit its committed successor")
+            var playback: Dictionary = state.get("playback_timeline",{})
+            if not bool(playback.get("presentation_confirmed",false)) or \
+                    renderer.bound_segment_id() != str(playback.get("segment_id","")):
+                return false
+            if clean_passes_after_recovery == 0:
+                if int(state.get("bpm",0)) != 40:
+                    _fail("One pass at a repeatedly failed tempo advanced prematurely")
+                    return false
+                clean_passes_after_recovery = 1
+                played_first = false
+                played_second = false
+                _advance("clean_repeat")
+                return false
+            if int(state.get("bpm",0)) <= 40 or int(state.get("bpm",0)) > 80:
+                _fail("Two clean passes at the recovery tempo did not advance")
                 return false
             if _press_primary():
                 _advance("hitch_pause")

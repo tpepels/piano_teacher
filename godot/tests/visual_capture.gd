@@ -51,7 +51,7 @@ func _rect(control: Control, viewport_size: Vector2) -> Array:
 
 const Admission := preload("res://score_stream_admission.gd")
 
-func _strips(view: Control, viewport_size: Vector2) -> Array:
+func _strips(view, viewport_size: Vector2) -> Array:
     # A physical witness from the actual retained queue, not from the
     # teaching mode or a guessed time window around a transition.
     var snapshot: Array = view.diagnostic_stream_snapshot()
@@ -123,7 +123,8 @@ func _sample() -> Dictionary:
         "ready":_app.score_session.is_ready(),"score":_rect(stage.score_frame,size),
         "playhead":cursor,"staff_hand":str(staff.active_hand),
         "count_in":_rect(stage.count_in,size) if stage.count_in.is_visible_in_tree() else null,
-        "layers":_layers(stage,size),"mode":str(state.get("mode","")),
+        "layers":_layers(stage,size),"strip_witness_version":1,
+        "mode":str(state.get("mode","")),
         "phase":str(state.get("phase","")),"revision":state.get("revision",-1),
         "transport":state.get("transport_id",-1),"hand":state.get("hand",""),
         "running":state.get("running",false),"paused":state.get("paused",false),

@@ -22,9 +22,6 @@ var musical_clock
 var metronome
 var failure_request: Node
 var placed_segment := ""
-# Count authenticated successor admissions, never speculative notation.
-var committed_successors := 0
-var _last_admitted_transport := -1
 # Takes first seen after their opening note passed (a stalled frame),
 # reported so Python places them again.
 var late_takes_reported := 0
@@ -203,10 +200,6 @@ func _place(state: Dictionary, current: Dictionary, segment_id: String) -> Strin
     if not view.bind_stream_segment(segment_id) or not view.acknowledge_stream_arm():
         view.cancel_stream_arm()
         return "wait"
-    var transport_id: int = int(state.get("transport_id",-1))
-    if transport_id == _last_admitted_transport:
-        committed_successors += 1
-    _last_admitted_transport = transport_id
     var count_in: float = float(current.get("count_in_beats",0.0))
     if count_in > 0.0:
         var backend_now: float = _backend_ms()

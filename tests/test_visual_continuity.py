@@ -86,7 +86,7 @@ def test_capture_detects_single_frame_flash_and_saves_surrounding_frames(tmp_pat
     capture.mkdir()
     old,_ = metadata()
     old.update(screen="practice",piece="fixture",ready=True,mode="practice",
-               phase="playing",step="tempo")
+               phase="playing",step="tempo",bpm=90)
     with (capture/"frames.bin").open("wb") as images, (capture/"frames.jsonl").open("w") as records:
         for index in range(9):
             meta = deepcopy(old)
@@ -154,3 +154,17 @@ def test_visible_strip_retirement_is_detected_even_with_small_ink_loss():
     assert "visible_strip_retired_before_exit" in compare(frame(),frame(-8),old,new)[0]
     old["layers"][0]["strips"][0].update(left=.01,right=.041)
     assert "visible_strip_retired_before_exit" not in compare(frame(),frame(-8),old,new)[0]
+
+
+
+def test_complete_layer_loss_and_hidden_existing_strip_fail():
+    old,new = metadata()
+    old["layers"][0]["strips"] = [{"id":"visible","left":.5,"right":.7,
+        "gutter":.04,"visible":True,"authorized":True,"admitted_inside":True,"future":True}]
+    new["strip_witness_version"] = 1
+    new["layers"] = []
+    assert "visible_strip_retired_before_exit" in compare(frame(),frame(-8),old,new)[0]
+    new["layers"] = deepcopy(old["layers"])
+    new["layers"][0]["world"] = .05
+    new["layers"][0]["strips"][0]["visible"] = False
+    assert "visible_strip_retired_before_exit" in compare(frame(),frame(-8),old,new)[0]
