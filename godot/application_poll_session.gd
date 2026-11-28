@@ -32,7 +32,7 @@ func poll() -> void:
         # Every poll carries the score's current placement facts, so an
         # automatic transition (the next take, a return to Free) is placed
         # from what is on the staff now, not from the last command's facts.
-        if _request.request("state.snapshot",_assets.continuation_geometry()) != OK:
+        if _request.request("state.snapshot",_assets.continuation_geometry(true)) != OK:
             _inbox.pending = false
 
 func accept_state(state: Dictionary) -> void:

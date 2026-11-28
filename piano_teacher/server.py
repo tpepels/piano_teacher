@@ -188,7 +188,8 @@ class PracticeEngine:
             raise ValueError("Presented segment must be a string")
         with self.lock:
             self.transport_timing.update_placement_facts(facts)
-            if presented and facts.get("placement_revision") == self.lesson.revision:
+            if (presented and facts.get("placement_revision") == self.lesson.revision
+                    and self.transport.running and not self.transport.paused):
                 self.transport.confirm_presentation(presented, now=self.now())
 
     def poll_state(self) -> dict:

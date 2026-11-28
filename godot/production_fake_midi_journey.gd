@@ -37,6 +37,8 @@ var continuity_bpm := 0.0
 var continuity_violation := ""
 var ink_shown_since := -1
 
+var _finishing := false
+
 func _initialize() -> void:
     call_deferred("_boot")
 
@@ -159,8 +161,6 @@ func _check_continuity(renderer, state: Dictionary, now_ms: float, step: String)
     continuity_ms = now_ms
     continuity_bpm = effective_bpm
     return ""
-
-var _finishing := false
 
 func _finish(code: int) -> void:
     if _finishing:

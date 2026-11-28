@@ -202,12 +202,12 @@ func is_ready() -> bool:
 ## native engraving may supply its physical rest/header clearance to the
 ## musical scheduling contract. Presentation controls never inspect a
 ## mutable stage tree or a half-compiled layout.
-func continuation_geometry() -> Dictionary:
+func continuation_geometry(include_presentation: bool = false) -> Dictionary:
     if not is_ready() or not _renderer.has_method("placement_facts"):
         return {}
     var facts: Dictionary = _renderer.placement_facts()
     facts["placement_revision"] = revision
-    if _renderer.has_method("bound_segment_id"):
+    if include_presentation and _renderer.has_method("bound_segment_id"):
         facts["presented_segment"] = str(_renderer.bound_segment_id())
     return facts
 

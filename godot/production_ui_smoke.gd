@@ -33,6 +33,8 @@ var resumed_sample_ms := -1
 var resumed_world_beat := NAN
 var resumed_pass_serial := -1
 
+var _finishing := false
+
 func _initialize() -> void:
     call_deferred("_boot")
 
@@ -54,8 +56,6 @@ func _boot() -> void:
         _fail("Production scene did not initialize the score session")
         return
     print("PHASE6_PRODUCTION_SCENE_STARTED")
-
-var _finishing := false
 
 func _finish(code: int) -> void:
     if _finishing:

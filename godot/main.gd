@@ -88,7 +88,6 @@ var inprocess_bus: Node
 var score_runway
 var score_admission
 var native_started := false
-var _quitting := false
 var spoken_countin: Node
 
 var current_screen: String:
@@ -97,6 +96,8 @@ var score_error: String:
     get: return score_session.score_error if score_session != null else ""
 var startup_last_music_checked: bool:
     get: return library_catalog.startup_checked
+
+var _quitting := false
 
 func _ready() -> void:
     get_tree().auto_accept_quit = false

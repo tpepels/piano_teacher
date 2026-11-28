@@ -254,6 +254,11 @@ class Transport:
     def confirm_presentation(self, segment_id: str, *, now: float) -> bool:
         return self._admission.confirm_presentation(segment_id, now=now)
 
+    def expired_presentation(self, now: float) -> tuple[str, str] | None:
+        if not self.running or self.paused:
+            return None
+        return self._admission.expired_presentation(now)
+
     def authorize(self, *args, **kwargs):
         return self._admission.authorize(*args, **kwargs)
 

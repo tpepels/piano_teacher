@@ -28,6 +28,8 @@ var resumed_bpm := 0.0
 var selected_bpm := 0.0
 var selected_revision := -1
 
+var _finishing := false
+
 func _initialize() -> void:
     call_deferred("_boot")
 
@@ -107,8 +109,6 @@ func _press(button: Button, action: String) -> bool:
         return false
     button.pressed.emit()
     return true
-
-var _finishing := false
 
 func _finish(code: int) -> void:
     if _finishing:

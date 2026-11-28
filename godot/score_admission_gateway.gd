@@ -28,10 +28,10 @@ var repeats_from_the_right := 0
 var late_takes_reported := 0
 var missing_score_frames := 0
 var unplaced_frames := 0
-var _missing_segment := ""
-var _unplaced_segment := ""
 var reported_failure_segment := ""
 var failure_report_in_flight := ""
+var _missing_segment := ""
+var _unplaced_segment := ""
 var _last_problem := ""
 var _last_problem_ms := -100000
 # Frames a running take may wait for its renderer before it is reported.
@@ -151,7 +151,8 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
 func _late_or_missing(current: Dictionary, segment_id: String, late: bool) -> void:
     if reported_failure_segment == segment_id or failure_request.is_pending():
         return
-    _report_problem("The score for this take could not be drawn")
+    if not late:
+        _report_problem("The score for this take could not be drawn")
     _report_authorized_failure(str(current.get("take_id","")),segment_id,
         "timeline_take_not_drawn")
     if late and reported_failure_segment == segment_id:

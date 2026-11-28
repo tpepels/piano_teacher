@@ -72,6 +72,11 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
         prepared.emit(token, revision)
         return
     if bool(state.get("running", false)):
+        var timeline: Variant = state.get("playback_timeline")
+        if timeline is Dictionary and not bool(timeline.get("presentation_confirmed",true)):
+            if started:
+                player.stream_paused = true
+            return
         var bpm: float = maxf(1.0, float(state.get("bpm", 60)))
         var beat: float = visual_beat if is_finite(visual_beat) else float(
             state.get("clock_beat", 0.0))

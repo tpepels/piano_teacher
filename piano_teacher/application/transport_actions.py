@@ -158,6 +158,13 @@ class PlaybackAuthorization:
                 action="score_ready", mode=mode, from_beat=self.lesson.opening_beat)
         return {"accepted": True}
 
+    def expire_unpresented(self) -> None:
+        expired = self.transport.expired_presentation(self.clock())
+        if expired is not None:
+            take_id, segment_id = expired
+            self.fail_physical(take_id=take_id, segment_id=segment_id,
+                               reason="presentation_timeout")
+
     _replaced: tuple | None = None
 
     def on_replaced_failure(self, reason: str) -> None:

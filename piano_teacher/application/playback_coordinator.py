@@ -170,6 +170,13 @@ class PlaybackCoordinator:
         self.presented_segment_id = segment_id
         return True
 
+    def expired_presentation(self, now: float) -> tuple[str, str] | None:
+        if (not self.presentation_confirmed and self.active_segment_id
+                and self.state != PlaybackState.FAILED
+                and now * 1000.0 > self.active_deadline_ms + MAX_ADMISSION_WAIT_SECONDS * 1000.0):
+            return self.active_take_id, self.active_segment_id
+        return None
+
     def _fail_terminally(self, intent, message: str) -> None:
         """No further admission attempt for this exact automatic source."""
         self._terminal_automatic_source = (

@@ -237,6 +237,9 @@ def test_unpresented_segment_cannot_grade_or_advance(practice_session):
     stale = session.ask("state.snapshot", placement_revision=replacement["revision"],
                         presented_segment=take["segment_id"])
     assert not stale["playback_timeline"]["presentation_confirmed"]
+    wrong_revision = session.ask("state.snapshot", placement_revision=replacement["revision"]-1,
+                                 presented_segment=next_take["segment_id"])
+    assert not wrong_revision["playback_timeline"]["presentation_confirmed"]
     confirmed = session.ask("state.snapshot", placement_revision=replacement["revision"],
                             presented_segment=next_take["segment_id"])
     assert confirmed["playback_timeline"]["presentation_confirmed"]
@@ -244,3 +247,19 @@ def test_unpresented_segment_cannot_grade_or_advance(practice_session):
     after = session.ask("state.snapshot", placement_revision=replacement["revision"],
                         presented_segment=next_take["segment_id"])
     assert not after["running"]
+
+
+def test_unpresented_native_take_expires_without_automatic_retries(practice_session):
+    session = practice_session(bars=2)
+    state = tempo(session)
+    take = state["playback_timeline"]["current"]
+    session.engine.playback.require_presentation = True
+    session.clock.at = take["deadline_ms"]/1000 + 121
+    expired = session.tick()
+    assert not expired["running"]
+    assert expired["playback_timeline"]["state"] == "failed"
+    assert expired["lesson_steps_mastered"] == state["lesson_steps_mastered"]
+    for _ in range(3):
+        after = session.tick(1)
+        assert not after["running"]
+        assert after["playback_timeline"]["state"] == "failed"

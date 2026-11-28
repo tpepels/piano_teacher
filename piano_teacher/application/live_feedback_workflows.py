@@ -41,7 +41,7 @@ class LiveFeedbackWorkflows:
         Uses the same _live_feedback grading call as every other consumer;
         only new or changed per-note results enter the feedback event log.
         """
-        if (not self.transport.running
+        if (not self.transport.running or not self.transport.presentation_confirmed
                 or self.transport.mode not in ("practice", "perform")):
             # No running graded take: never carry the previous take's marks.
             self.live_assessment.clear()
@@ -58,7 +58,7 @@ class LiveFeedbackWorkflows:
     def live_feedback(self, elapsed_seconds: float) -> list[dict]:
         """Ask the grading owner for observations on the active source."""
         plan = self.lesson.plan
-        if plan is None or not self.transport.running:
+        if plan is None or not self.transport.running or not self.transport.presentation_confirmed:
             return []
         return self.policy_registry.grading.live_projection(
             plan.active_phrase, hand=plan.hand, bpm=plan.bpm,

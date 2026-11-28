@@ -103,6 +103,10 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
             library.mark_opened(event.opened_identifier)
         return resumed
 
+    def advance_clock(_event):
+        playback_authorization.expire_unpresented()
+        return tick.advance()
+
     def then_start(handler):
         # Every event may request a timed take; it is placed on the musical
         # timeline and started once the event has finished.
@@ -117,7 +121,7 @@ def event_handlers(*, commands, tick, epoch, midi_input, midi_delivery,
     handlers = {
         UserCommand: lambda e: commands.apply(e.action, **e.parameters),
         PhysicalMidi: physical,
-        ClockAdvanced: lambda e: tick.advance(),
+        ClockAdvanced: advance_clock,
         MidiShortcut: shortcut,
         PlaybackFailed: lambda e: playback_authorization.fail_physical(**e.failure),
         SourceCommitted: source,
