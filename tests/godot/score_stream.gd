@@ -44,6 +44,9 @@ func run() -> void:
     var controller := Controller.new()
     var windows: Array[Vector2] = [Vector2(0.0,4.0)]
     pool.install(canvas,windows)
+    for segment in pool.repeat_segments:
+        check(segment.source_floor == 0.0 and segment.source_ceiling == 4.0,
+            "Single-measure repeat buffers are seeded with the exact source window")
     controller.bind_surface(canvas,pool,func(_opening: float) -> Array[Vector2]: return windows)
     # The musical timeline put the first note one count-in bar ahead.
     var armed: Dictionary = controller.place_timeline_take(geometry(0.0),0.0,4.0,6.7,0.4,4.0)
@@ -192,6 +195,18 @@ func run() -> void:
         bool(slow.queue.online[0].get("detached_leading_rest",false)),
         "The original rest stays at its immutable world position")
     check(not slow.queue.has_take(1),"Detached rest cannot attest an old graded take")
+    var original_archives := 0
+    for entry in slow.offline_snapshot():
+        if int(entry.get("owner_serial",-1)) == 1:
+            original_archives += 1
+    check(original_archives == 1,"The withdrawn source is archived once")
+    check(slow.reset(),"Reset journals the replacement but not the detached rest twice")
+    var original_after_reset := 0
+    for entry in slow.offline_snapshot():
+        if int(entry.get("owner_serial",-1)) == 1:
+            original_after_reset += 1
+    check(original_after_reset == original_archives,
+        "Detached rest reset cannot duplicate the already archived original source")
     slow_canvas.free()
 
     # Free (owner report 2026-11-25): Python holds the staff at the target

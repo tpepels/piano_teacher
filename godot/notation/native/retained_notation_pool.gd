@@ -96,14 +96,20 @@ func resize(view: Control, windows: Array[Vector2], reseed: bool = false) -> voi
     while repeat_segments.size() < required:
         var index: int = repeat_segments.size()+1
         var segment = _new_segment(view,"source")
-        if index < windows.size():
-            segment.set_source_window(windows[index].x,windows[index].y)
+        if not windows.is_empty():
+            var bounds: Vector2 = windows[index % windows.size()]
+            segment.set_source_window(bounds.x,bounds.y)
         repeat_segments.append(segment)
-    for index in range(1,windows.size()) if reseed else []:
-        if repeat_segments[index-1].source_floor != windows[index].x or repeat_segments[index-1].source_ceiling != windows[index].y:
-            _invalidate_publication()
-        repeat_segments[index-1].set_source_window(
-            windows[index].x,windows[index].y)
+    if reseed and not windows.is_empty():
+        # Spare buffers should contain actual source windows too. A
+        # one-measure lesson needs several precompiled copies of the same
+        # measure, not four unused whole-atlas command lists.
+        for index in range(repeat_segments.size()):
+            var bounds: Vector2 = windows[(index+1) % windows.size()]
+            var segment = repeat_segments[index]
+            if segment.source_floor != bounds.x or segment.source_ceiling != bounds.y:
+                _invalidate_publication()
+            segment.set_source_window(bounds.x,bounds.y)
     while rest_segments.size() < 5:
         rest_segments.append(_new_segment(view,"rest"))
 
