@@ -47,24 +47,14 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
             for note in teaching.get("expected_notes",[]):
                 targets.append(str(note.get("source_id","")))
         else:
-            # The fixture probes one attack at a time. Identify the expected
-            # source note by pitch, selected score and nearest reading axis.
-            var source_pitches: Dictionary = {}
-            for note in renderer.timeline.notes:
-                # The canonical semantic source uses midi_pitch, not pitch;
-                # rendered heads use source_id rather than engraved event_id.
-                source_pitches[str(note.get("id",""))] = int(note.get("midi_pitch",-1))
-            var nearest := INF
-            for head in renderer.drawn_note_instances:
-                var source: String = str(head.get("source_id",""))
-                if str(head.get("take_key","")) != "%s|%d|%d|%s" % [str(state.get("piece_fingerprint","")),
-                        int(state.get("revision",-1)),int(state.get("transport_id",-1)),str(state.get("mode",""))] or \
-                        int(source_pitches.get(source,-1)) != pitch:
-                    continue
-                var distance: float = absf(float(head["position"].x)-renderer.size.x*PLAYHEAD_FRACTION)
-                if distance < nearest:
-                    nearest = distance
-                    targets = [source]
+            # The synthetic journey plays the first attack of its
+            # authorized take. Resolve that expected source before MIDI,
+            # independently of whether a physical head has been projected.
+            var current: Dictionary = state.get("playback_timeline",{}).get("current",{})
+            var source: Dictionary = current.get("source",{})
+            if int(source.get("revision",-1)) == renderer.timeline.revision:
+                targets = correct_probe_targets(renderer.timeline.model,pitch,
+                    float(source.get("from_beat",NAN)))
         baseline = _painted_heads(stage,viewport_size)
     _events.append({"kind":kind,"label":label,"pitch":pitch,"targets":targets,"baseline_feedback":baseline,
         "take":"%s|%d|%d|%s" % [str(state.get("piece_fingerprint","")),int(state.get("revision",-1)),
@@ -76,6 +66,21 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
         "transport":int(state.get("transport_id",-1)),
         "midi_count":int(state.get("midi_input_count",0)),
         "layers":_layers(stage,viewport_size) if kind == "transition" else []})
+
+# Only active source attacks at the authored onset can satisfy this
+# probe. The separate painted-feedback witness still requires the
+# authenticated take, the correct source identity and visible core ink.
+static func correct_probe_targets(model: Dictionary, pitch: int, source_beat: float) -> Array:
+    var targets: Array = []
+    if not is_finite(source_beat):
+        return targets
+    var active: Array = model.get("active_note_ids",[])
+    for note in model.get("notes",[]):
+        var source: String = str(note.get("id",""))
+        if active.has(source) and int(note.get("midi_pitch",-1)) == pitch and \
+                absf(float(note.get("onset_beats",INF))-source_beat) < .0001:
+            targets.append(source)
+    return targets
 
 func start(app: Node, window: Window) -> void:
     var directory: String = OS.get_environment("PIANO_VISUAL_CAPTURE_DIR")

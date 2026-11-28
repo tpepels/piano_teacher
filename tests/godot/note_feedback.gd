@@ -2,6 +2,7 @@ extends SceneTree
 ## Source facts and compiled-head records are fixtures. All feedback ingestion,
 ## take selection, tied-head gating and status ink selection use production code.
 const Native := preload("res://notation/native/view.gd")
+const VisualCapture := preload("res://tests/visual_capture.gd")
 const Feedback := preload("res://native_score_feedback.gd")
 const Segment := preload("res://notation/native/retained_segment.gd")
 const StatusLayer := preload("res://notation/native/note_status_layer.gd")
@@ -55,6 +56,16 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+    var model := {"active_note_ids":["a","b"],"notes":[
+        {"id":"a","midi_pitch":72,"onset_beats":0.0},
+        {"id":"b","midi_pitch":72,"onset_beats":1.0},
+        {"id":"c","midi_pitch":72,"onset_beats":0.0}]}
+    check(VisualCapture.correct_probe_targets(model,72,0.0) == ["a"],
+        "MIDI witness resolves the active canonical source at its authorized onset")
+    check(VisualCapture.correct_probe_targets(model,72,1.0) == ["b"],
+        "Repeated pitches bind to distinct source identities")
+    check(VisualCapture.correct_probe_targets(model,79,0.0).is_empty(),
+        "A different pitch cannot establish the expected source")
     var view = renderer()
     var feedback := Feedback.new()
     feedback.bind_score(view,7)

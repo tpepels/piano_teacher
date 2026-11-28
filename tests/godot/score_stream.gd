@@ -226,6 +226,11 @@ func run() -> void:
     var rest: Dictionary = trim_queue.online[-1]
     source["ever_visible"] = true
     var source_slot: String = str(source["slot_id"])
+    rest["ever_visible"] = true
+    var clearance: Dictionary = trim_controller.ink_clearance(geometry(3.0))
+    check(float(clearance["end"]) > float(clearance["source_end"]),
+        "Retained silence and retained source provide different count-in clearance")
+    rest["ever_visible"] = false
     var exposed_preview: Array = trim_queue.preview_timed_withdrawal(3.0,100.0,20.0,4.0,1000.0,330.0)
     check(exposed_preview.size() == trim_queue.online.size(),
         "A trailing rest within the viewport cannot be withdrawn even before the draw flags it")

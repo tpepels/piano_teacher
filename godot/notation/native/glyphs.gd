@@ -149,12 +149,17 @@ func prepare_status_sizes(gap: float, screen_scale: Vector2) -> void:
         _head_size_lock.unlock()
         _prepared_head_sizes[head] = sizes.duplicate()
     var derived: Dictionary = _assets.derived_status_images()
+    # Identical aliases share CPU images, not the mutable upload catalog.
+    var prepared: Dictionary = {}
     for key in derived:
         var image: Image = derived[key][0]
         var box: Array = derived[key][1]
         var base_size := Vector2(box[2],box[3]) * (gap / 250.0) * screen_scale
-        _prepared_derived_sizes[key] = _status_sizes(image,base_size,
-            [1.0] if str(key).begins_with("interior:") else scales)
+        var status: bool = str(key).begins_with("cutout:") or key == "note:whole"
+        var identity: String = "%d|%s|%s" % [image.get_instance_id(),str(base_size),str(status)]
+        if not prepared.has(identity):
+            prepared[identity] = _status_sizes(image,base_size,scales if status else [1.0])
+        _prepared_derived_sizes[key] = prepared[identity].duplicate()
 
 func _publish_status_sizes(original: Texture2D, sizes: Dictionary) -> void:
     if original == null:
@@ -466,6 +471,8 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     var cached: Array = _display_cache.get(key,[])
     if cached.size() == 2 and (cached[0] as WeakRef).get_ref() == texture:
         return cached[1]
+    var profile: bool = OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
+    var began: int = Time.get_ticks_usec() if profile else 0
     var size := Vector2i(width,height)
     var source_image: Image = texture.get_meta("verovio_cpu_image") if \
         texture.has_meta("verovio_cpu_image") else texture.get_image()
@@ -474,6 +481,10 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     var pixels: Image = _resample(source_image,size)
     var sized := ImageTexture.create_from_image(pixels)
     _display_cache[key] = [weakref(texture),sized]
+    if profile and Time.get_ticks_usec()-began >= 1000:
+        print("GLYPH_DISPLAY_CACHE_MISS:",JSON.stringify({"at_ms":float(began)*.001,
+            "elapsed_ms":float(Time.get_ticks_usec()-began)*.001,
+            "original":[source.x,source.y],"target":[size.x,size.y]}))
     return sized
 
 static func _resample(image: Image, size: Vector2i) -> Image:

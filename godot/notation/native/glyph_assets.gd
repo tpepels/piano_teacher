@@ -669,8 +669,19 @@ func derived_status_images() -> Dictionary:
     for head in _prepared_interiors:
         if _prepared_interiors[head] != null:
             result["interior:"+str(head)] = [_prepared_interiors[head],bounds[head]]
-    if note_textures.has("whole"):
-        result["whole"] = [note_textures["whole"],note_bounds["whole"]]
+    # First ordinary retained draws need these exact nominal display
+    # sizes too; prepare them through the same existing upload catalog.
+    for name in textures:
+        if not head_images.has(name) and name != "brace":
+            result["glyph:"+str(name)] = [textures[name],bounds[name]]
+    for name in note_textures:
+        result["note:"+str(name)] = [note_textures[name],note_bounds[name]]
+    for name in chord_textures:
+        result["chord:"+str(name)] = [chord_textures[name],chord_metadata[name]["bounds"]]
+    for name in chord_heads_textures:
+        result["heads:"+str(name)] = [chord_heads_textures[name],chord_heads_bounds[name]]
+    for name in tuplet_textures:
+        result["tuplet:"+str(name)] = [tuplet_textures[name]["number"],tuplet_metadata[name]["number"]["bounds"]]
     return result
 
 func derived_status_texture(key: String) -> Texture2D:
@@ -678,7 +689,17 @@ func derived_status_texture(key: String) -> Texture2D:
         return _head_masks.cached_cutout(key.trim_prefix("cutout:"))
     if key.begins_with("interior:"):
         return head_interior(key.trim_prefix("interior:"))
-    return note_textures.get("whole")
+    if key.begins_with("glyph:"):
+        return textures.get(key.trim_prefix("glyph:"))
+    if key.begins_with("note:"):
+        return note_textures.get(key.trim_prefix("note:"))
+    if key.begins_with("chord:"):
+        return chord_textures.get(key.trim_prefix("chord:"))
+    if key.begins_with("heads:"):
+        return chord_heads_textures.get(key.trim_prefix("heads:"))
+    if key.begins_with("tuplet:"):
+        return tuplet_textures[key.trim_prefix("tuplet:")]["number"]
+    return null
 
 func head_cutout(source: String, key: String, index: int, head: String) -> Texture2D:
     return _head_masks.cutout(source,key,index,head,
