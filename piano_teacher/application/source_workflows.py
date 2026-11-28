@@ -11,12 +11,11 @@ from pathlib import Path
 
 class SourcePreparationWorkflow:
     def __init__(self, *, lesson, source_preparation, preprocessing,
-                 fingering, progress, listen_outcomes, lock):
+                 fingering, listen_outcomes, lock):
         self.lesson = lesson
         self.source_preparation = source_preparation
         self.preprocessing = preprocessing
         self.fingering = fingering
-        self.progress = progress
         self.listen_outcomes = listen_outcomes
         self.lock = lock
 
@@ -24,7 +23,6 @@ class SourcePreparationWorkflow:
         return self.source_preparation.prepare(
             Path(path).expanduser().resolve(),
             preprocessing=self.preprocessing, fingering=self.fingering,
-            progress=self.progress, state_lock=self.lock,
             diagnostics=diagnostics)
 
     def correction_identity(self, *, fingerprint: str | None = None):
@@ -51,12 +49,13 @@ class SourcePreparationWorkflow:
 
 class SourceInstallation:
     def __init__(self, *, lesson, notices, lifecycle, plans,
-                 transport, source_preparation, score, take, listen,
+                 transport, source_preparation, progress, score, take, listen,
                  listen_outcomes):
         self.lesson = lesson
         self.notices = notices
         self.lifecycle = lifecycle
         self.plans = plans
+        self.progress = progress
         self.transport = transport
         self.source_preparation = source_preparation
         self.score = score
@@ -66,6 +65,8 @@ class SourceInstallation:
 
     def install(self, prepared) -> bool | None:
         """Called with application lock and source-mutation guard held."""
+        resumed = (self.progress.restore(prepared.plan, prepared.fingerprint)
+                   if prepared.restore_progress else False)
         self.lifecycle.stop(reason="source_changed")
         self.plans.adopt(lambda: self.lesson.install_source(
             plan=prepared.plan, source=str(prepared.path),
@@ -73,7 +74,7 @@ class SourceInstallation:
         self.source_preparation.source_installed()
         self.notices.publish("", "Press Play to practise.")
         self.take.reset_source_presentation()
-        return prepared.resumed
+        return resumed
 
     def install_fingering_correction(self, corrected) -> None:
         """One source-bound state commit, under session and mutation guards."""

@@ -169,6 +169,7 @@ func _ready() -> void:
             command_coordinator.correct_fingering))
 
     var action_request = _new_request(command_coordinator.receive)
+    var source_request = _new_request(command_coordinator.receive_source)
     action_request.timeout = 90.0
     midi_devices.attach_request(_new_request(midi_devices.on_devices))
     midi_devices.bind_context(navigation_session,state_inbox,settings_interactions)
@@ -211,7 +212,7 @@ func _ready() -> void:
             return presentation_session.transport_beat(state_inbox.current,at_ms),
         countin_audio.practice_click,countin_audio.click)
     command_coordinator.configure(practice_view,settings_view,metronome_frame,
-        action_request,command_failure_presenter,score_session,sight_reading_view)
+        action_request,source_request,command_failure_presenter,score_session,sight_reading_view)
     metronome_frame.score_flow = score_flow
     visual_transport_clock.score_flow = score_flow
     score_admission = ScoreAdmissionGateway.new()

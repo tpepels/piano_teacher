@@ -4,7 +4,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import asdict
 import fcntl
-from functools import partial
 from hashlib import sha256
 import json
 import os
@@ -40,15 +39,10 @@ def _write(path: Path, value: dict) -> None:
             os.unlink(temp)
 
 
-def _check_open(shutdown_requested) -> None:
-    if shutdown_requested is not None and shutdown_requested():
-        raise ValueError("Fingering preparation cancelled during shutdown")
-
-
 class FingeringService:
     def __init__(self, directory: Path, *, provider: FingeringProvider | None = None,
-                 shutdown_requested=None):
-        self._checkpoint = partial(_check_open, shutdown_requested)
+                 checkpoint=None):
+        self._checkpoint = checkpoint
         if provider is None:
             from .lumikey import LumikeyProvider
             provider = LumikeyProvider(checkpoint=self._checkpoint)
@@ -62,7 +56,8 @@ class FingeringService:
         directory.mkdir(parents=True, exist_ok=True)
         with (directory/'lock').open('a') as lock:
             while True:
-                self._checkpoint()
+                if self._checkpoint:
+                    self._checkpoint()
                 try:
                     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break

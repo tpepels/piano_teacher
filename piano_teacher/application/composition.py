@@ -162,7 +162,8 @@ def _devices_library_and_score(r, *, enable_midi, data_dir, shutdown_requested) 
     data_dir.mkdir(parents=True, exist_ok=True)
     r._data_dir = data_dir
     r.listen = ListenSession(data_dir / "demo-audio", lock=r.lock)
-    r.fingering = FingeringService(data_dir / "fingering", shutdown_requested=shutdown_requested)
+    r.source_preparation = SourcePreparationSession(shutdown_requested)
+    r.fingering = FingeringService(data_dir / "fingering", checkpoint=r.source_preparation.checkpoint)
     r.preprocessing = PreprocessingCache(data_dir / "preprocessed")
     r.teaching_continuation = TeachingContinuation(r.visual_transport)
     # The untimed guided engine owns repeat presentation epochs; no
@@ -214,7 +215,6 @@ def _persistence_and_settlement(r) -> None:
     r.learning_evidence = LearningEvidenceSession(
         r.progress, r.library, r.measurement, r.midi,
         r.midi_calibration)
-    r.source_preparation = SourcePreparationSession()
     r.playback_session.bind_transport(transport=r.visual_transport,
         take=r.take, score=r.score, midi_input=r.midi_input,
         measurement=r.measurement, assessment=r.live_assessment,
@@ -244,11 +244,11 @@ def _lesson_source_and_settings_workflows(r) -> None:
     r.source_workflows = SourcePreparationWorkflow(
         lesson=r.lesson, source_preparation=r.source_preparation,
         preprocessing=r.preprocessing, fingering=r.fingering,
-        progress=r.progress, listen_outcomes=r.listen_outcomes, lock=r.lock)
+        listen_outcomes=r.listen_outcomes, lock=r.lock)
     r.source_installation = SourceInstallation(
         lesson=r.lesson, notices=r.notices, lifecycle=r.session_lifecycle,
         plans=r.plans, transport=r.transport,
-        source_preparation=r.source_preparation, score=r.score, take=r.take,
+        source_preparation=r.source_preparation, progress=r.progress, score=r.score, take=r.take,
         listen=r.listen, listen_outcomes=r.listen_outcomes)
     r.settings_workflows = SettingsWorkflows(
         library=r.library, measurement=r.measurement,

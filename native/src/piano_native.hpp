@@ -25,6 +25,7 @@ class PianoNative : public RefCounted {
         int64_t id;
         std::string operation, body;
         int64_t enqueued_ms;
+        bool source_commit = false;
     };
     struct Reply {
         int64_t id;
@@ -53,6 +54,8 @@ class PianoNative : public RefCounted {
     void worker_loop();
     void timing_loop();
     void asset_loop();
+    void source_loop();
+    void publish(Reply reply, bool wake_timing);
     static bool is_asset_operation(const std::string &operation);
     int tick_engine();
     Reply execute(const Command &command, bool subprocess_score = false);
@@ -66,6 +69,7 @@ public:
     bool is_ready() const { return ready_.load(); }
     int64_t monotonic_milliseconds() const;
     String failure_message();
+    void schedule_source_commit(int64_t id);
     int64_t submit(const String &operation, const String &body);
     void cancel_asset(int64_t id);
     Array take_responses();

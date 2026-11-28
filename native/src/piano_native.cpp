@@ -54,6 +54,17 @@ PyObject *check_stopping(PyObject *capsule, PyObject *) {
 
 PyMethodDef shutdown_method = {"shutdown_requested", check_stopping, METH_NOARGS, nullptr};
 
+PyObject *source_prepared(PyObject *capsule, PyObject *identifier) {
+    auto *bridge = static_cast<PianoNative *>(PyCapsule_GetPointer(capsule, "piano.source"));
+    if (!bridge) return nullptr;
+    const auto id = PyLong_AsLongLong(identifier);
+    if (PyErr_Occurred()) return nullptr;
+    bridge->schedule_source_commit(id);
+    Py_RETURN_NONE;
+}
+
+PyMethodDef source_method = {"source_prepared", source_prepared, METH_O, nullptr};
+
 std::string python_error() {
     if (!PyErr_Occurred()) return "Unknown Python bridge failure";
     PyObject *type = nullptr, *value = nullptr, *traceback = nullptr;
@@ -158,7 +169,12 @@ void PianoNative::initialize_python() {
     PyObject *capsule = klass ? PyCapsule_New(&stopping_, "piano.shutdown", nullptr) : nullptr;
     PyObject *shutdown = capsule ? PyCFunction_New(&shutdown_method, capsule) : nullptr;
     // Physical score presentation is the engine's only transport.
-    PyObject *instance = shutdown ? PyObject_CallOneArg(klass, shutdown) : nullptr;
+    PyObject *source = PyCapsule_New(this, "piano.source", nullptr);
+    PyObject *prepared = source ? PyCFunction_New(&source_method, source) : nullptr;
+    PyObject *instance = shutdown && prepared
+        ? PyObject_CallFunctionObjArgs(klass, shutdown, prepared, nullptr) : nullptr;
+    Py_XDECREF(prepared);
+    Py_XDECREF(source);
     if (!instance) {
         std::lock_guard<std::mutex> guard(mutex_);
         failure_ = python_error();
@@ -207,6 +223,7 @@ void PianoNative::worker_loop() {
     if (!engine_) return;
     std::thread assets([this] { asset_loop(); });
     std::thread timing([this] { timing_loop(); });
+    std::thread sources([this] { source_loop(); });
     {
         std::lock_guard<std::mutex> guard(mutex_);
         if (!stopping_) ready_ = true;
@@ -225,22 +242,25 @@ void PianoNative::worker_loop() {
         Reply output = execute(next);
         // Only state-changing commands re-evaluate transport deadlines.
         // Snapshot and UI reads never re-anchor the musical clock.
-        const bool wake_timing = next.operation == "practice.command" ||
+        const bool wake_timing = next.source_commit || next.operation == "practice.command" ||
                 next.operation == "library.open" ||
                 next.operation == "settings.update" ||
                 next.operation == "midi.device.select" ||
                 next.operation == "fingering.correct" ||
                 next.operation == "library.health.start" ||
                 next.operation == "hardware.action";
-        {
-            std::lock_guard<std::mutex> guard(mutex_);
-            if (stopping_) break;
-            completed_.push_back(std::move(output));
-            tick_requested_ |= wake_timing;
-        }
-        if (wake_timing) timing_changed_.notify_one();
+        publish(std::move(output), wake_timing);
     }
     assets_.stop();
+    {
+        const auto gil = PyGILState_Ensure();
+        PyObject *closed = PyObject_CallMethod(
+            static_cast<PyObject *>(engine_), "close_sources", nullptr);
+        Py_XDECREF(closed);
+        if (PyErr_Occurred()) PyErr_Print();
+        PyGILState_Release(gil);
+    }
+    sources.join();
     timing.join();
     assets.join();
     if (engine_) {
@@ -253,6 +273,30 @@ void PianoNative::worker_loop() {
         engine_ = nullptr;
         PyGILState_Release(gil);
     }
+}
+
+void PianoNative::publish(Reply reply, bool wake_timing) {
+    if (reply.id == 0) return;  // Deferred source command or worker shutdown.
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        if (stopping_) return;
+        completed_.push_back(std::move(reply));
+        tick_requested_ |= wake_timing;
+    }
+    if (wake_timing) timing_changed_.notify_one();
+}
+
+void PianoNative::schedule_source_commit(int64_t id) {
+    {
+        std::lock_guard<std::mutex> guard(mutex_);
+        if (stopping_) return;
+        pending_.push_back(Command{id, "", "", 0, true});
+    }
+    available_.notify_one();
+}
+
+void PianoNative::source_loop() {
+    while (!stopping_) publish(execute(Command{0, "", "", 0}), false);
 }
 
 void PianoNative::timing_loop() {
@@ -306,7 +350,26 @@ PianoNative::Reply PianoNative::execute(const Command &command, bool subprocess_
     PyGILState_STATE gil = PyGILState_Ensure();
     auto *engine = static_cast<PyObject *>(engine_);
     PyObject *response = nullptr;
-    if (subprocess_score) {
+    const bool source = command.operation == "library.open" ||
+        command.operation == "sight_reading.start" || command.operation == "fingering.correct";
+    if (command.source_commit) {
+        response = PyObject_CallMethod(engine, "commit_source", "L", static_cast<long long>(command.id));
+    } else if (source || command.id == 0) {
+        PyObject *envelope = source
+            ? PyObject_CallMethod(engine, "enqueue_source", "Lss",
+                static_cast<long long>(command.id), command.operation.c_str(), command.body.c_str())
+            : PyObject_CallMethod(engine, "next_source", nullptr);
+        if (envelope == Py_None) {
+            Py_DECREF(envelope);
+            PyGILState_Release(gil);
+            return Reply{0, 0, {}};
+        }
+        if (envelope && PyTuple_Check(envelope) && PyTuple_Size(envelope) == 2) {
+            output.id = PyLong_AsLongLong(PyTuple_GetItem(envelope, 0));
+            response = Py_NewRef(PyTuple_GetItem(envelope, 1));
+        }
+        Py_XDECREF(envelope);
+    } else if (subprocess_score) {
         struct Context {
             PianoNative *bridge;
             int64_t id;

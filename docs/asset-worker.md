@@ -46,11 +46,10 @@ stay with the application.
 - **Shutdown.** The mailbox stops accepting requests and discards unpublished
   work. The bridge's shutdown flag also interrupts a pending fingering lock
   or provider exchange. The provider's process group is terminated and its
-  child reaped before the command lane returns. The fingering provider reads
+  child reaped before the source worker returns. The fingering provider reads
   a complete temporary input file, so response polling cannot truncate a
-  large request on CPython 3.12. The bridge joins the timing driver and
-  the native asset lane. The
-  asset lane cancels or closes the channel and reaps the child before the
+  large request on CPython 3.12. The bridge joins the source worker, timing
+  driver and native asset lane. The asset lane cancels or closes the channel and reaps the child before the
   bridge closes the practice engine.
 
 ## IPC and publication
@@ -131,9 +130,10 @@ cost was about 5 ms, so this protocol keeps the raw UTF-8 payload.
 - **Source loading and fingering.** Opening Moonlight took about 457 ms
   before source installation in the original paired Godot run. Import took
   23 ms, curriculum and progress restore took 120 ms, and the parallel
-  LumiKey call took 424 ms. The command lane still waits for source
-  preparation. The native timing driver can tick while source and fingering
-  work runs outside the session lock. The import cache keys the exact bytes
+  LumiKey call took 424 ms. Source preparation now runs on its own bounded
+  lane. The command lane remains available until the short installation
+  transaction, and the native timing driver continues independently. The
+  import cache keys the exact bytes
   parsed, even when another application replaces the selected file during
   open. Full UI snapshots still read learner
   progress and project the current course. MIDI and clock-driven Free
@@ -212,3 +212,32 @@ transition improvement uncertain. The warm 576 KB → 3.66 MB exchange took
 30.17 ms round trip. Software rendering still produced an opening frame above
 150 ms. Combined RSS still increased after moving generation into its own
 process.
+
+
+### Source command latency (A3, 2026-11-28)
+
+A temporary Godot driver used the real GDExtension, embedded CPython 3.14
+and local ONNX worker. Three alternating runs per bridge used the same four
+allowed CPUs. Each started with fresh application data, opened a one-bar
+seed, then submitted a cold 32-bar, 128-attack MIDI open immediately followed
+by a state read, Pause and Stop. A second burst applied one uncached manual
+finger after selecting lesson step 2. Times are elapsed submission-to-reply
+in milliseconds, including a 1 ms client poll and concurrent host load.
+
+| Command during preparation | Serial bridge (8ab689ed), range | A3, range |
+| --- | ---: | ---: |
+| State read during open | 892–1306 | 4–12 |
+| Pause during open | 899–1322 | 10–58 |
+| Stop during open | 906–1339 | 36–66 |
+| State read during correction | 704–1112 | 5–20 |
+| Pause refusal on the stopped lesson during correction | 707–1113 | 5–25 |
+| Stop during correction | 707–1115 | 9–38 |
+
+On the new bridge both superseded selections returned an invalid result and
+only the third selection installed. A missing file left that selection
+intact. Reopening the edited piece restored step 2. Closing the complete
+engine 50 ms into another correction took 837–1119 ms in these runs,
+including application shutdown. Import parsing and curriculum construction
+finish their current indivisible operation before observing cancellation.
+These measurements cover software command delivery; the practice owner
+verifies physical MIDI, audio and score presentation at the piano.

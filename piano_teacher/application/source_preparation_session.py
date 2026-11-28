@@ -1,9 +1,8 @@
 """Atomic source preparation outside the live MIDI/transport lock.
 
 This owner imports an exact MIDI source, starts independent fingering
-inference while compiling its learning curriculum, restores its saved
-progress under the caller's short state lock, and publishes only a fully
-prepared immutable result. The same owner serializes source replacement and
+inference while compiling its learning curriculum, and returns the candidate
+for progress restoration and installation under the application lock. The same owner serializes source replacement and
 fingering correction, validates their generation/original-note identity, and
 returns an exact correction install effect. It retains no engine or live plan.
 """
@@ -26,7 +25,7 @@ class PreparedSource:
     path: Path
     fingerprint: str
     plan: LearningPlan
-    resumed: bool = False
+    restore_progress: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,15 +51,28 @@ _SOURCE_CHANGED = "The loaded piece changed; refresh the score before correcting
 
 
 class SourcePreparationSession:
-    def __init__(self):
+    def __init__(self, shutdown_requested=None):
+        self._shutdown_requested = shutdown_requested
+        self._cancelled = None
         self._source_mutation = Lock()
         self._generation = 0
 
     @contextmanager
-    def source_mutation(self):
+    def source_mutation(self, cancelled=None):
         """Serialize full import/correction work outside the musical lock."""
         with self._source_mutation:
-            yield
+            self._cancelled = cancelled
+            try:
+                self.checkpoint()
+                yield
+            finally:
+                self._cancelled = None
+
+    def checkpoint(self):
+        if self._shutdown_requested and self._shutdown_requested():
+            raise ValueError("Source preparation cancelled during shutdown")
+        if self._cancelled and self._cancelled():
+            raise ValueError("Source preparation superseded")
 
     def source_installed(self) -> None:
         """Called under source_mutation and the short application state lock."""
@@ -116,10 +128,10 @@ class SourcePreparationSession:
                                 score_revision)
 
     def prepare(self, source: Path, *, preprocessing, fingering,
-                progress, state_lock,
                 diagnostics: bool = False) -> PreparedSource:
         checkpoint = time.perf_counter()
         fingerprint, piece = preprocessing.load_import(source, source.read_bytes())
+        self.checkpoint()
         if diagnostics:
             now = time.perf_counter()
             print("SCORE_LOAD_STAGE: import",round((now-checkpoint)*1000,1),
@@ -138,8 +150,6 @@ class SourcePreparationSession:
             predicted = worker.submit(prepare_fingering)
             started_course = time.perf_counter()
             candidate = LearningPlan(piece)
-            with state_lock:
-                resumed = progress.restore(candidate,fingerprint)
             course_ms = (time.perf_counter()-started_course)*1000.0
             fingering_plan,infer_ms = predicted.result()
             candidate.piece = replace(piece,fingering_plan=fingering_plan)
@@ -151,4 +161,4 @@ class SourcePreparationSession:
                 print("SCORE_LOAD_STAGE: parallel_prepare",
                       round((time.perf_counter()-checkpoint)*1000,1),
                       "ms wall",source.name,flush=True)
-        return PreparedSource(source,fingerprint,candidate,resumed)
+        return PreparedSource(source,fingerprint,candidate)

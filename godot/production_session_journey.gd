@@ -370,7 +370,7 @@ func _process(_delta: float) -> bool:
             app.open_library_piece(EXPECTED_PIECE,true)
             _advance("reopen")
         "reopen":
-            if app.command_coordinator.state.pending or not _ready_score():
+            if app.command_coordinator.source_state.pending or not _ready_score():
                 return false
             # docs/practice-flow.md: reopening returns to the same window
             # and hand at Free (untimed), not to the last manual tempo.

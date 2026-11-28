@@ -10,6 +10,8 @@ import json
 import os
 import time
 import traceback
+from dataclasses import dataclass, field
+from threading import Condition, Event
 
 from .application.score_ipc import BINDING_FIELDS, DEADLINE_SECONDS, OPERATIONS
 from .server import PracticeEngine
@@ -18,6 +20,16 @@ OK = 0
 INVALID = 1
 UNKNOWN = 2
 FAILED = 3
+
+
+@dataclass
+class SourceRequest:
+    identifier: int
+    operation: str
+    payload: str
+    cancelled: Event = field(default_factory=Event)
+    prepared_event: object = None
+    replied: bool = False
 
 
 class EngineCommands:
@@ -31,10 +43,89 @@ class EngineCommands:
         "performance.diagnostics": "performance_diagnostics",
     }
 
-    def __init__(self, shutdown_requested=None, *, engine: PracticeEngine | None = None):
+    def __init__(self, shutdown_requested=None, source_ready=None, *, engine: PracticeEngine | None = None):
         self.engine = engine if engine is not None else PracticeEngine(
             shutdown_requested=shutdown_requested)
         self.owned = engine is None
+        self._wake_command_lane = source_ready
+        self._source_ready = Condition(self.engine.lock)
+        self._active_source = None
+        self._pending_source = None
+        self._sources_closed = False
+
+    def enqueue_source(self, identifier, operation, payload):
+        """Admit on the command lane. Only source selections may replace one another."""
+        job = SourceRequest(identifier, operation, payload)
+        with self._source_ready:
+            active = self._active_source
+            if active is None:
+                self._active_source = job
+                self._source_ready.notify()
+                return None
+            if operation == "fingering.correct":
+                return identifier, self._reply(INVALID, {"error": "Source preparation in progress"})
+            if active.operation != "fingering.correct":
+                active.cancelled.set()
+            displaced = self._pending_source
+            self._pending_source = job
+            if displaced is not None:
+                return displaced.identifier, self._reply(INVALID, {"error": "Source preparation superseded"})
+            return None
+
+    def next_source(self):
+        """Called by the single native source worker, joined before engine close."""
+        with self._source_ready:
+            self._source_ready.wait_for(lambda: self._sources_closed or self._active_source)
+            if self._sources_closed:
+                return None
+            job = self._active_source
+        try:
+            result = self.request(job.operation, job.payload, cancelled=job.cancelled.is_set,
+                                  commit=self._handoff_source)
+            return None if job.replied else (job.identifier, result)
+        finally:
+            with self._source_ready:
+                if self._active_source is job:
+                    self._advance_source()
+
+    def _advance_source(self):
+        self._active_source = self._pending_source
+        self._pending_source = None
+
+    def _handoff_source(self, event):
+        # Keep the mutation guard on the preparing worker until the command
+        # lane has installed or rejected this exact event and taken its reply.
+        with self._source_ready:
+            job = self._active_source
+            if self._sources_closed:
+                raise ValueError("Source preparation cancelled during shutdown")
+            job.prepared_event = event
+            self._wake_command_lane(job.identifier)
+            self._source_ready.wait_for(lambda: job.replied or self._sources_closed)
+
+    def commit_source(self, identifier):
+        with self._source_ready:
+            job = self._active_source
+            if job is None or job.identifier != identifier or job.prepared_event is None:
+                return self._reply(INVALID, {"error": "Source request expired"})
+            try:
+                self.engine.source_preparation.checkpoint()
+                self.engine.practice_session.apply(job.prepared_event)
+                return self._reply(OK, self.engine.state())
+            except Exception as exc:
+                return self._error_reply(exc)
+            finally:
+                job.replied = True
+                self._advance_source()
+                self._source_ready.notify_all()
+
+    def close_sources(self):
+        with self._source_ready:
+            self._sources_closed = True
+            if self._active_source:
+                self._active_source.cancelled.set()
+            self._pending_source = None
+            self._source_ready.notify_all()
 
     def tick(self) -> int:
         """The native timing driver advances all musical deadlines."""
@@ -56,9 +147,9 @@ class EngineCommands:
     def _score_request(self, operation, values, *, cancelled, timeout):
         if values.keys() - {"generation", "rejected_generation"} != set(BINDING_FIELDS) and values:
             raise ValueError("Score request needs a complete source identity")
-        for field in ("revision", "generation", "rejected_generation"):
-            if field in values and (type(values[field]) is not int or values[field] < 0):
-                raise ValueError(f"Score {field} must be a nonnegative integer")
+        for key in ("revision", "generation", "rejected_generation"):
+            if key in values and (type(values[key]) is not int or values[key] < 0):
+                raise ValueError(f"Score {key} must be a nonnegative integer")
         if ("rejected_generation" in values and
                 values["rejected_generation"] >= values.get("generation", -1)):
             raise ValueError("A score retry must advance its cancellation generation")
@@ -66,7 +157,7 @@ class EngineCommands:
                                               timeout=timeout)
 
     def request(self, operation: str, payload_json: str = "", *,
-                cancelled=None, timeout=DEADLINE_SECONDS) -> tuple[int, bytes | bytearray]:
+                cancelled=None, timeout=DEADLINE_SECONDS, commit=None) -> tuple[int, bytes | bytearray]:
         started = time.perf_counter()
         try:
             values = json.loads(payload_json) if payload_json else {}
@@ -129,11 +220,11 @@ class EngineCommands:
                 return self._reply(OK, engine.delete_learner_history(confirm=True))
             if operation == "fingering.correct":
                 engine.correct_fingering(values["source_id"], values["finger"],
-                                         fingerprint=values.get("fingerprint"))
+                                         fingerprint=values.get("fingerprint"), commit=commit)
             elif operation == "library.open":
-                engine.load_library(values["id"])
+                engine.load_library(values["id"], cancelled=cancelled, commit=commit)
             elif operation == "sight_reading.start":
-                engine.start_sight_reading(values["level"], values["tempo"])
+                engine.start_sight_reading(values["level"], values["tempo"], cancelled=cancelled, commit=commit)
             elif operation == "library.health.start":
                 return self._reply(OK, engine.start_library_health())
             elif operation == "settings.update":
@@ -163,19 +254,24 @@ class EngineCommands:
                 })
             else:
                 return self._reply(UNKNOWN, {"error": f"Unknown operation: {operation}"})
-            return self._reply(
-                OK, engine.state())
-        except (KeyError, ValueError, TypeError, RuntimeError, TimeoutError) as exc:
-            return self._reply(INVALID, {"error": str(exc)})
+            if commit is not None:
+                # The command lane already sampled the state at installation.
+                return OK, b""
+            return self._reply(OK, engine.state())
         except Exception as exc:
-            traceback.print_exc()
-            return self._reply(FAILED, {"error": f"Practice engine error: {exc}"})
+            return self._error_reply(exc)
         finally:
             if os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
                 elapsed_ms = (time.perf_counter() - started) * 1000.0
                 if elapsed_ms >= 24:
                     print("INPROCESS_COMMAND_SLOW:", operation,
                           round(elapsed_ms, 2), "ms", flush=True)
+
+    def _error_reply(self, exc):
+        if isinstance(exc, KeyError | ValueError | TypeError | RuntimeError | TimeoutError):
+            return self._reply(INVALID, {"error": str(exc)})
+        traceback.print_exc()
+        return self._reply(FAILED, {"error": f"Practice engine error: {exc}"})
 
     def drain_feedback_events(self, acknowledged: int) -> dict:
         """Acknowledge processed events and return every later one."""

@@ -106,39 +106,38 @@ class PracticeEngine:
     def set_preferences(self, **changes) -> dict:
         return self.practice_session.apply(SettingsChanged(changes))
 
-    def load_library(self, identifier: str) -> None:
+    def load_library(self, identifier: str, *, cancelled=None, commit=None) -> None:
         with self.lock:
             path = self.library.resolve(identifier)
-        self.load(str(path), opened_identifier=identifier)
+        self.load(str(path), opened_identifier=identifier, cancelled=cancelled, commit=commit)
 
-    def start_sight_reading(self, level: int, tempo: str) -> None:
+    def start_sight_reading(self, level: int, tempo: str, *, cancelled=None, commit=None) -> None:
         from .sight_reading import new_round
         from .application.source_preparation_session import PreparedSource
-        with self.source_preparation.source_mutation():
+        with self.source_preparation.source_mutation(cancelled):
             plan, fingerprint = new_round(level, tempo)
-            self.practice_session.apply(SourceCommitted(
+            self._commit_source(SourceCommitted(
                 PreparedSource(Path("Sight reading " + fingerprint + ".mid"),
-                               fingerprint,plan,False)))
+                               fingerprint,plan,False)), commit)
 
     def performance_diagnostics(self) -> dict:
         return self.runtime_timings.snapshot()
 
-    def load(self, path: str, *, opened_identifier: str | None = None):
+    def load(self, path: str, *, opened_identifier: str | None = None, cancelled=None, commit=None):
         """Commit a prepared source under one mutation guard and short lock."""
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = time.perf_counter()
-        with self.source_preparation.source_mutation():
+        with self.source_preparation.source_mutation(cancelled):
             prepared = self.source_workflows.prepare(
                 path, diagnostics=diagnostics)
-            self.practice_session.apply(
-                SourceCommitted(prepared, opened_identifier))
+            self._commit_source(SourceCommitted(prepared, opened_identifier), commit)
         if diagnostics:
             print("SCORE_LOAD_STAGE: ready",
                   round((time.perf_counter()-began)*1000,1),
                   "ms total",prepared.path.name,flush=True)
 
     def correct_fingering(self, source_id: str, finger: int | None,
-                         *, fingerprint: str | None = None) -> None:
+                         *, fingerprint: str | None = None, commit=None) -> None:
         identity = self.source_workflows.correction_identity(
             fingerprint=fingerprint)
         with self.source_preparation.source_mutation():
@@ -146,7 +145,15 @@ class PracticeEngine:
             # then commit only the validated revision inside PracticeSession.
             corrected = self.source_workflows.prepare_fingering_correction(
                 identity, source_id=source_id, finger=finger)
-            self.practice_session.apply(FingeringCorrectionCommitted(corrected))
+            self._commit_source(FingeringCorrectionCommitted(corrected), commit)
+
+    def _commit_source(self, event, commit):
+        if commit is not None:
+            commit(event)
+        else:
+            with self.lock:
+                self.source_preparation.checkpoint()
+                self.practice_session.apply(event)
 
     def demo_audio(self, token: str) -> Path:
         with self.lock:

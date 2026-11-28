@@ -14,7 +14,7 @@ signal refresh_requested
 signal library_open_status(message: String)
 
 var state = CommandRequestState.new()
-var request_token := 0
+var source_state = CommandRequestState.new()
 var last_published_control_started_ms := -1
 var last_state: Dictionary = {}
 var practice_view
@@ -22,21 +22,32 @@ var settings_view
 var sight_reading_view
 var metronome_frame
 var action_request
+var source_request
 var command_failure_presenter
 var score_session
 
-func configure(practice, settings, metronome, request,
+func configure(practice, settings, metronome, request, source_adapter,
         failure_presenter, assets, reading = null) -> void:
     practice_view = practice
     settings_view = settings
     sight_reading_view = reading
     metronome_frame = metronome
+    source_request = source_adapter
     action_request = request
     command_failure_presenter = failure_presenter
     score_session = assets
 
 func receive(code: int, body: PackedByteArray) -> void:
-    accept_response(request_token,code,body)
+    if state.pending:
+        _accept_response(state.finish(),code,body)
+
+func receive_source(code: int, body: PackedByteArray) -> void:
+    if source_state.pending:
+        var completed: Dictionary = source_state.finish()
+        # The source reply samples the installed state after preparation.
+        # Reject earlier outstanding polls and date playback from that sample.
+        completed["started_ms"] = Time.get_ticks_msec()
+        _accept_response(completed,code,body)
 
 func primary() -> void:
     _ui_intent("ui_primary")
@@ -61,18 +72,19 @@ func open_library_piece(identifier: String, resume_saved := false) -> void:
         library_open_status.emit("Preparing your selected music…")
         return
     library_open_status.emit("Opening score…")
-    state.resume_requested = resume_saved
-    request_command("library.open",{"id":identifier})
+    _request_source("library.open",{"id":identifier},resume_saved)
 
 func correct_fingering(source_id: String, finger: Variant) -> void:
     var decision: Dictionary = score_session.fingering_correction_request(
-        source_id,finger,last_state,state.pending)
+        source_id,finger,last_state,state.pending or source_state.pending)
     if not bool(decision.get("accepted",false)):
         practice_view.present_message(str(decision.get("message","Score not ready")))
         return
     request_command(str(decision["operation"]),decision["payload"])
 
 func _flush_transport_action() -> void:
+    if state.pending:
+        return
     var action: String = state.take_transport()
     if not action.is_empty():
         request_action({"action":action},last_state)
@@ -120,10 +132,23 @@ func request_action(command: Dictionary, presentation_facts: Dictionary) -> void
             command.merge(clearance,true)
     request_command("practice.command",command)
 
+func _request_source(operation: String, payload: Dictionary, resume_saved := false) -> void:
+    if source_state.pending:
+        source_request.cancel_request()
+        source_state.request_failed()
+    source_state.begin(operation,Time.get_ticks_msec())
+    source_state.resume_requested = resume_saved
+    var err: int = source_state.dispatch(source_request,operation,payload)
+    if err != OK:
+        command_failure_presenter.present(
+            "Cannot reach practice engine (status %d)" % err,operation,false)
+
 func request_command(operation: String, payload: Dictionary) -> void:
+    if operation in ["sight_reading.start","library.open","fingering.correct"]:
+        _request_source(operation,payload)
+        return
     if not state.begin(operation,Time.get_ticks_msec()):
         return
-    request_token += 1
     practice_view.present_busy(true)
     settings_view.present_busy(true)
     if sight_reading_view != null:
@@ -145,14 +170,11 @@ func request_command(operation: String, payload: Dictionary) -> void:
         message,operation,queued_library_failed)
     _flush_transport_action()
 
-func accept_response(token: int, code: int, body: PackedByteArray) -> void:
-    if token != request_token or not state.pending:
-        return
-    var completed: Dictionary = state.finish()
-    practice_view.present_busy(false)
-    settings_view.present_busy(false)
+func _accept_response(completed: Dictionary, code: int, body: PackedByteArray) -> void:
+    practice_view.present_busy(state.pending)
+    settings_view.present_busy(state.pending)
     if sight_reading_view != null:
-        sight_reading_view.present_busy(false)
+        sight_reading_view.present_busy(state.pending)
     var operation: String = str(completed["operation"])
     var stopped: bool = str(completed["action"]) in ["stop","ui_stop"]
     if operation == "practice.command":
@@ -162,14 +184,15 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
         # segment. MetronomeFrameCoordinator reconciles its countdown
         # directly from the authorized playback state.
         var message := Reply.failure_message(code,body)
-        var queued_library_failed: bool = state.discard_library()
+        var queued_library_failed: bool = not state.pending and state.discard_library()
         command_failure_presenter.present(
             message,operation,queued_library_failed)
         if stopped:
             score_session.request_layout()
         _flush_transport_action()
         return
-    var opened: Variant = Reply.decode_reply(body) if operation in ["library.open","sight_reading.start"] else null
+    var opened: Variant = Reply.decode_reply(body) \
+        if operation in ["library.open","sight_reading.start"] else null
     if operation in ["learning.export","learning.delete_piece","learning.delete_learner"]:
         var result: Variant = Reply.decode_reply(body)
         learning_accepted.emit(operation,
@@ -235,6 +258,8 @@ func accept_response(token: int, code: int, body: PackedByteArray) -> void:
         score_session.request_layout()
     _flush_transport_action()
     refresh_requested.emit()
+    if state.pending:
+        return
     var deferred: Dictionary = state.take_library()
     if not str(deferred["piece"]).is_empty():
         library_requested.emit(
