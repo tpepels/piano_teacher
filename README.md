@@ -34,6 +34,10 @@ all moving windows, the final test brings the whole original piece together.
 2. Open a MIDI or MusicXML file from your music.
 3. Listen to the first measure, then play its notes when Free begins.
 
+The Linux package includes a recorded FreePats upright piano for offline Listen.
+An installed Salamander Grand Piano or an SF2 selected with
+`PIANO_TEACHER_SOUNDFONT` takes precedence.
+
 The flow advances automatically. **Pause/Resume** and **Listen again** stay on
 screen, and the metronome can be switched on or off. **Grade how long I hold notes**
 is available in Settings and is off by default. Correct pitches and note attacks

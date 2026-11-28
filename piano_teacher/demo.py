@@ -39,6 +39,8 @@ class _Voice:
     first: int
     last: int
     frequency: float
+    pitch: int
+    velocity: int
 
 
 def _finite(value: Real, label: str) -> float:
@@ -76,7 +78,7 @@ def _prepare(variant: ExerciseVariant, bpm: Real, sample_rate: int, chunk_frames
             raise ValueError("Source pitch needs a higher audio sample rate")
         first = round(SCHEDULER.signed_beats_seconds(onset-start,bpm)*sample_rate)
         last = max(first+1, round(SCHEDULER.signed_beats_seconds(release-start,bpm)*sample_rate))
-        voices.append(_Voice(first, last, frequency))
+        voices.append(_Voice(first, last, frequency, note.pitch, getattr(note, "velocity", 85)))
         # Held source notes may cross the last engraved bar. Preserve them.
         audio_end = max(audio_end, release)
     duration = SCHEDULER.signed_beats_seconds(audio_end-start,bpm)
@@ -263,7 +265,7 @@ class DemoAudioCache:
                                                         checkpoint):
                                     wav.writeframesraw(chunk)
                     if soundfont is not None:
-                        render_wav(Path(temporary), variant, bpm=float(bpm), frames=frames,
+                        render_wav(Path(temporary), voices, frames=frames,
                                    sample_rate=self.sample_rate,
                                    chunk_frames=self.chunk_frames, soundfont=soundfont,
                                    checkpoint=checkpoint)

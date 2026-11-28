@@ -6,18 +6,15 @@ MIDI input, or giant in-memory waveform is required.
 """
 from __future__ import annotations
 
-from array import array
 import ctypes as ct
 import ctypes.util
 from dataclasses import dataclass
 import os
 from pathlib import Path
-import sys
 import wave
 
-from .application.musical_scheduler import SCHEDULER
 
-
+BUNDLED_SOUNDFONT = Path(__file__).with_name("soundfonts") / "UprightPianoKW-small.sf2"
 DEFAULT_SOUNDFONT = Path.home() / ".local/share/piano-teacher/soundfonts/salamander-grand-piano.sf2"
 
 
@@ -34,7 +31,9 @@ def find_soundfont() -> SampleBank | None:
     if not path.exists():
         if configured:
             raise FileNotFoundError(f"Configured piano SoundFont does not exist: {path}")
-        return None
+        if not available():
+            return None
+        path = BUNDLED_SOUNDFONT
     if not path.is_file():
         raise ValueError(f"SoundFont is not a regular file: {path}")
     with path.open("rb") as stream:
@@ -44,16 +43,28 @@ def find_soundfont() -> SampleBank | None:
     stamp = path.stat()
     identity = f"{path.resolve()}:{stamp.st_size}:{stamp.st_mtime_ns}"
     name = "Salamander Grand Piano (sampled)" if path == DEFAULT_SOUNDFONT else path.stem + " (sampled)"
+    if path == BUNDLED_SOUNDFONT:
+        name = "FreePats Upright Piano KW (sampled)"
     return SampleBank(path, identity, name)
 
 
+def _library_path(font: Path | None = None) -> str | None:
+    packaged = Path(__file__).resolve().parents[1] / "runtime/lib/libfluidsynth.so.3"
+    if packaged.is_file():
+        # An installed full FluidSynth can support extra formats in user banks.
+        if font is not None and font != BUNDLED_SOUNDFONT:
+            return ct.util.find_library("fluidsynth") or str(packaged)
+        return str(packaged)
+    return ct.util.find_library("fluidsynth")
+
+
 def available() -> bool:
-    return bool(ct.util.find_library("fluidsynth"))
+    return bool(_library_path())
 
 
 class _Synth:
     def __init__(self, font: Path, sample_rate: int):
-        library_path = ct.util.find_library("fluidsynth")
+        library_path = _library_path(font)
         if not library_path:
             raise RuntimeError("Sampled piano requires libfluidsynth. Install the fluidsynth package.")
         self.lib = ct.CDLL(library_path)
@@ -128,19 +139,16 @@ class _Synth:
             self.settings = None
 
 
-def render_wav(path: Path, variant, *, bpm: float, frames: int,
+def render_wav(path: Path, voices, *, frames: int,
                sample_rate: int, chunk_frames: int, soundfont: SampleBank,
                checkpoint=None) -> None:
     """Render actual recorded grand-piano samples in source clock order."""
-    phrase = variant.phrase
     events = []
-    for note in variant.notes:
-        attack = round(SCHEDULER.signed_beats_seconds(note.start-phrase.start,bpm)*sample_rate)
-        release = max(attack + 1, round(SCHEDULER.signed_beats_seconds(note.end-phrase.start,bpm)*sample_rate))
-        if not 1 <= getattr(note, "velocity", 85) <= 127:
+    for voice in voices:
+        if not 1 <= voice.velocity <= 127:
             raise ValueError("Sampled MIDI velocity must be between 1 and 127")
-        events.append((attack, 1, note.pitch, int(getattr(note, "velocity", 85))))
-        events.append((release, 0, note.pitch, 0))
+        events.append((voice.first, 1, voice.pitch, int(voice.velocity)))
+        events.append((voice.last, 0, voice.pitch, 0))
     events.sort()  # Releases before new attacks at the same tick.
     if checkpoint is not None:
         checkpoint()
@@ -178,13 +186,12 @@ MAX_MAKEUP_GAIN = 64.0  # +36 dB; a near-silent render is not amplified noise
 
 
 def _wav_samples(source, chunk_frames, checkpoint):
+    import numpy as np
+
     while data := source.readframes(chunk_frames):
         if checkpoint is not None:
             checkpoint()
-        samples = array("h", data)
-        if sys.byteorder != "little":
-            samples.byteswap()
-        yield samples
+        yield np.frombuffer(data, dtype="<i2")
 
 
 def normalize_wav(path: Path, *, chunk_frames: int = 4096, checkpoint=None) -> None:
@@ -195,7 +202,7 @@ def normalize_wav(path: Path, *, chunk_frames: int = 4096, checkpoint=None) -> N
         if params.sampwidth != 2:
             return
         for samples in _wav_samples(wav, chunk_frames, checkpoint):
-            peak = max(peak, max(samples, default=0), -min(samples, default=0))
+            peak = max(peak, int(samples.max()), -int(samples.min()))
     if peak <= 0:
         return
     gain = min(MAX_MAKEUP_GAIN, TARGET_PEAK / peak)
@@ -205,8 +212,6 @@ def normalize_wav(path: Path, *, chunk_frames: int = 4096, checkpoint=None) -> N
     with wave.open(str(path), "rb") as source, wave.open(str(scaled), "wb") as target:
         target.setparams(source.getparams())
         for samples in _wav_samples(source, chunk_frames, checkpoint):
-            out = array("h", (max(-32768, min(32767, round(v * gain))) for v in samples))
-            if sys.byteorder != "little":
-                out.byteswap()
-            target.writeframesraw(out.tobytes())
+            scaled_samples = (samples * gain).round().clip(-32768, 32767)
+            target.writeframesraw(scaled_samples.astype("<i2").tobytes())
     scaled.replace(path)

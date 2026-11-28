@@ -25,9 +25,10 @@ def source(notes, *, start=0, end=4):
 
 @pytest.fixture
 def fallback(monkeypatch, tmp_path):
-    # Control absent optional files, while exercising the real fallback renderer.
+    # Exercise the offline instrument for hosts without FluidSynth.
     monkeypatch.delenv("PIANO_TEACHER_SOUNDFONT", raising=False)
     monkeypatch.setattr(sample_piano, "DEFAULT_SOUNDFONT", tmp_path / "absent.sf2")
+    monkeypatch.setattr(sample_piano, "available", lambda: False)
 
 
 def read_pcm(path):
