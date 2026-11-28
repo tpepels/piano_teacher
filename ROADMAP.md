@@ -62,6 +62,41 @@ the basic instrument would leave clean installations without Listen.
 A8 builds Linux releases from runtime entry points and records their file
 sizes, native dependencies, wheel versions, model/font hashes and notices.
 
+The verified Linux x86-64 archive shrank from 212,630,916 to 179,407,906
+bytes (15.6%). The staged runtime is 436,340,298 bytes and contains 37
+Python distributions, down from 47. The inventory covers 161 ELF files.
+The relocated launch on the build host exercised offline MusicXML import,
+saved tempo, both remediation providers, both audio paths, two-hand
+fingering, native notation and score-worker recovery. Its host dependencies
+include symbol versions through GLIBC_2.44 and GLIBCXX_3.4.32. Compatibility
+with older distributions and physical piano, audio and display acceptance
+remain unverified.
+
+Three alternating pairs per piece compared the full application at
+`8ab689ed` and after the audit. Each opened a fresh profile and reopened
+it warm. The production Godot scene ran on four fixed CPUs at 1280×800
+with software OpenGL and synthetic MIDI. These are medians of three runs
+per cell. Other verification jobs shared the host during the benchmark.
+
+| Piece and cache | First retained score, s | Preparation frame p95 / p99 / max, ms | Peak session PSS, MiB |
+| --- | ---: | ---: | ---: |
+| Bach Invention No. 1, cold | 4.72 → 5.27 | 26 / 78 / 147 → 27 / 97 / 166 | 1042 → 1045 |
+| Bach, warm | 1.68 → 1.96 | 30 / 84 / 88 → 29 / 94 / 94 | 994 → 995 |
+| Moonlight Sonata I, cold | 4.94 → 4.67 | 34 / 110 / 142 → 26 / 95 / 136 | 1052 → 1055 |
+| Moonlight, warm | 1.87 → 1.55 | 34 / 120 / 120 → 29 / 95 / 95 | 1002 → 1004 |
+| Hanon exercises 1–20, cold | 9.24 → 10.25 | 34 / 91 / 145 → 28 / 106 / 151 | 1115 → 1115 |
+| Hanon, warm | 4.11 → 4.53 | 40 / 100 / 102 → 28 / 83 / 94 | 1083 → 1080 |
+
+Peak proportional memory covers the measured session, including the display
+server and workers. Moonlight opened faster in these runs. Bach and Hanon
+took longer to publish their first score despite the shorter Stop latency.
+Physical MIDI-to-display latency remains unmeasured.
+
+The regression suite passed all 384 cases on CPython 3.14 and 3.12, with
+three music21 warnings on each. The five Godot player scenarios passed.
+The 3.12 run covered 81.9% of Python lines and 64.0% of branches. Cold
+import and cache restore matched across all 22 MIDI and MusicXML fixtures.
+
 ## Python ONNX fingering (A2, 2026-11-28)
 
 The existing Lumikey 0.3.0 weights run through Python ONNX Runtime 1.30.0 CPU.
