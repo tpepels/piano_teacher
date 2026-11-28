@@ -92,6 +92,8 @@ var _font_keys: Dictionary = {}
 var _upload_queue: Array = []
 var _upload_index := 0
 var _uploaded_images: Dictionary = {}
+# Detached upload copies preserve the original CPU pixels for mask work.
+var _mipmapped_images: Dictionary = {}
 var _prepared_interiors: Dictionary = {}
 var _prepared_cutouts: Dictionary = {}
 var _cutout_boxes: Dictionary = {}
@@ -160,6 +162,28 @@ func begin_upload() -> void:
         var catalog: Dictionary = tuplet_textures[key]
         for part in catalog:
             _upload_queue.append([catalog,part,""])
+    # Variable-size strokes cannot have every possible destination size
+    # cached. Prepare their filtered source once, off the draw thread.
+    _mipmapped_images.clear()
+    for catalog in [note_stem_textures,chord_stem_textures,beam_textures,tie_textures,
+            slur_textures]:
+        for key in catalog:
+            _prepare_mipmapped(catalog[key])
+    for key in tuplet_textures:
+        if tuplet_textures[key].has("bracket"):
+            _prepare_mipmapped(tuplet_textures[key]["bracket"])
+
+func _prepare_mipmapped(image: Image) -> void:
+    var id: int = image.get_instance_id()
+    if _mipmapped_images.has(id):
+        return
+    var filtered: Image = image.duplicate()
+    if filtered.is_compressed():
+        filtered.decompress()
+    filtered.convert(Image.FORMAT_RGBA8)
+    filtered.fix_alpha_edges()
+    if filtered.generate_mipmaps() == OK:
+        _mipmapped_images[id] = filtered
 
 # These exclusively owned dictionaries hold derived CPU images, just like
 # the regular atlas. Rewind restores their images through the same catalog.
@@ -180,7 +204,7 @@ func upload_step(budget_usec: int = 2000) -> bool:
         if texture == null and not font_key.is_empty():
             texture = _font_raster_cache.get(font_key)
         if texture == null:
-            texture = ImageTexture.create_from_image(image)
+            texture = ImageTexture.create_from_image(_mipmapped_images.get(id,image))
         if not font_key.is_empty():
             _font_raster_cache[font_key] = texture
         _uploaded_images[id] = texture
@@ -193,6 +217,7 @@ func upload_step(budget_usec: int = 2000) -> bool:
         return false
     _upload_queue.clear()
     _uploaded_images.clear()
+    _mipmapped_images.clear()
     for head in _prepared_interiors:
         _head_masks.install_interior(str(head),_prepared_interiors[head])
     _prepared_interiors.clear()

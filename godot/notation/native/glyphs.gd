@@ -12,6 +12,11 @@ static var _last_head_sizes: Dictionary = {}
 static var _head_size_lock := Mutex.new()
 
 static var _display_cache: Dictionary = {}
+# Every unexpected destination is observable. The draw path must not
+# resample pixels, allocate textures or mutate the prepared cache.
+static var display_fallback_count := 0
+static var trace_display_fallbacks := false
+static var display_fallback_keys: Dictionary = {}
 var textures: Dictionary:
     get: return _assets.textures
 var bounds: Dictionary:
@@ -471,21 +476,13 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     var cached: Array = _display_cache.get(key,[])
     if cached.size() == 2 and (cached[0] as WeakRef).get_ref() == texture:
         return cached[1]
-    var profile: bool = OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
-    var began: int = Time.get_ticks_usec() if profile else 0
-    var size := Vector2i(width,height)
-    var source_image: Image = texture.get_meta("verovio_cpu_image") if \
-        texture.has_meta("verovio_cpu_image") else texture.get_image()
-    if source_image == null or source_image.is_empty():
-        return texture
-    var pixels: Image = _resample(source_image,size)
-    var sized := ImageTexture.create_from_image(pixels)
-    _display_cache[key] = [weakref(texture),sized]
-    if profile and Time.get_ticks_usec()-began >= 1000:
-        print("GLYPH_DISPLAY_CACHE_MISS:",JSON.stringify({"at_ms":float(began)*.001,
-            "elapsed_ms":float(Time.get_ticks_usec()-began)*.001,
-            "original":[source.x,source.y],"target":[size.x,size.y]}))
-    return sized
+    display_fallback_count += 1
+    if trace_display_fallbacks:
+        display_fallback_keys[key] = int(display_fallback_keys.get(key,0))+1
+    # Use the same authentic uploaded source and destination geometry;
+    # dynamic strokes have worker-prepared mipmaps. Never read back or
+    # create a replacement texture from a CanvasItem draw.
+    return texture
 
 static func _resample(image: Image, size: Vector2i) -> Image:
     image = image.duplicate()

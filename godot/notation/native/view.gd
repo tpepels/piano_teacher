@@ -244,6 +244,7 @@ func _clear_retained_segments() -> bool:
 
 ## Adopt an exclusively owned CPU engraving after main-thread texture upload.
 func install_prepared_score(prepared) -> bool:
+    texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
     if not _clear_retained_segments():
         return false
     native_ready = false

@@ -29,6 +29,7 @@ class FramePacing:
                 "frame_budget_ms": 1000/fps,
                 "draw_ms": new.get("draw_ms"),
                 "between_draws_ms": new.get("between_draws_ms"),
+                "display_fallbacks": new.get("display_fallbacks"),
             }
         return [], {}
 

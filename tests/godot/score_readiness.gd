@@ -52,6 +52,8 @@ func run() -> void:
         quit(1)
         return
     fixture = data
+    Glyphs.trace_display_fallbacks = true
+    Glyphs.display_fallback_keys.clear()
     root.size = Vector2i(1280,800)
     view = Native.new()
     root.add_child(view)
@@ -99,8 +101,27 @@ func run() -> void:
         var nominal := Vector2i((Vector2(box[2],box[3])*view.staff_gap()/250.0*scale).round())
         nominal = nominal.clamp(Vector2i.ONE,Vector2i(ordinary.get_size()))
         if nominal != Vector2i(ordinary.get_size()):
-            check(Glyphs._display_cache.has(Glyphs._display_key(ordinary,nominal)),
+            var nominal_key: String = Glyphs._display_key(ordinary,nominal)
+            check(Glyphs._display_cache.has(nominal_key),
                 "Ordinary retained source textures are prepared before first draw")
+            check(not Glyphs.display_fallback_keys.has(nominal_key),
+                "Ordinary retained source did not miss the prepared display cache")
+        # Fault injection: an unexpected size must not allocate or populate
+        # the cache during drawing, even when the original is authentic.
+        var probe_image := Image.create_empty(23,23,false,Image.FORMAT_RGBA8)
+        probe_image.fill(Color.WHITE)
+        var probe_texture := ImageTexture.create_from_image(probe_image)
+        var fallback_before: int = Glyphs.display_fallback_count
+        var cache_before: int = Glyphs._display_cache.size()
+        check(Glyphs._display_texture(probe_texture,Vector2(11,13)) == probe_texture,
+            "An unprepared destination keeps the authentic source texture")
+        check(Glyphs.display_fallback_count == fallback_before+1 and
+            Glyphs._display_cache.size() == cache_before,
+            "Unexpected display sizes are witnessed without synchronous allocation")
+        for stem in view.glyphs.note_stem_textures.values():
+            if stem is Texture2D:
+                check(stem.get_image().has_mipmaps(),
+                    "Variable-sized stems have a filtered source prepared before playback")
         var original = view.engraving
         var selected: Dictionary = state(2)
         var target: Dictionary = {}

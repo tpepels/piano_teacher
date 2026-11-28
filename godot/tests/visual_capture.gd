@@ -24,6 +24,7 @@ var _events: Array = []
 var _previous_capture_ms := 0.0
 var _pre_draw_us := 0
 var _last_draw_us := 0
+var _previous_display_fallbacks := 0
 var _midi_until_ms := -1.0
 
 # Test-only markers taken BEFORE the real input is sent. They are attached
@@ -131,6 +132,7 @@ func _rect(control: Control, viewport_size: Vector2) -> Array:
         rect.size.x/viewport_size.x,rect.size.y/viewport_size.y]
 
 const Admission := preload("res://score_stream_admission.gd")
+const Glyphs := preload("res://notation/native/glyphs.gd")
 
 func _strips(view, viewport_size: Vector2) -> Array:
     # A physical witness from the actual retained queue, not from the
@@ -274,8 +276,11 @@ func _capture() -> void:
         var draw_ms: float = float(began-_pre_draw_us)*.001 if _pre_draw_us > _last_draw_us else -1.0
         var between_draws_ms: float = float(_pre_draw_us-_last_draw_us)*.001 if _last_draw_us > 0 and _pre_draw_us > _last_draw_us else -1.0
         _last_draw_us = began
+        var fallback_delta: int = Glyphs.display_fallback_count-_previous_display_fallbacks
+        _previous_display_fallbacks = Glyphs.display_fallback_count
         _metadata.store_line(JSON.stringify({
             "draw_ms":draw_ms,"between_draws_ms":between_draws_ms,
+            "display_fallbacks":fallback_delta,
             "frame":_count,"engine_frame":Engine.get_frames_drawn(),
             "time_ms":float(began)*.001,"fps":_fps,
             "capture_cost_ms":_previous_capture_ms,"step":step,
