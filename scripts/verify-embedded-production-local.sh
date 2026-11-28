@@ -178,7 +178,7 @@ run_player() {
     cp "$capture/complete.json" "$output/capture.json"
   fi
   "$PYTHON" "$ROOT/tests/visual_continuity.py" "$capture" "$output" \
-    "${required[@]}" || status=1
+    --require-timing "${required[@]}" || status=1
   if ((status == 0)); then
     rm -rf "$capture"
   else

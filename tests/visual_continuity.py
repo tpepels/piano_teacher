@@ -292,7 +292,7 @@ class Review:
                 save_witness(dest,self.history,event,residual)
                 self.witnesses.append((dest,meta["frame"]+3))
 
-    def finish(self, required_steps):
+    def finish(self, required_steps, require_timing=False):
         if (self.coverage["score_pairs"] < 60 or self.coverage["motion_pairs"] < 20
                 or self.coverage["staff_pairs"] < 20 or self.coverage["ink_pairs"] < 20):
             self.failures.append({"reasons":["insufficient_rendered_motion_coverage"]})
@@ -301,6 +301,8 @@ class Review:
             self.failures.append({"reasons":["missing_journey_steps"],"steps":missing})
         timing_report,timing_failures = self.timing.finish(required_steps)
         self.failures.extend(timing_failures)
+        if require_timing and not timing_report["active"]:
+            self.failures.append({"reasons":["missing_rendered_timing_capture"]})
         report = {"coverage":self.coverage,"timing":timing_report,"failures":self.failures}
         (self.output/"report.json").write_text(json.dumps(report,indent=2))
         print(f"VISUAL_CONTINUITY frames={self.coverage['frames']} pairs={self.coverage['score_pairs']} "
@@ -309,7 +311,7 @@ class Review:
         return not self.failures
 
 
-def analyze(folder, output, required_steps=()):
+def analyze(folder, output, required_steps=(), require_timing=False):
     output.mkdir(parents=True, exist_ok=True)
     review = Review(output)
     try:
@@ -317,7 +319,7 @@ def analyze(folder, output, required_steps=()):
             review.consume(meta,image)
     except (OSError, ValueError, KeyError, TypeError) as exc:
         review.failures.append({"reasons":["invalid_capture"],"detail":str(exc)})
-    return review.finish(required_steps)
+    return review.finish(required_steps,require_timing)
 
 
 def main():
@@ -325,8 +327,9 @@ def main():
     parser.add_argument("capture",type=Path)
     parser.add_argument("output",type=Path)
     parser.add_argument("--require-step",action="append",default=[])
+    parser.add_argument("--require-timing",action="store_true")
     args = parser.parse_args()
-    return 0 if analyze(args.capture,args.output,args.require_step) else 1
+    return 0 if analyze(args.capture,args.output,args.require_step,args.require_timing) else 1
 
 
 if __name__ == "__main__":

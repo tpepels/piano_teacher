@@ -35,6 +35,7 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
         "at_ms":float(Time.get_ticks_usec())*.001,
         "world":float(flow.beat),"bpm":float(state.get("bpm",0.0)),
         "paused":bool(state.get("paused",false)),
+        "button_text":str(_app.practice_view.start_button.text),
         "transport":int(state.get("transport_id",-1)),
         "midi_count":int(state.get("midi_input_count",0)),
         "layers":_layers(stage,viewport_size) if kind == "transition" else []})
@@ -187,7 +188,7 @@ func _sample() -> Dictionary:
 func _capture() -> void:
     if _failed:
         return
-    if _count >= MAX_FRAMES:
+    if _count >= MAX_FRAMES*(_fps/30.0):
         _error("Rendered-frame capture exceeded its bound")
         return
     var began: int = Time.get_ticks_usec()
