@@ -228,6 +228,11 @@ composes no lesson text of its own.
 
 ## Remaining complexity and why it stays
 
+The [runtime dependency and simplification audit](runtime-dependency-audit.md)
+records additional source-level findings, proposed reductions and evidence
+required before removing existing dependencies or code. It is an audit, not a
+replacement for the current product architecture or ROADMAP.md.
+
 - **Three transport internals behind one `Transport`.** Timeline facts,
   session intent and the physical receipt ledger are disjoint; the domain
   object is the only access path.

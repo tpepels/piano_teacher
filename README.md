@@ -65,8 +65,9 @@ software tests establish teaching efficacy or physical MIDI/audio acceptance.
 
 ## Inside the project
 
-The application uses Godot 4.7, embedded CPython and authentic Verovio notation
-in one desktop process. The technical details live in four documents:
+The application uses Godot 4.7, an embedded CPython musical engine and authentic
+Verovio notation prepared in a supervised subprocess. Automatic fingering
+currently uses an isolated Node/ONNX worker. The technical details live in:
 
 | Document | Read it for |
 | --- | --- |
@@ -74,6 +75,7 @@ in one desktop process. The technical details live in four documents:
 | [Architecture](docs/architecture.md) | Current owners, immutable score and timing contracts |
 | [Development](docs/development.md) | Setup, checks, packaging and physical acceptance |
 | [Reference](docs/reference.md) | Fingering, local evidence, privacy and research limits |
+| [Runtime dependency audit](docs/runtime-dependency-audit.md) | Dependency inventory, simplification candidates and verification gates |
 
 [ROADMAP](ROADMAP.md) remains the product and phase record. Superseded designs
 and implementation history are available through Git.
