@@ -468,6 +468,9 @@ func _process(delta: float) -> void:
             native_started = true
             if OS.get_environment("PIANO_TEACHER_HEADLESS_SMOKE") == "1":
                 print("PIANO_PACKAGE_NATIVE_READY")
+                # Exit the bounded package smoke only after real retained ink is published.
+                score_session.score_published.connect(
+                    func(_revision: int): get_tree().quit(), CONNECT_ONE_SHOT)
             poll_session.poll()
             midi_devices.discover()
             settings_interactions.request_settings()

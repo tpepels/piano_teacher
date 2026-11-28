@@ -38,7 +38,7 @@ export PYTHONNOUSERSITE=1
 # CI verifies the installed *package*, from a relocated clean extraction.
 # This opt-in mode never touches normal desktop startup or the score clock.
 if [[ "${PIANO_TEACHER_HEADLESS_SMOKE:-0}" == "1" ]]; then
-  exec "$HERE/bin/godot" --headless --audio-driver Dummy --max-fps 60 --quit-after 1800 \
+  exec "$HERE/bin/godot" --headless --audio-driver Dummy --max-fps 60 \
     --path "$HERE/godot" -- --in-process
 fi
 exec "$HERE/bin/godot" --path "$HERE/godot" -- --in-process "$@"
