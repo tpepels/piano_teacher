@@ -22,13 +22,15 @@ var _fps := 30
 var _pacing_only := false
 var _events: Array = []
 var _previous_capture_ms := 0.0
+var _midi_until_ms := -1.0
+var _last_midi_sample: Dictionary = {}
 
 # Test-only markers taken BEFORE the real input is sent. They are attached
 # to the next completed viewport frame, not reconstructed from phase names.
 func mark(kind: String, label: String = "", pitch: int = -1) -> void:
     if not _enabled or _failed:
         return
-    if _pacing_only:
+    if _pacing_only and kind != "midi":
         if kind == "injected_hitch":
             _events.append({"kind":kind,"label":label})
         return
@@ -36,7 +38,35 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
     var flow = _app.score_flow
     var stage = _app.practice_view.stage
     var viewport_size: Vector2 = _window.get_visible_rect().size
-    _events.append({"kind":kind,"label":label,"pitch":pitch,
+    var targets: Array = []
+    var baseline: Array = []
+    if kind == "midi":
+        _midi_until_ms = float(Time.get_ticks_usec())*.001+400.0
+        var renderer = stage.renderer
+        var teaching: Variant = state.get("teaching")
+        if label == "wrong" and teaching is Dictionary:
+            for note in teaching.get("expected_notes",[]):
+                targets.append(str(note.get("source_id","")))
+        else:
+            # The fixture probes one attack at a time. Identify the expected
+            # source note by pitch, selected score and nearest reading axis.
+            var source_pitches: Dictionary = {}
+            for note in renderer.timeline.notes:
+                source_pitches[str(note.get("id",""))] = int(note.get("pitch",-1))
+            var nearest := INF
+            for head in renderer.drawn_note_instances:
+                var source: String = str(head.get("source_id",""))
+                if int(head.get("pitch",source_pitches.get(source,-1))) != pitch and \
+                        int(source_pitches.get(source,-1)) != pitch:
+                    continue
+                var distance: float = absf(float(head["position"].x)-renderer.size.x*PLAYHEAD_FRACTION)
+                if distance < nearest:
+                    nearest = distance
+                    targets = [source]
+        baseline = _painted_heads(stage,viewport_size)
+    _events.append({"kind":kind,"label":label,"pitch":pitch,"targets":targets,"baseline_feedback":baseline,
+        "take":"%s|%d|%d|%s" % [str(state.get("piece_fingerprint","")),int(state.get("revision",-1)),
+            int(state.get("transport_id",-1)),str(state.get("mode",""))],
         "at_ms":float(Time.get_ticks_usec())*.001,
         "world":float(flow.beat),"bpm":float(state.get("bpm",0.0)),
         "paused":bool(state.get("paused",false)),
@@ -143,6 +173,39 @@ func _feedback(item: Dictionary) -> Array:
         result.append([str(ghost.get("pitch","")),str(ghost.get("shown_ms",""))])
     return result
 
+func _painted_heads(stage, viewport_size: Vector2) -> Array:
+    var result: Array = []
+    for view in stage.score_frame.get_children():
+        if not view is Control or not view.has_method("diagnostic_stream_snapshot") or not view.is_visible_in_tree():
+            continue
+        for item in view.diagnostic_stream_snapshot():
+            var segment = item.get("segment")
+            var clip = item.get("clip")
+            if not is_instance_valid(segment) or not is_instance_valid(clip) or \
+                    not clip.is_visible_in_tree() or not is_instance_valid(segment.get("status_layer")):
+                continue
+            var clip_rect: Rect2 = clip.get_global_rect()
+            for entry in segment.status_layer.painted_feedback:
+                var head: Dictionary = entry["instance"]
+                var at: Vector2 = segment.to_global(head["position"])
+                if not clip_rect.has_point(at) or at.x < 0.0 or at.x >= viewport_size.x:
+                    continue
+                result.append({"take":entry["take"],"source":str(head.get("source_id","")),
+                    "event":str(head.get("event_id","")),"slot":str(item.get("slot_id","")),
+                    "layer":view.get_instance_id(),"status":entry["status"],
+                    "x":at.x/viewport_size.x,"y":at.y/viewport_size.y,
+                    "rx":float(head["gap"])*.85/viewport_size.x,
+                    "ry":float(head["gap"])*.65/viewport_size.y})
+    return result
+
+func _midi_sample(now_ms: float) -> Dictionary:
+    if now_ms > _midi_until_ms:
+        return {}
+    var state: Dictionary = _app.current_state()
+    var size: Vector2 = _window.get_visible_rect().size
+    return {"midi_count":int(state.get("midi_input_count",0)),
+        "painted_feedback":_painted_heads(_app.practice_view.stage,size)}
+
 func _layers(stage, viewport_size: Vector2) -> Array:
     var result: Array = []
     for child in stage.score_frame.get_children():
@@ -172,7 +235,8 @@ func _sample() -> Dictionary:
         "sample_ms":float(flow.last_ms),"world":world,"step":step,
         "timing_version":1,"fps":_fps,"capture_cost_ms":_previous_capture_ms,
         "run_offset":float(flow.run_offset),"following":bool(flow.following),
-        "events":_events.duplicate(true),
+        "events":_events.duplicate(true),"feedback_version":2,
+        "painted_feedback":_painted_heads(stage,size) if float(Time.get_ticks_usec())*.001 <= _midi_until_ms else [],
         "midi_count":int(state.get("midi_input_count",0)),
         "teaching":state.get("teaching"),
         "button_text":str(_app.practice_view.start_button.text),
@@ -207,7 +271,7 @@ func _capture() -> void:
             "time_ms":float(began)*.001,"fps":_fps,
             "capture_cost_ms":_previous_capture_ms,"step":step,
             "screen":str(_app.current_screen),"ready":_app.score_session.is_ready(),
-            "events":_events}))
+            "events":_events,"midi_sample":_midi_sample(float(began)*.001)}))
         if _metadata.get_error() != OK:
             _error("Cannot write lightweight pacing record")
             return

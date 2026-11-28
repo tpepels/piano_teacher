@@ -13,6 +13,9 @@ const Ink := preload("res://note_status_ink.gd")
 var segment: Node2D
 var take_key := ""
 var painted_instances := 0
+# Core paint witness is updated only by the actual retained draw callback.
+# References point to the already immutable notehead records.
+var painted_feedback: Array = []
 # Number of status-ink pass repaints; scrolling must never increase it.
 var paint_count := 0
 var _source = null
@@ -91,11 +94,15 @@ func status_of_instance(instance_id: String) -> String:
 
 func _paint(layer: Node2D, pass_name: String) -> void:
     paint_count += 1
+    if pass_name == "core":
+        painted_feedback.clear()
     if _colored.is_empty() or segment.painter == null:
         return
     var glyphs = segment.painter.glyphs
     for entry in _colored:
-        Ink.paint(layer,glyphs,entry["instance"],str(entry["status"]),pass_name)
+        var painted: bool = Ink.paint(layer,glyphs,entry["instance"],str(entry["status"]),pass_name)
+        if painted and pass_name == "core":
+            painted_feedback.append({"take":take_key,"instance":entry["instance"],"status":entry["status"]})
 
 func _paint_ghosts() -> void:
     if segment.painter == null:

@@ -4,11 +4,13 @@ import json
 import math
 from pathlib import Path
 import numpy as np
+from midi_visual_probe import MidiProbeReview
 
 
 def review(records, manifest, required_steps=()):
     failures, gaps, costs, steps = [], [], [], set()
     previous = None
+    midi = MidiProbeReview()
     count = injected = 0
     armed = False
     fps = manifest.get("fps")
@@ -38,6 +40,12 @@ def review(records, manifest, required_steps=()):
                 if dt>limit:
                     failures.append({"reasons":["render_frame_hitch"],"frame":index,"step":frame["step"],
                                      "gap_ms":dt,"limit_ms":limit,"capture_cost_ms":costs[-1]})
+        if armed:
+            sample=dict(frame.get("midi_sample",{}))
+            sample.update(time_ms=frame["time_ms"],events=frame.get("events",[]))
+            reasons,metrics=midi.observe(sample)
+            if reasons:
+                failures.append({"reasons":reasons,"frame":index,"step":frame["step"],"metrics":metrics})
         previous=frame
     if count != manifest["frames"] or not manifest["success"]:
         raise ValueError("Incomplete pacing capture")
@@ -56,6 +64,8 @@ def review(records, manifest, required_steps=()):
         failures.append({"reasons":["missing_journey_steps"],"steps":sorted(missing)})
     if "hitch_recover" in required_steps and injected!=1:
         failures.append({"reasons":["missing_injected_hitch_witness"],"count":injected})
+    summary["midi_probes"]=midi.completed
+    failures.extend(midi.finish("wrong_free" in required_steps))
     return {"timing":summary,"failures":failures}
 
 

@@ -2,6 +2,7 @@
 import math
 from collections import deque
 import numpy as np
+from midi_visual_probe import MidiProbeReview
 
 # Test budgets, deliberately stricter than journey timeouts. Raw capture
 # overhead is reported and never silently subtracted from a real stall.
@@ -143,6 +144,8 @@ class TimingReview:
         self.tempo_windows = 0
         self.policy_windows = 0
         self.fps = 30
+        self.midi = MidiProbeReview()
+        self.feedback_v2 = False
 
     def observe(self, old, new, old_image, image):
         if new.get("timing_version") != 1:
@@ -205,8 +208,13 @@ class TimingReview:
                                 metrics.update(policy_bpm=policy,measured_bpm=actual_bpm)
             else:
                 self.motion.clear()
+        if new.get("feedback_version")==2:
+            self.feedback_v2 = True
+            midi_reasons,midi_metrics = self.midi.observe(new,image)
+            reasons.extend(midi_reasons)
+            metrics.update(midi_metrics)
         for event in events:
-            if injected or event["kind"] == "injected_hitch":
+            if injected or event["kind"] == "injected_hitch" or (self.feedback_v2 and event["kind"]=="midi"):
                 continue
             probe = dict(event)
             probe["baseline"] = _pixels(old_image,old,event["label"]) if event["kind"]=="midi" else 0
@@ -290,6 +298,9 @@ class TimingReview:
 
     def finish(self,required_steps=()):
         failures=[]
+        if self.feedback_v2:
+            self.completed.extend(self.midi.completed)
+            failures.extend(self.midi.finish("wrong_free" in required_steps))
         if self.pending:
             failures.append({"reasons":["unfinished_timing_probes"],"probes":[p["label"] for p in self.pending]})
         summary={"active":self.active,"motion_windows":self.motion_windows,"tempo_windows":self.tempo_windows,
