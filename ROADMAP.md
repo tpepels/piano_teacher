@@ -170,6 +170,26 @@ import and cache restore matched across all 22 MIDI and MusicXML fixtures.
   Physical piano/display/audio acceptance and commercial model redistribution
   remain open; do not publish commercial artifacts before these are cleared.
 
+### Native follow-up after owner verification
+
+The Tempo-to-Free transition could retroactively change the scrolling rate
+before the receiving frame saw its new timeline. Preserve the outgoing rate
+for a bounded publication lead while retaining the original travel distance
+and arrival time. Acknowledged replacement segments must activate even if
+their transport key is unchanged; count missing and unplaced frames separately
+for each segment. The native journey now measures continuity at microsecond
+resolution without changing its tolerance. Added regression cases for the
+timeline projection and same-transport segment replacement.
+
+These are source-level corrections, pending the current regression and native
+journeys. A long deliberate frame hitch can still cause a missed opening;
+the existing recovery must report and re-place it, never insert past ink.
+The ObjectDB warnings did not identify the leaked objects; repertoire journeys
+now run with verbose diagnostics to identify them. Do not claim leak closure
+without reproduction and clean shutdown. Use TMPDIR on a disk-backed filesystem
+for the native verifier's workspace and logs to avoid the previous tmpfs quota
+failure. No physical or commercial release acceptance is claimed.
+
 ## Python ONNX fingering (A2, 2026-11-28)
 
 The existing Lumikey 0.3.0 weights run through Python ONNX Runtime 1.30.0 CPU.

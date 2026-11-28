@@ -103,7 +103,9 @@ func observe_transport(facts: StreamGeometry, world: float, opening: float,
         withdraw_future.call(facts,"changed_practice_decision")
     elif allow_admission and running_now and phase in [
             "count_in","playing","guided_wait"]:
-        if key != last_take or was_paused:
+        if key != last_take or was_paused or \
+                (arm_acknowledged and not expected_segment.is_empty() and \
+                 armed_segment_id == expected_segment and expected_segment != live_segment_id):
             live_serial = -1
             if armed_serial >= 0:
                 # An old state poll must never claim an unacknowledged

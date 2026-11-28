@@ -411,15 +411,38 @@ class MusicalTimeline:
         self.end_world = None
         self.next_take = None
 
+    @staticmethod
+    def _free_travel_spans(beats: float, bpm: float, outgoing: float,
+                           lead: float) -> tuple[TempoSpan, ...]:
+        """Keep the published outgoing rate until a Free transition can arrive.
+
+        Both the target's position and arrival time remain unchanged. Bound
+        the prefix so even very short moves have positive remaining time
+        and distance; a newly opened run needs no outgoing-rate prefix.
+        """
+        seconds = beats * 60.0 / bpm
+        lead = min(lead, seconds / 2, beats * 30.0 / outgoing)
+        if lead <= 1e-9 or abs(bpm - outgoing) < 1e-9:
+            return (TempoSpan(beats, bpm, bpm),)
+        prefix = lead * outgoing / 60.0
+        remaining = beats - prefix
+        rate = remaining * 60.0 / (seconds - lead)
+        return (TempoSpan(prefix, outgoing, outgoing),
+                TempoSpan(remaining, rate, rate))
+
     def start_free(self, *, now: float, travel_beats: float, bpm: float) -> None:
-        """Free: the staff travels `travel_beats` at `bpm` to the first
-        target, then holds there until the target is played."""
+        """Free: the staff travels `travel_beats` to the first target, then holds.
+
+        A same-run tempo change has publication lead without moving its
+        target or delaying the planned arrival.
+        """
         if self.open:
             self.bridge_to_rest(now)
         else:
             self.reset()
         m = self.musical(now)
         world, at = 0.0, m
+        spans = (TempoSpan(max(0.0, travel_beats), bpm, bpm),)
         if self.segments:
             last = self.segments[-1]
             world, at = last.world_end, last.end_at
@@ -428,8 +451,10 @@ class MusicalTimeline:
                 tail = self.append(TimelineSegment(
                     "rest", world, at, (TempoSpan(elapsed, last.end_bpm, last.end_bpm),)))
                 world, at = tail.world_end, tail.end_at
-        rest = self.append(TimelineSegment(
-            "rest", world, at, (TempoSpan(max(0.0, travel_beats), bpm, bpm),)))
+            spans = self._free_travel_spans(
+                max(0.0, travel_beats), bpm, last.end_bpm,
+                max(0.0, m + MOVE_LEAD_SECONDS - at))
+        rest = self.append(TimelineSegment("rest", world, at, spans))
         self.append(TimelineSegment("hold", rest.world_end, rest.end_at,
                                     (TempoSpan(0.0, bpm, bpm),)))
 

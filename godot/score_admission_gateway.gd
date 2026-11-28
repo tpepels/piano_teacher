@@ -28,6 +28,8 @@ var repeats_from_the_right := 0
 var late_takes_reported := 0
 var missing_score_frames := 0
 var unplaced_frames := 0
+var _missing_segment := ""
+var _unplaced_segment := ""
 var reported_failure_segment := ""
 var failure_report_in_flight := ""
 var _last_problem := ""
@@ -121,6 +123,9 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
     var running: bool = bool(state.get("running",false))
     if timeline is Dictionary:
         var segment: String = str(timeline.get("segment_id",""))
+        if segment != _missing_segment:
+            _missing_segment = segment
+            missing_score_frames = 0
         if (running and str(state.get("phase","")) == "playing"
                 and not segment.is_empty()
                 and (stage.renderer == null or not is_instance_valid(stage.renderer)
@@ -139,6 +144,9 @@ func observe(state: Dictionary, _frame_ms: int) -> void:
         _keep_prediction(state)
         return
     var segment_id: String = str(current.get("segment_id",""))
+    if segment_id != _unplaced_segment:
+        _unplaced_segment = segment_id
+        unplaced_frames = 0
     if segment_id.is_empty() or segment_id == placed_segment:
         _keep_prediction(state)
         return

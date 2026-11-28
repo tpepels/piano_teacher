@@ -30,7 +30,7 @@ var played_first := false
 var played_second := false
 # Continuity invariant (owner report 2026-11-24): the staff may never jump.
 var continuity_world := NAN
-var continuity_ms := -1
+var continuity_ms := -1.0
 var continuity_bpm := 0.0
 var continuity_violation := ""
 var ink_shown_since := -1
@@ -134,7 +134,7 @@ func _current_take_beat(state: Dictionary) -> float:
         str(current.get("segment_id","")), Time.get_ticks_usec()*.001)
 
 
-func _check_continuity(renderer, state: Dictionary, now_ms: int, step: String) -> String:
+func _check_continuity(renderer, state: Dictionary, now_ms: float, step: String) -> String:
     # Between two painted frames the staff moves forward by at most what
     # the fastest current tempo covers in that time (plus frame slack).
     # A visible jump forward or backward is a defect in every phase.
@@ -200,7 +200,8 @@ func _process(_delta: float) -> bool:
     var step: String = str(state.get("flow",{}).get("step",""))
     var mode: String = str(state.get("mode",""))
     var renderer = app.practice_view.stage.renderer
-    var continuity: String = _check_continuity(renderer, state, now_ms, step)
+    var continuity: String = _check_continuity(
+        renderer, state, float(Time.get_ticks_usec())*.001, step)
     if not continuity.is_empty():
         _fail(continuity)
         return true

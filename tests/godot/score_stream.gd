@@ -93,6 +93,14 @@ func run() -> void:
         "Retry preserves the original exposed source without relocating it")
     check(controller.visible_take_keys().has("piece|7|10|practice")
         and controller.visible_take_keys().has("piece|7|11|practice"),"Old and retried score copies keep separate results")
+    # A recovery can authorize another segment without changing the
+    # transport key. It must bind the exact new arm, not the old source.
+    var recovery: Dictionary = controller.place_timeline_take(geometry(6.0),0.0,
+        controller.ink_end(geometry(6.0))+4.0,6.7,0.4,4.0)
+    check(not recovery.is_empty(),"Same-transport recovery draws its new segment")
+    acknowledge(controller,6.0,"piece|7|11|practice","recovery")
+    check(controller.bound_segment() == "recovery",
+        "A new acknowledged segment binds even when transport identity is unchanged")
     # A real one-bar printed rest must reserve the following native header
     # *inside* that bar's musical silence, otherwise a fixed four-beat repeat
     # becomes impossible even when no source notes overlap. Use this same

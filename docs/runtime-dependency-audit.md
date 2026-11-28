@@ -40,6 +40,19 @@ build passed, offline execution failed at archive access. See the
 for the blocker and follow-up. No physical acceptance, latest-revision
 performance improvement or sale readiness is claimed.
 
+### Native follow-up
+
+The timeline now schedules a bounded outgoing-rate prefix at a same-run Free
+transition while preserving travel distance and arrival. Native binding
+recognizes an acknowledged new segment even at an unchanged transport key,
+and the gateway's missing/unplaced counters reset for each segment. The
+continuous-motion tolerance is unchanged. The regression and native gates must
+pass on the new revision before these issues are closed. Verbose repertoire
+shutdown diagnostics identify ObjectDB leak types if the warnings recur.
+The disk-quota failure is addressed operationally with a disk-backed TMPDIR;
+the successful local Debian-built archive result remains valid for its
+recorded revision.
+
 ## 1. Purpose and constraints
 
 Identify external runtimes, redundant transformations, obsolete interfaces, unnecessary runtime assets and duplicated responsibilities. A dependency must have an explicit owner, a current product requirement and a demonstrated reason to remain. Do not remove a dependency just because another language/library could perform a similar task.

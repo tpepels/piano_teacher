@@ -38,7 +38,7 @@ if ! "$PYTHON" -c 'import sys; assert sys.version_info[:2] == (3,14); import mid
   echo "Install Python 3.14 packages: .venv/bin/python -m pip install -e '.[godot,test]'" >&2
   exit 2
 fi
-LOG="$(mktemp /tmp/piano-embedded-production.XXXXXX.log)"
+LOG="$(mktemp "${TMPDIR:-/tmp}/piano-embedded-production.XXXXXX.log")"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/piano-embedded-verify.XXXXXX")"
 cleanup() {
   if [[ "${PIANO_KEEP_VERIFY_TMP:-0}" != 1 ]]; then
@@ -190,7 +190,7 @@ verify_real_source() {
   seed "$score"
   local fingerprint
   fingerprint="$(sha256sum "$HOME/Music/Piano Teacher/$score" | cut -d' ' -f1)"
-  timeout 115s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
+  timeout 115s "$GODOT_BIN" --headless --verbose --audio-driver Dummy --path godot \
     --script res://production_ui_smoke.gd -- "$score" "$fingerprint"
 }
 audit_package() {

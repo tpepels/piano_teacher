@@ -226,3 +226,31 @@ def test_unknown_placement_facts_are_refused(practice_session):
     session = practice_session(bars=2)
     status, body = session.commands.request("state.snapshot", '{"travel":1}')
     assert status != 0 and b"Unknown placement facts" in body
+
+
+@pytest.mark.parametrize("outgoing, incoming", [(40.0, 160.0), (120.0, 60.0)])
+def test_return_to_free_preserves_projection_until_publication(outgoing, incoming):
+    from piano_teacher.application.musical_timeline import (
+        MOVE_LEAD_SECONDS,
+        MusicalTimeline,
+        TimelineSegment,
+    )
+    from piano_teacher.application.tempo_curve import TempoSpan
+
+    timeline = MusicalTimeline()
+    timeline.append(TimelineSegment(
+        "take", 0.0, 10.0, (TempoSpan(4.0, outgoing, outgoing),),
+        take_id="previous", mode="practice"))
+    now = timeline.segments[-1].end_at + .25
+    world = timeline.world_at(now)
+    old = [timeline.world_at(now + delay)
+           for delay in (0.0, .04, .08, MOVE_LEAD_SECONDS)]
+    travel = 8.0
+    timeline.start_free(now=now, travel_beats=travel, bpm=incoming)
+    assert timeline.world_at(now) == pytest.approx(world)
+    assert [timeline.world_at(now + delay)
+            for delay in (0.0, .04, .08, MOVE_LEAD_SECONDS)] == pytest.approx(old)
+    arrival = now + travel * 60.0 / incoming
+    assert timeline.hold_open_at() == pytest.approx(arrival)
+    assert timeline.world_at(arrival) == pytest.approx(world + travel)
+    assert timeline.world_at(arrival + 10.0) == pytest.approx(world + travel)
