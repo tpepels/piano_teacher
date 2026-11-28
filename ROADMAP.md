@@ -36,8 +36,11 @@ Across the five whole pieces all 80 such slurs had native fragments. An
 earlier trial with cross-measure slurs left missing fragments on every
 piece. Historical pickup windows also differ from the written grid on all
 five pieces. Keep those windows for saved mastery and grade the same attacks.
-Grouped graces, cross-measure slurs and arbitrary printed-page reproduction
-remain outside the verified notation coverage.
+Subsequent commits 148f6ba4 and eddc6d3 implement cross-measure slurs and
+anchored grace groups/chords, including measure-excerpt engraving recovery.
+The earlier limitation describes the prior measured revision. Arbitrary
+printed-page reproduction remains outside the supported practice view.
+Fresh end-to-end verification is required on the updated source.
 
 A3 prepares imports and corrections separately from command dispatch.
 Three alternating cold native runs placed Stop during open at 36–66 ms
@@ -56,9 +59,11 @@ with all 19 templates matching the original full-atlas bytes. A6
 preserved all Coda catalog outputs for 1,240 windows from 17 pieces and
 removed the dense research matrices from the application import path.
 A7 reduced public score reads to the bound model and layout in one bundle.
-A5 retains the optional sampled piano and the basic offline piano. They
-rendered the same four-second passage with identical frame counts. Removing
-the basic instrument would leave clean installations without Listen.
+The earlier A5 comparison measured both optional sampled and basic audio
+paths. Commits d5d3163 and d39dee87 bundle the CC0 upright bank and FluidSynth
+in the Linux release, and handle a sampled voice ending before its scheduled
+release. Source installs without a sampled instrument retain basic offline
+synthesis; it is not the packaged default.
 A8 builds Linux releases from runtime entry points and records their file
 sizes, native dependencies, wheel versions, model/font hashes and notices.
 
@@ -96,6 +101,23 @@ The regression suite passed all 384 cases on CPython 3.14 and 3.12, with
 three music21 warnings on each. The five Godot player scenarios passed.
 The 3.12 run covered 81.9% of Python lines and 64.0% of branches. Cold
 import and cache restore matched across all 22 MIDI and MusicXML fixtures.
+
+### Follow-up release verification (2026-11-28)
+
+- [Core CI for 2644068](https://github.com/tpepels/piano_teacher/actions/runs/46149754201)
+  passed quality, Godot and fingering; Python coverage was still running when
+  this record was prepared.
+- The Debian 12 builder is paired with a separate offline target-container
+  verifier. Both local and target verification use the existing player
+  fixtures, exact archive launch, sampled Listen, MusicXML import, progress
+  restore, two-hand inference and worker recovery. No target result is claimed
+  until the actual job completes.
+- The final rendering changes require repeated paired measurements; faster
+  fragment extraction alone does not resolve the earlier Bach/Hanon startup
+  regressions.
+- Keep desktop worker isolation. iPad is outside the approved desktop scope.
+  Physical piano/display/audio acceptance and commercial model redistribution
+  remain open; do not publish commercial artifacts before these are cleared.
 
 ## Python ONNX fingering (A2, 2026-11-28)
 

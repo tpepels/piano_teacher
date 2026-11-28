@@ -1,0 +1,44 @@
+name: Linux release verification
+
+# Run on release-tooling changes or manual dispatch, not ordinary commits.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/linux-release.yml'
+      - 'scripts/build-linux-release.sh'
+      - 'scripts/package-inprocess.sh'
+      - 'scripts/build-release-fluidsynth.sh'
+      - 'scripts/release/**'
+      - 'native/release-profile.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debian-12:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Linux x86-64 archives
+        run: bash scripts/build-linux-release.sh "$RUNNER_TEMP/piano-release"
+      - name: Prepare clean Debian 12 runtime
+        run: docker build -f scripts/release/verify-linux.Dockerfile -t piano-release-verifier .
+      - name: Verify exported archive offline
+        run: |
+          docker run --rm --network none --user 1000:1000 \
+            --mount "type=bind,source=$RUNNER_TEMP/piano-release,target=/archives,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/release,target=/verification/scripts/release,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/tests/fixtures/pieces/bach-invention-1.midi,target=/verification/tests/fixtures/pieces/bach-invention-1.midi,readonly" \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/tests/godot/score_worker_recovery.gd,target=/verification/tests/godot/score_worker_recovery.gd,readonly" \
+            piano-release-verifier bash /verification/scripts/release/verify-archive.sh \
+            /archives/piano-teacher-linux-x86_64.tar.gz
+      # Model redistribution clearance is unresolved: do not publish artifacts.
+      - name: Report archive hashes
+        run: sha256sum "$RUNNER_TEMP"/piano-release/*.tar*

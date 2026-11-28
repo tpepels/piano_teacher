@@ -236,6 +236,17 @@ the desktop archive, library source companion and runtime inventory.
 The release selects wheels with [binary source constraints](../scripts/release/binary-constraints.txt).
 NumPy 2.5.4 reports x86-64-v2 as its CPU baseline.
 
+The [Linux release verification workflow](../.github/workflows/linux-release.yml)
+runs on release-tooling changes or manual dispatch. It builds the archive and
+executes the relocated-package verifier in a separate Debian 12 container,
+with networking disabled and an unprivileged user. It does not upload or
+publish archives. Passing establishes target software acceptance only. To
+verify an existing archive on a supported host:
+
+```bash
+bash scripts/release/verify-archive.sh dist/piano-teacher-linux-x86_64.tar.gz
+```
+
 To assemble a developer-host build using an existing native bridge and
 private Python prefix, set these inputs:
 

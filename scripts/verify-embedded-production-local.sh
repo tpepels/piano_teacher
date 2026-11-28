@@ -122,83 +122,8 @@ verify_bridge() {
   unset PIANO_NATIVE_REAL_SCORE_SMOKE
 }
 make_fixture() {
-  "$PYTHON" - <<'PY'
-from pathlib import Path
-import mido
-
-target = Path.home() / "Music" / "Piano Teacher" / "phase6_native_fixture.mid"
-target.parent.mkdir(parents=True, exist_ok=True)
-piece = mido.MidiFile(type=1, ticks_per_beat=480)
-meta = mido.MidiTrack()
-piece.tracks.append(meta)
-meta.append(mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0))
-meta.append(mido.MetaMessage("set_tempo", tempo=500000, time=0))
-meta.append(mido.MetaMessage("end_of_track", time=0))
-
-def add_hand(channel, notes):
-    track = mido.MidiTrack()
-    piece.tracks.append(track)
-    track.append(mido.Message("program_change", channel=channel, program=0, time=0))
-    events = []
-    for at, pitch, length in notes:
-        events.append((at, 1, mido.Message("note_on", channel=channel, note=pitch, velocity=84)))
-        events.append((at+length, 0, mido.Message("note_off", channel=channel, note=pitch, velocity=0)))
-    last = 0
-    for at, _, message in sorted(events, key=lambda item:(item[0],item[1])):
-        message.time = at-last
-        track.append(message)
-        last = at
-    track.append(mido.MetaMessage("end_of_track", time=0))
-
-right = [(bar*1920+beat*480, [72,74,76,77,79,77,76,74][(bar+beat)%8], 400)
-         for bar in range(8) for beat in range(4)]
-left = [(bar*1920+beat*960, [48,55,52,55][(bar+beat)%4], 800)
-        for bar in range(8) for beat in range(2)]
-add_hand(0,right)
-add_hand(1,left)
-piece.save(target)
-print("CREATED_FIXTURE", target)
-
-# Small source for the full-scene synthetic physical MIDI journey.
-# Two quickly spaced attacks start at the documented 50% floor so the
-# journey exercises the return to Free after two failures there.
-short = mido.MidiFile(type=1,ticks_per_beat=480)
-short_meta = mido.MidiTrack()
-short.tracks.append(short_meta)
-short_meta.append(mido.MetaMessage("time_signature",numerator=4,denominator=4))
-short_meta.append(mido.MetaMessage("set_tempo",tempo=mido.bpm2tempo(80)))
-notes = mido.MidiTrack()
-short.tracks.append(notes)
-notes.extend([
-    mido.Message("note_on",channel=0,note=72,velocity=84,time=0),
-    mido.Message("note_off",channel=0,note=72,velocity=0,time=120),
-    mido.Message("note_on",channel=0,note=79,velocity=84,time=120),
-    mido.Message("note_off",channel=0,note=79,velocity=0,time=240),
-])
-short_path = target.parent / "ci_state_journey.mid"
-short.save(short_path)
-print("CREATED_FAKE_MIDI_JOURNEY",short_path)
-
-# The same journey in 2/4: a bar is only two beats, so the count-in and
-# the rest between repeats are short (owner report 2026-11-24).
-two = mido.MidiFile(type=1,ticks_per_beat=480)
-two_meta = mido.MidiTrack()
-two.tracks.append(two_meta)
-two_meta.append(mido.MetaMessage("time_signature",numerator=2,denominator=4))
-two_meta.append(mido.MetaMessage("set_tempo",tempo=mido.bpm2tempo(80)))
-two_notes = mido.MidiTrack()
-two.tracks.append(two_notes)
-two_notes.extend([
-    mido.Message("note_on",channel=0,note=72,velocity=84,time=0),
-    mido.Message("note_off",channel=0,note=72,velocity=0,time=120),
-    mido.Message("note_on",channel=0,note=79,velocity=84,time=120),
-    mido.Message("note_off",channel=0,note=79,velocity=0,time=240),
-])
-two.save(target.parent / "ci_state_journey_two_four.mid")
-print("CREATED_FAKE_MIDI_JOURNEY_TWO_FOUR")
-PY
-}
-verify_fixture_ui() {
+  "$PYTHON" "$ROOT/scripts/release/make-fixtures.py"
+}verify_fixture_ui() {
   set_case fixture
   seed phase6_native_fixture.mid
   timeout 105s "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
@@ -314,76 +239,8 @@ audit_package() {
     timeout 240s bash scripts/package-inprocess.sh
     test -s dist/piano-teacher-linux-x86_64.tar.gz
   )
-  local destination="$WORK/clean-package"
-  local clean_home="$WORK/clean-home"
-  mkdir -p "$destination" "$clean_home"
-  tar -xzf "$workspace/dist/piano-teacher-linux-x86_64.tar.gz" -C "$destination"
-  local launcher="$destination/piano-teacher-linux-x86_64/PianoTeacher"
-  test -x "$launcher"
-  test -s "$destination/piano-teacher-linux-x86_64/godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so"
-  # This child inherits neither the builder's venv nor any PYTHONPATH,
-  # PIANO_TEACHER_PYTHON_HOME or compiled project import cache.
-  local package_log="$WORK/clean-package-boot.log"
-  local package_tools="$WORK/package-tools"
-  local fixture="$clean_home/Music/Piano Teacher/phase6_native_fixture.mid"
-  mkdir -p "$(dirname "$fixture")" "$package_tools"
-  # Only the launcher utilities are on PATH. There is no host Node or Python.
-  ln -s "$(command -v bash)" "$(command -v dirname)" "$package_tools"
-  cp "$HOME/Music/Piano Teacher/phase6_native_fixture.mid" "$fixture"
-  "$PYTHON" - "$clean_home" "$fixture" <<'PY'
-from pathlib import Path
-import sys
-from piano_teacher.library import ScoreLibrary
-home, fixture = map(Path, sys.argv[1:])
-library = ScoreLibrary(config_dir=home / '.config/piano-teacher')
-library.update(music_dir=str(fixture.parent), fullscreen=False)
-library.mark_opened(fixture.name)
-PY
-  timeout 45s env -i \
-    HOME="$clean_home" USER="${USER:-runner}" PATH="$package_tools" \
-    PIANO_TEACHER_HEADLESS_SMOKE=1 PIANO_TEACHER_TIMING_DIAGNOSTICS=1 \
-    "$launcher" > "$package_log" 2>&1 || {
-      tail -n 100 "$package_log" >&2
-      return 1
-    }
-  if ! grep -Fq "PIANO_PACKAGE_NATIVE_READY" "$package_log" || \
-       ! grep -Eq 'SCORE_WORKER_GENERATION: [0-9]+ score\.bundle ' "$package_log" || \
-       ! grep -Fq "NATIVE_MODEL_READY:" "$package_log" || \
-       grep -Eq 'Embedded Piano Teacher stopped|SCRIPT ERROR|ERROR:.*(extension|python|libpiano)' "$package_log"; then
-    echo "Relocated package did not generate and install its native score" >&2
-    tail -n 100 "$package_log" >&2
-    return 1
-  fi
-  "$PYTHON" - "$clean_home" <<'PY'
-import json
-from pathlib import Path
-import sys
-
-cache = Path(sys.argv[1]) / ".local/share/piano-teacher/fingering"
-plans = [json.loads(file.read_text()) for file in cache.glob("*/plan-*.json")]
-assert len(plans) == 1, "Relocated package did not save the new score's fingering plan"
-plan = plans[0]
-assert plan["provider"]["runtime"] == "onnxruntime@1.30.0/cpu", plan["provider"]
-assert {note["hand"] for note in plan["assignments"].values()
-        if note["finger"] is not None} == {"left", "right"}, plan["status"]
-PY
-  local release="${launcher%/*}"
-  local -a packaged=(env -i HOME="$clean_home" PATH="$package_tools"
-    PIANO_PYTHON="$release/runtime/python/bin/python3" PYTHONNOUSERSITE=1
-    PIANO_TEACHER_PYTHON_HOME="$release/runtime/python" PYTHONHOME="$release/runtime/python"
-    LD_LIBRARY_PATH="$release/runtime/python/lib" PYTHONPATH="$release")
-  "${packaged[@]}" "$release/runtime/python/bin/python3" -P "$ROOT/scripts/release/verify-relocated.py" "$WORK"
-  if [[ -f "$sample_bank" ]]; then
-    "${packaged[@]}" PIANO_TEACHER_SOUNDFONT="$sample_bank" \
-      "$release/runtime/python/bin/python3" -P "$ROOT/scripts/release/verify-relocated.py" "$WORK"
-  fi
-  cp "$HOME/Music/Piano Teacher/ci_state_journey"{,_two_four}.mid "$(dirname "$fixture")/"
-  ln -s "$(command -v sleep)" "$(command -v timeout)" "$(command -v mkdir)" "$(command -v cat)" \
-    "$(command -v chmod)" "$(command -v env)" "$package_tools"
-  # Carry the existing recovery journey outside the installed project.
-  "${packaged[@]}" bash "$ROOT/scripts/release/verify-score-recovery.sh" "$WORK/package-recovery" \
-    "$release/bin/godot" "$release/godot" "$ROOT/tests/godot/score_worker_recovery.gd"
-  echo "Relocated standalone package generated both hands' fingerings and native notation"
+  bash "$ROOT/scripts/release/verify-archive.sh" \
+    "$workspace/dist/piano-teacher-linux-x86_64.tar.gz" "$sample_bank"
 }
 
 # Export only this runner's local case helpers. Each subprocess inherits
