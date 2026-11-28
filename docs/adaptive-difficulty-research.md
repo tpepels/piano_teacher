@@ -1,6 +1,6 @@
 # Local piano difficulty recognition and adaptive practice
 
-Status: research proposal; no production integration approved.
+Status: research proposal; D0 artifacts available in [difficulty-research/d0-protocol.md](difficulty-research/d0-protocol.md). Human annotation/reliability gate remains open; no production integration approved.
 
 ## 1. Motivation and research question
 

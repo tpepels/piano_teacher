@@ -1,0 +1,2683 @@
+{
+  "version": 1,
+  "source_commit": "59885ba193938905082b9277b2910561cb04f8fb",
+  "scope": "original constructed feature controls and verified existing repository MIDI windows; human severity is not yet annotated",
+  "synthetic_time_unit": "quarter-note beats",
+  "synthetic": [
+    {
+      "id": "melody-slow",
+      "family": "melody",
+      "split": "development",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 1,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 1,
+          "duration": 1,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 2,
+          "duration": 1,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 3,
+          "duration": 1,
+          "pitch": 65,
+          "finger": 4,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 4,
+          "duration": 1,
+          "pitch": 67,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "simultaneous_chord",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "absent"
+        },
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n1",
+            "n2"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null,
+      "easy_control": true
+    },
+    {
+      "id": "melody-left",
+      "family": "melody",
+      "split": "development",
+      "hand": "L",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 1,
+          "pitch": 48,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 1,
+          "duration": 1,
+          "pitch": 50,
+          "finger": 4,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 2,
+          "duration": 1,
+          "pitch": 52,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 3,
+          "duration": 1,
+          "pitch": 53,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 4,
+          "duration": 1,
+          "pitch": 55,
+          "finger": 1,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "simultaneous_chord",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "absent"
+        },
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n1",
+            "n2"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null,
+      "easy_control": true
+    },
+    {
+      "id": "leap-short",
+      "family": "leap",
+      "split": "development",
+      "hand": "L",
+      "bpm": 120,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 36,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.5,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 55,
+          "finger": 2,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "pitch_displacement",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null,
+      "contrast": "leap-long: less release-to-attack time"
+    },
+    {
+      "id": "leap-long",
+      "family": "leap",
+      "split": "development",
+      "hand": "L",
+      "bpm": 120,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 36,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 4,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 4.5,
+          "duration": 0.5,
+          "pitch": 55,
+          "finger": 2,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "pitch_displacement",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null,
+      "contrast": "leap-short: equal displacement, more preparation"
+    },
+    {
+      "id": "stretch-octave",
+      "family": "stretch",
+      "split": "development",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 2,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0,
+          "duration": 2,
+          "pitch": 72,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "simultaneous_chord",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "octave_span",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "stretch-tenth",
+      "family": "stretch",
+      "split": "development",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 2,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0,
+          "duration": 2,
+          "pitch": 76,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "simultaneous_chord",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "wide_span",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "chord-change-repeat",
+      "family": "chord-change",
+      "split": "development",
+      "hand": "R",
+      "bpm": 80,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 67,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n5",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 67,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "simultaneous_chord",
+          "notes": [
+            "n0",
+            "n1",
+            "n2"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "changed_pitch_set",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3",
+            "n4",
+            "n5"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null,
+      "easy_control": true
+    },
+    {
+      "id": "chord-change-inverted",
+      "family": "chord-change",
+      "split": "development",
+      "hand": "R",
+      "bpm": 80,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 67,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 67,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n5",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 72,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "changed_pitch_set",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3",
+            "n4",
+            "n5"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "retained_pitch_class",
+          "notes": [
+            "n1",
+            "n2",
+            "n3",
+            "n4"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "run-slow",
+      "family": "run",
+      "split": "development",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.25,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.25,
+          "duration": 0.25,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 0.5,
+          "duration": 0.25,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 0.75,
+          "duration": 0.25,
+          "pitch": 65,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 1,
+          "duration": 0.25,
+          "pitch": 67,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n5",
+          "onset": 1.25,
+          "duration": 0.25,
+          "pitch": 69,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n6",
+          "onset": 1.5,
+          "duration": 0.25,
+          "pitch": 71,
+          "finger": 4,
+          "voice": 1
+        },
+        {
+          "id": "n7",
+          "onset": 1.75,
+          "duration": 0.25,
+          "pitch": 72,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n2",
+            "n3"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "run-fast",
+      "family": "run",
+      "split": "development",
+      "hand": "R",
+      "bpm": 144,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.25,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.25,
+          "duration": 0.25,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 0.5,
+          "duration": 0.25,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 0.75,
+          "duration": 0.25,
+          "pitch": 65,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 1,
+          "duration": 0.25,
+          "pitch": 67,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n5",
+          "onset": 1.25,
+          "duration": 0.25,
+          "pitch": 69,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n6",
+          "onset": 1.5,
+          "duration": 0.25,
+          "pitch": 71,
+          "finger": 4,
+          "voice": 1
+        },
+        {
+          "id": "n7",
+          "onset": 1.75,
+          "duration": 0.25,
+          "pitch": 72,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n2",
+            "n3"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null,
+      "contrast": "run-slow: same notes/fingers, shorter seconds"
+    },
+    {
+      "id": "repeated-same-finger",
+      "family": "repeated",
+      "split": "calibration",
+      "hand": "R",
+      "bpm": 120,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.125,
+          "pitch": 60,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.25,
+          "duration": 0.125,
+          "pitch": 60,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 0.5,
+          "duration": 0.125,
+          "pitch": 60,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 0.75,
+          "duration": 0.125,
+          "pitch": 60,
+          "finger": 3,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "repeated_pitch",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "repeated_finger",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "repeated-alternating",
+      "family": "repeated",
+      "split": "calibration",
+      "hand": "R",
+      "bpm": 120,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.125,
+          "pitch": 60,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.25,
+          "duration": 0.125,
+          "pitch": 60,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 0.5,
+          "duration": 0.125,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 0.75,
+          "duration": 0.125,
+          "pitch": 60,
+          "finger": 3,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "repeated_pitch",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "repeated_finger",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "crossing-white",
+      "family": "crossing",
+      "split": "calibration",
+      "hand": "L",
+      "bpm": 90,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 48,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.5,
+          "duration": 0.5,
+          "pitch": 50,
+          "finger": 4,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 52,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 1.5,
+          "duration": 0.5,
+          "pitch": 53,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 2,
+          "duration": 0.5,
+          "pitch": 55,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n5",
+          "onset": 2.5,
+          "duration": 0.5,
+          "pitch": 57,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n6",
+          "onset": 3,
+          "duration": 0.5,
+          "pitch": 59,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n7",
+          "onset": 3.5,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n4",
+            "n5"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "crossing-unknown",
+      "family": "crossing",
+      "split": "calibration",
+      "hand": "L",
+      "bpm": 90,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 48,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.5,
+          "duration": 0.5,
+          "pitch": 50,
+          "finger": 4,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 52,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 1.5,
+          "duration": 0.5,
+          "pitch": 53,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 2,
+          "duration": 0.5,
+          "pitch": 55,
+          "finger": null,
+          "voice": 1
+        },
+        {
+          "id": "n5",
+          "onset": 2.5,
+          "duration": 0.5,
+          "pitch": 57,
+          "finger": null,
+          "voice": 1
+        },
+        {
+          "id": "n6",
+          "onset": 3,
+          "duration": 0.5,
+          "pitch": 59,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n7",
+          "onset": 3.5,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n4",
+            "n5"
+          ],
+          "observed": "unknown"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "independence-held",
+      "family": "independence",
+      "split": "calibration",
+      "hand": "R",
+      "bpm": 90,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 4,
+          "pitch": 72,
+          "finger": 5,
+          "voice": 2
+        },
+        {
+          "id": "n1",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 2,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "held_while_moving",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "independence-released",
+      "family": "independence",
+      "split": "calibration",
+      "hand": "R",
+      "bpm": 90,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 72,
+          "finger": 5,
+          "voice": 2
+        },
+        {
+          "id": "n1",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 2,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "held_while_moving",
+          "notes": [
+            "n0",
+            "n2",
+            "n3"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "substitution-explicit",
+      "family": "substitution",
+      "split": "calibration",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 3,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 2,
+          "duration": 1,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "finger_substitution",
+          "notes": [
+            "n0"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null,
+      "substitutions": [
+        {
+          "note": "n0",
+          "beat": 1,
+          "from": 1,
+          "to": 2
+        }
+      ]
+    },
+    {
+      "id": "substitution-unknown",
+      "family": "substitution",
+      "split": "calibration",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 3,
+          "pitch": 60,
+          "finger": null,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 2,
+          "duration": 1,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "finger_substitution",
+          "notes": [
+            "n0"
+          ],
+          "observed": "unknown"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "geometry-white",
+      "family": "geometry",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 2,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0,
+          "duration": 2,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "simultaneous_chord",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "black_key_present",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "geometry-black",
+      "family": "geometry",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 2,
+          "pitch": 61,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0,
+          "duration": 2,
+          "pitch": 65,
+          "finger": 3,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "simultaneous_chord",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "black_key_present",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null,
+      "contrast": "geometry-white: same semitone span, different key geometry"
+    },
+    {
+      "id": "boundary-cross-bar",
+      "family": "boundary",
+      "split": "held_out",
+      "hand": "L",
+      "bpm": 100,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 3.5,
+          "duration": 0.5,
+          "pitch": 36,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 4,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 4.5,
+          "duration": 0.5,
+          "pitch": 55,
+          "finger": 2,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "pitch_displacement",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "cross_bar_transition",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "boundary-within-bar",
+      "family": "boundary",
+      "split": "held_out",
+      "hand": "L",
+      "bpm": 100,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 1.5,
+          "duration": 0.5,
+          "pitch": 36,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 2,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 2.5,
+          "duration": 0.5,
+          "pitch": 55,
+          "finger": 2,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "pitch_displacement",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "cross_bar_transition",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "tie-sustain",
+      "family": "tie",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 3,
+          "duration": 2,
+          "pitch": 67,
+          "finger": 4,
+          "voice": 2
+        },
+        {
+          "id": "n1",
+          "onset": 4,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "held_while_moving",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "new_attack_at_barline",
+          "notes": [
+            "n0"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null,
+      "ties": [
+        {
+          "note": "n0",
+          "boundary": 4
+        }
+      ]
+    },
+    {
+      "id": "tie-reattack",
+      "family": "tie",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 3,
+          "duration": 1,
+          "pitch": 67,
+          "finger": 4,
+          "voice": 2
+        },
+        {
+          "id": "n1",
+          "onset": 4,
+          "duration": 1,
+          "pitch": 67,
+          "finger": 4,
+          "voice": 2
+        },
+        {
+          "id": "n2",
+          "onset": 4,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "repeated_pitch",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "new_attack_at_barline",
+          "notes": [
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "rhythm-regular",
+      "family": "rhythm",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 90,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.5,
+          "duration": 0.5,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 1.5,
+          "duration": 0.5,
+          "pitch": 65,
+          "finger": 4,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "unequal_intervals",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null,
+      "easy_control": true
+    },
+    {
+      "id": "rhythm-unequal",
+      "family": "rhythm",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 90,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.25,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.25,
+          "duration": 0.75,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 1.5,
+          "duration": 0.5,
+          "pitch": 65,
+          "finger": 4,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "unequal_intervals",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "meter-tempo-change",
+      "family": "meter-tempo",
+      "split": "held_out",
+      "hand": "L",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          3,
+          4
+        ],
+        [
+          3,
+          2,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 2.5,
+          "duration": 0.5,
+          "pitch": 48,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 3,
+          "duration": 0.5,
+          "pitch": 50,
+          "finger": 4,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 3.5,
+          "duration": 0.5,
+          "pitch": 52,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 4,
+          "duration": 0.5,
+          "pitch": 53,
+          "finger": 2,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "cross_bar_transition",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null,
+      "tempo_map": [
+        [
+          0,
+          60
+        ],
+        [
+          3,
+          120
+        ]
+      ]
+    },
+    {
+      "id": "meter-tempo-constant",
+      "family": "meter-tempo",
+      "split": "held_out",
+      "hand": "L",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 2.5,
+          "duration": 0.5,
+          "pitch": 48,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 3,
+          "duration": 0.5,
+          "pitch": 50,
+          "finger": 4,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 3.5,
+          "duration": 0.5,
+          "pitch": 52,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 4,
+          "duration": 0.5,
+          "pitch": 53,
+          "finger": 2,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "cross_bar_transition",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "absent"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "rotation-ambiguous",
+      "family": "rotation",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 120,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.25,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.25,
+          "duration": 0.25,
+          "pitch": 67,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 0.5,
+          "duration": 0.25,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 0.75,
+          "duration": 0.25,
+          "pitch": 67,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "rotation",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "observed": "unknown"
+        },
+        {
+          "type": "tension",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "observed": "unknown"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "rotation-rested",
+      "family": "rotation",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 60,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.25,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 2,
+          "duration": 0.25,
+          "pitch": 67,
+          "finger": 5,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 4,
+          "duration": 0.25,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 6,
+          "duration": 0.25,
+          "pitch": 67,
+          "finger": 5,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "rotation",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "observed": "unknown"
+        },
+        {
+          "type": "tension",
+          "notes": [
+            "n0",
+            "n1",
+            "n2",
+            "n3"
+          ],
+          "observed": "unknown"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "thumb-under",
+      "family": "thumb",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 110,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.5,
+          "duration": 0.5,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 1.5,
+          "duration": 0.5,
+          "pitch": 65,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 2,
+          "duration": 0.5,
+          "pitch": 67,
+          "finger": 2,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n2",
+            "n3"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "thumb-over",
+      "family": "thumb",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 110,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.5,
+          "pitch": 67,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 0.5,
+          "duration": 0.5,
+          "pitch": 65,
+          "finger": 1,
+          "voice": 1
+        },
+        {
+          "id": "n2",
+          "onset": 1,
+          "duration": 0.5,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n3",
+          "onset": 1.5,
+          "duration": 0.5,
+          "pitch": 62,
+          "finger": 2,
+          "voice": 1
+        },
+        {
+          "id": "n4",
+          "onset": 2,
+          "duration": 0.5,
+          "pitch": 60,
+          "finger": 1,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n1",
+            "n2"
+          ],
+          "observed": "present"
+        }
+      ],
+      "expert_severity": null
+    },
+    {
+      "id": "thumb-reposition",
+      "family": "thumb",
+      "split": "held_out",
+      "hand": "R",
+      "bpm": 110,
+      "meter": [
+        [
+          0,
+          4,
+          4
+        ]
+      ],
+      "events": [
+        {
+          "id": "n0",
+          "onset": 0,
+          "duration": 0.25,
+          "pitch": 64,
+          "finger": 3,
+          "voice": 1
+        },
+        {
+          "id": "n1",
+          "onset": 3,
+          "duration": 0.5,
+          "pitch": 65,
+          "finger": 1,
+          "voice": 1
+        }
+      ],
+      "expected_features": [
+        {
+          "type": "crossing_candidate",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "present"
+        },
+        {
+          "type": "actual_thumb_motion",
+          "notes": [
+            "n0",
+            "n1"
+          ],
+          "observed": "unknown"
+        }
+      ],
+      "expert_severity": null,
+      "contrast": "long release gap permits alternative reposition"
+    }
+  ],
+  "repertoire": [
+    {
+      "composition": "bach-prelude",
+      "split": "development",
+      "path": "midi/Prelude_I_in_C_major,_BWV_846_-_Well_Tempered_Clavier_[First_Book].midi",
+      "git_blob": "3d462b0114e681791f1dce9e4074ec2817a031bb",
+      "ppq": 480,
+      "last_attack_tick": 65280,
+      "windows": [
+        {
+          "id": "bach-prelude-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "bach-prelude-2",
+          "start_tick": 15360,
+          "end_tick": 23040,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "bach-prelude-3",
+          "start_tick": 46080,
+          "end_tick": 53760,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "mozart-k545",
+      "split": "development",
+      "path": "midi/Mozart_-_Piano_Sonata_No_16_in_C_Major,_K_545,_1st_Movement.midi",
+      "git_blob": "ec08f9aa8ffe9fd173d96ef953902f0e71cfb6d2",
+      "ppq": 480,
+      "last_attack_tick": 279360,
+      "windows": [
+        {
+          "id": "mozart-k545-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "mozart-k545-2",
+          "start_tick": 15360,
+          "end_tick": 23040,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "mozart-k545-3",
+          "start_tick": 53760,
+          "end_tick": 61440,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "mozart-k545-4",
+          "start_tick": 107520,
+          "end_tick": 115200,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "satie-gymnopedie",
+      "split": "development",
+      "path": "midi/Gymnopédie_No_1_–_Satie.midi",
+      "git_blob": "fee90d4d078c3e35c4234432e97b262240ff574a",
+      "ppq": 480,
+      "last_attack_tick": 110880,
+      "windows": [
+        {
+          "id": "satie-gymnopedie-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "satie-gymnopedie-2",
+          "start_tick": 11520,
+          "end_tick": 19200,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "satie-gymnopedie-3",
+          "start_tick": 57600,
+          "end_tick": 65280,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "rachmaninoff-op3-2",
+      "split": "development",
+      "path": "midi/Prelude_in_C-sharp_Minor,_Opus_3_No_2_–_Sergei_Rachmaninoff.midi",
+      "git_blob": "0ca0bd286518b04f1d18de930e02319a8b93c351",
+      "ppq": 480,
+      "last_attack_tick": 116160,
+      "windows": [
+        {
+          "id": "rachmaninoff-op3-2-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "rachmaninoff-op3-2-2",
+          "start_tick": 15360,
+          "end_tick": 23040,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "rachmaninoff-op3-2-3",
+          "start_tick": 61440,
+          "end_tick": 69120,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "bach-invention1",
+      "split": "calibration",
+      "path": "midi/J_S_Bach_-_Invention_No_1_(BWV_772).midi",
+      "git_blob": "d8235e813fa782e36944e19ce69a130cbf02e1d3",
+      "ppq": 480,
+      "last_attack_tick": 40510,
+      "windows": [
+        {
+          "id": "bach-invention1-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "bach-invention1-2",
+          "start_tick": 11520,
+          "end_tick": 19200,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "bach-invention1-3",
+          "start_tick": 23040,
+          "end_tick": 30720,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "joplin-entertainer",
+      "split": "calibration",
+      "path": "midi/The_Entertainer_-_Scott_Joplin.midi",
+      "git_blob": "177a6236a919fea04b94140d22d9277a467ec8d1",
+      "ppq": 480,
+      "last_attack_tick": 145440,
+      "windows": [
+        {
+          "id": "joplin-entertainer-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "joplin-entertainer-2",
+          "start_tick": 15360,
+          "end_tick": 23040,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "joplin-entertainer-3",
+          "start_tick": 76800,
+          "end_tick": 84480,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "beethoven-op27-2",
+      "split": "held_out",
+      "path": "midi/Moonlight_Sonata_I.midi",
+      "git_blob": "932598486a28b0f6c1163db77a2e5506526e033a",
+      "ppq": 480,
+      "last_attack_tick": 130560,
+      "windows": [
+        {
+          "id": "beethoven-op27-2-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "beethoven-op27-2-2",
+          "start_tick": 15360,
+          "end_tick": 23040,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "beethoven-op27-2-3",
+          "start_tick": 61440,
+          "end_tick": 69120,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "chopin-op9-2",
+      "split": "held_out",
+      "path": "midi/Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+      "git_blob": "4828dfd0951e5aa3a85217f821040ed35306af74",
+      "ppq": 480,
+      "last_attack_tick": 100560,
+      "windows": [
+        {
+          "id": "chopin-op9-2-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "chopin-op9-2-2",
+          "start_tick": 15360,
+          "end_tick": 23040,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "chopin-op9-2-3",
+          "start_tick": 61440,
+          "end_tick": 69120,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "debussy-clair",
+      "split": "held_out",
+      "path": "midi/Clair_de_Lune_–_Debussy.midi",
+      "git_blob": "c74e3099dd2631ee6efa6fe27182366c9ef20abd",
+      "ppq": 480,
+      "last_attack_tick": 153672,
+      "windows": [
+        {
+          "id": "debussy-clair-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "debussy-clair-2",
+          "start_tick": 17280,
+          "end_tick": 24960,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "debussy-clair-3",
+          "start_tick": 69120,
+          "end_tick": 76800,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    },
+    {
+      "composition": "liszt-s541-3",
+      "split": "held_out",
+      "path": "midi/Liebestraum_S_541_No_3_in_A♭_Major_–_Liszt.midi",
+      "git_blob": "acfe7e49994cfef93fd23969f92da61e8e94b95d",
+      "ppq": 480,
+      "last_attack_tick": 280076,
+      "windows": [
+        {
+          "id": "liszt-s541-3-1",
+          "start_tick": 0,
+          "end_tick": 7680,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "liszt-s541-3-2",
+          "start_tick": 63360,
+          "end_tick": 71040,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        },
+        {
+          "id": "liszt-s541-3-3",
+          "start_tick": 181920,
+          "end_tick": 189600,
+          "context_before_ticks": 1920,
+          "context_after_ticks": 1920,
+          "hands": [
+            "L",
+            "R"
+          ],
+          "annotation_status": "unannotated"
+        }
+      ],
+      "tempo": "source tempo map; repeat at 0.5x",
+      "hand_assignment": "verify against score and approved fingering; MIDI tracks alone are insufficient",
+      "rights": "existing local repository source; edition/encoding rights not verified for redistribution"
+    }
+  ],
+  "excluded": {
+    "pathétique": "Original score/edition/hand unavailable; register externally and lock as independent case before any model tuning on it",
+    "others": "Non-classical or unverified source rights and multi-piece Hanon compilation excluded from v1; no inference about their difficulty."
+  }
+}
