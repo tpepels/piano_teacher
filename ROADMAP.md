@@ -11,12 +11,56 @@ Superseded designs, detailed audit checkpoints and earlier phase logs remain in 
 
 One Godot 4.7 desktop application, embedded CPython, native Verovio notation,
 one immutable score stream and a single MIDI/transport timeline. MIDI
-(`.mid`/`.midi`) and MusicXML (`.musicxml`/`.xml`/`.mxl`, converted to the same MIDI timeline) are the user imports. Generated MusicXML serves engraving.
+(`.mid`/`.midi`) and MusicXML (`.musicxml`/`.xml`/`.mxl`, linked directly to the same performance timeline) are the user imports. Generated MusicXML serves engraving.
 
 Each authored measure is learned alone, then with up to three preceding
 measures: **1; 2, 1–2; 3, 2–3, 1–3; 4, 3–4, 2–4, 1–4; 5, 4–5, 3–5, 2–5**.
 Each window advances Right → Left → Together and Listen → Free → Tempo.
 The separate final examination uses the whole original piece.
+
+## Desktop runtime dependency audit (2026-11-28)
+
+The [audit implementation record](docs/runtime-dependency-audit.md#implementation-record)
+covers the dependency decisions. A1 uses music21’s performed events and
+their written source objects without writing an intermediate MIDI file.
+Across five compressed repertoire scores, 3,272 attacks matched the previous
+source IDs, pitches, hands, tracks/channels, velocities and onset/release
+times on both music21 9.9.2 and 10.5.2. The saved Für Elise left-hand window
+(1–2), its fingerprint and its manual finger on A2 survived reopening.
+Corrections without a matching attack are preserved and reported.
+
+Written spelling, supported clefs, selected articulations, compatible
+tie/tuplet/beam details, single eighth/sixteenth grace notes, and slurs
+with both ends in one displayed measure can now inform the retained score.
+Across the five whole pieces all 80 such slurs had native fragments. An
+earlier trial with cross-measure slurs left missing fragments on every
+piece. Historical pickup windows also differ from the written grid on all
+five pieces. Keep those windows for saved mastery and grade the same attacks.
+Grouped graces, cross-measure slurs and arbitrary printed-page reproduction
+remain outside the verified notation coverage.
+
+A3 prepares imports and corrections separately from command dispatch.
+Three alternating cold native runs placed Stop during open at 36–66 ms
+(previously 906–1,339 ms) and Stop during correction at 9–38 ms
+(previously 707–1,115 ms). Source replacement, failure and ordered edits
+are covered in the [source lane measurements](docs/asset-worker.md#source-command-latency-a3-2026-11-28).
+An in-flight notation read retries within its original deadline if a
+correction replaces its piece at the same score revision.
+
+A4 reads Cairo coverage directly before encoding final white ink. All 48
+captured engraving fragments reproduced identical bounds and PNG bytes. In
+12 alternating runs the median for that fragment batch went from 498 to
+440 ms on this host. Ordinary passages ship 15 note templates. Passages
+with slashed graces additionally receive four genuine Verovio templates,
+with all 19 templates matching the original full-atlas bytes. A6
+preserved all Coda catalog outputs for 1,240 windows from 17 pieces and
+removed the dense research matrices from the application import path.
+A7 reduced public score reads to the bound model and layout in one bundle.
+A5 retains the optional sampled piano and the basic offline piano. They
+rendered the same four-second passage with identical frame counts. Removing
+the basic instrument would leave clean installations without Listen.
+A8 builds Linux releases from runtime entry points and records their file
+sizes, native dependencies, wheel versions, model/font hashes and notices.
 
 ## Python ONNX fingering (A2, 2026-11-28)
 

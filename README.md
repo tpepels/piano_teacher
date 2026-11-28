@@ -14,7 +14,7 @@ Work on a small passage, hear how it sounds, find its notes at your own pace,
 then bring it up to the original tempo. Piano Teacher guides each window through
 **Listen → Free → Tempo**, with the right hand, left hand and both together.
 
-- **Your music.** Open a `.mid` or `.midi` file. The lessons keep the original
+- **Your music.** Open MIDI or MusicXML, including compressed `.mxl` files. The lessons keep the original
   notes and complete held endings; simplified exercises are announced.
 - **A manageable next step.** Introduce one measure, then connect it with up to
   three preceding measures. Each window keeps its own progress.
@@ -31,7 +31,7 @@ all moving windows, the final test brings the whole original piece together.
 ## Start a session
 
 1. Launch Piano Teacher and connect your MIDI piano in Settings.
-2. Open a MIDI file from your music.
+2. Open a MIDI or MusicXML file from your music.
 3. Listen to the first measure, then play its notes when Free begins.
 
 The flow advances automatically. **Pause/Resume** and **Listen again** stay on

@@ -232,6 +232,15 @@ export PIANO_GODOT_BINARY=/absolute/path/to/godot
 bash scripts/package-inprocess.sh
 ```
 
+The build requires `readelf` and `ldd` to inspect the staged ELF files. It writes
+`dist/runtime-inventory.json` alongside the archive with wheel versions and
+owners, per-file sizes, hashes for model and font assets, and native library
+requirements. The desktop uses host graphics, MIDI and audio drivers and
+Cairo. Sampled Listen also uses the installed FluidSynth library and SF2.
+Run `bash scripts/verify-embedded-production-local.sh --package-only` for the
+relocated-package checks. Set `PIANO_TEACHER_SOUNDFONT` to exercise a custom
+bank in addition to the clean installation's basic piano.
+
 The Python prefix must include shared libpython, the CPU ONNX Runtime wheel
 with its license and third-party notices, and the other runtime dependencies.
 The native extension must use its matching ABI. Output is

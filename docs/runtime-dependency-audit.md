@@ -2,7 +2,20 @@
 
 **Baseline:** [ae95edd739003ed5908546b2e3f19ecaa583f347](https://github.com/tpepels/piano_teacher/tree/ae95edd739003ed5908546b2e3f19ecaa583f347)  
 **Audit date:** 2026-11-28  
-**Status:** static source inspection and review of existing recorded benchmarks; no remediation or new runtime measurements performed by this audit.
+**Status:** Sections 2–6 record the original audit and its acceptance criteria. The implementation record below supersedes historical descriptions of the runtime. Release verification and pending owner acceptance are recorded in [ROADMAP.md](../ROADMAP.md).
+
+## Implementation record
+
+| Finding | Current disposition |
+| --- | --- |
+| A1 · MusicXML | The importer uses music21 to link performed attacks to written notes directly. Historical attack ordinals and practice windows retain the identity used by progress and manual corrections. The native renderer can project compatible authored marks onto lesson excerpts. |
+| A2 · Automated fingers | Retain the two original Lumikey models and the bounded Python ONNX worker. The previous JavaScript parity results remain the reference. |
+| A3 · Command latency | A bounded source lane prepares selections off the command thread. The command thread validates and installs the prepared result. A later selection supersedes a pending open. Accepted corrections retain their ordered commit. [Measured Stop and Pause latency](asset-worker.md#source-command-latency-a3-2026-11-28) |
+| A4 · Rendering | Cairo's alpha channel is read directly, eliminating one PNG encode, decode and conversion per beam or tuplet fragment. Pillow still crops the mask and encodes the published texture. Verovio, Cairo and Pillow each retain a production consumer. |
+| A5 · Listen | Retain both offline instruments. On this host a four-second Bach passage rendered 176,400 non-silent frames at 44.1 kHz on each path. The basic WAV used 352,844 bytes in mono and the sampled WAV used 705,644 bytes in stereo. A first render took 98 ms and 529 ms respectively in one development run. The installed Salamander SF2 alone used 1,266,462,334 bytes. Requiring it would remove Listen from a clean installation. The upstream 296 MiB download is attributed to Alexander Holm under CC BY 3.0. The optional host FluidSynth library has its own terms. [FreePats instrument and license](https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html) · [FluidSynth license](https://github.com/FluidSynth/fluidsynth/blob/master/LICENSE) |
+| A6 · Remediation | Production Coda selects original hand and voice indices and performs sparse transformations without importing dense NumPy reference matrices or research XML analysis. Research references remain in the checkout. Output agreed with the old full catalog for 1,240 windows across all 17 repertoire pieces. The Fukuda path stays in the application, and ONNX still requires NumPy. |
+| A7 · Score commands | Godot and the player journeys use `score.bundle` for bound semantic and layout data. The two partial operations have been removed from routing, native classification and the child. |
+| A8 · Packaging | Release staging follows application entry points, resource references and runtime wheel records. The build writes a per-file size, wheel, model, font and ELF dependency report. Host drivers, dynamic Cairo and optional FluidSynth remain explicit dependencies. |
 
 ## 1. Purpose and constraints
 
