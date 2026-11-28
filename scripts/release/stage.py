@@ -115,11 +115,9 @@ def wheel_runtime(path):
         # fontTextLiberation defaults to false throughout our engraving pipeline.
         return False
     if parts[0] == "music21":
-        # Importer code and its schema. Upstream's optional corpus, Scala scales
+        # Importer code. Upstream's optional corpus, Scala scales
         # and format samples carry independent rights and have no app consumer.
-        return (path.suffix == ".py"
-                or path.name.lower() in {"license", "license.txt"}
-                or parts == ("music21", "musicxml", "musicxml.xsd"))
+        return path.suffix == ".py" or path.name.lower() in {"license", "license.txt"}
     if parts[0] == "onnxruntime" and len(parts) > 2 and parts[1] != "capi":
         return False
     return not {"tests", "benchmarks", "sample_data"} & set(parts)

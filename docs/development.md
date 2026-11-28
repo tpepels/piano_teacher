@@ -274,9 +274,9 @@ and original Verovio sdist, and `PIANO_FLUIDSYNTH_SOURCE` pointing to the
 source archive included under `licenses/FluidSynth/`.
 [Bundled library sources](../scripts/release/Library-sources.txt) · [GNU distribution FAQ](https://www.gnu.org/licenses/gpl-faq.html#UnchangedJustBinary)
 
-The music21 importer uses its Python modules and MusicXML schema. The
-export excludes its optional repertoire, format samples and Scala scale
-archive. Individual works in those collections have independent rights.
+The music21 importer parses MusicXML using its Python modules. The
+export excludes its unused 2008 validation schema, optional repertoire,
+format samples and Scala scale archive. Individual works in those collections have independent rights.
 Verovio's optional Liberation font is omitted because the renderer leaves
 `fontTextLiberation` disabled. The software still ships the five music
 fonts listed in its font notice. Lumikey's upstream npm declaration covers
