@@ -7,6 +7,7 @@ const Engraving := preload("res://notation/native/score_engraving.gd")
 const Geometry := preload("res://notation/native/geometry.gd")
 const Spacing := preload("res://notation/shared/spacing_policy.gd")
 const LivingScore := preload("res://living_score.gd")
+const StreamQueue := preload("res://score_stream_queue.gd")
 
 var body: PackedByteArray
 var request: Dictionary
@@ -87,6 +88,7 @@ func _fit() -> void:
         result["error"] = engraving.failure_reason
     else:
         engraving.glyphs.prepare_status_sizes(engraving.gap(),screen_scale)
+        engraving.glyphs.begin_upload()
     var elapsed: float = float(Time.get_ticks_usec()-started)*.001
     result["timing"]["geometry_cpu_ms"] += elapsed
     result["timing"]["total_ms"] += elapsed
@@ -116,8 +118,9 @@ func run() -> void:
     if not _prepare_atlas(engraving,bundle["layout"]):
         return
     var atlas_at: int = Time.get_ticks_usec()
+    # The source key is pure CPU work and stable across viewport refits.
+    engraving.stream_source_key = StreamQueue.source_identity(axis.model)
     # The main thread receives the sole owner after the pool task joins.
-    engraving.glyphs.begin_upload()
     var layout: Dictionary = bundle["layout"]
     result = {"engraving":engraving,"attacks":layout["attack_map"],
         "source_groups":LivingScore.prepare(layout),

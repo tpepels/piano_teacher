@@ -73,11 +73,17 @@ func prepare_head_interiors() -> void:
 
 func begin_upload() -> void:
     _assets.begin_upload()
+    # The worker's derived head sizes participate in the same bounded
+    # upload as the original glyphs. Do not re-rasterize or draw a second
+    # batch of warmup nodes during score-ready publication.
+    for head in _prepared_head_sizes:
+        _assets.append_upload_catalog(_prepared_head_sizes[head])
 
 func rewind_upload() -> void:
     _assets.rewind_upload()
 
 func prepare_status_sizes(gap: float, screen_scale: Vector2) -> void:
+    _prepared_head_sizes.clear()
     var scales: Array = [1.0,StatusInk.CORE_INNER[0]]
     for ring in StatusInk.BLEED:
         scales.append(ring[0])
@@ -89,7 +95,7 @@ func prepare_status_sizes(gap: float, screen_scale: Vector2) -> void:
         var known: Dictionary = _last_head_sizes.get(head,{})
         _head_size_lock.unlock()
         if known.get("image") == image and known.get("size") == base_size:
-            _prepared_head_sizes[head] = known["sizes"]
+            _prepared_head_sizes[head] = known["sizes"].duplicate()
             continue
         var sizes := {}
         for scale: float in scales:
@@ -99,13 +105,17 @@ func prepare_status_sizes(gap: float, screen_scale: Vector2) -> void:
         _head_size_lock.lock()
         _last_head_sizes[head] = {"image":image,"size":base_size,"sizes":sizes}
         _head_size_lock.unlock()
-        _prepared_head_sizes[head] = sizes
+        _prepared_head_sizes[head] = sizes.duplicate()
 
 func upload_step(budget_usec: int = 2000) -> bool:
     if not _assets.upload_step(budget_usec):
         return false
+    prune_display_cache()
     for head in _prepared_head_sizes:
-        textures[head].set_meta("verovio_status_sizes",_prepared_head_sizes[head])
+        var original: Texture2D = textures[head]
+        for size in _prepared_head_sizes[head]:
+            var prepared: Texture2D = _prepared_head_sizes[head][size]
+            _display_cache[_display_key(original,size)] = [weakref(original),prepared]
     _prepared_head_sizes.clear()
     return true
 
@@ -386,6 +396,9 @@ static func prune_display_cache() -> void:
         if entry.size() != 2 or (entry[0] as WeakRef).get_ref() == null:
             _display_cache.erase(key)
 
+static func _display_key(texture: Texture2D, size: Vector2i) -> String:
+    return "%d|%d|%d" % [texture.get_instance_id(),size.x,size.y]
+
 static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     var source := Vector2i(texture.get_width(),texture.get_height())
     var width: int = clampi(roundi(wanted.x),1,source.x)
@@ -394,19 +407,16 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
         return texture
     # Instance ids are never reused while the object lives; the weak
     # reference rejects an entry whose source texture has been freed.
-    var key: String = "%d|%d|%d" % [texture.get_instance_id(),width,height]
+    var key: String = _display_key(texture,Vector2i(width,height))
     var cached: Array = _display_cache.get(key,[])
     if cached.size() == 2 and (cached[0] as WeakRef).get_ref() == texture:
         return cached[1]
     var size := Vector2i(width,height)
-    var prepared: Dictionary = texture.get_meta("verovio_status_sizes",{})
-    var pixels: Image = prepared.get(size)
-    if pixels == null:
-        var source_image: Image = texture.get_meta("verovio_cpu_image") if \
-            texture.has_meta("verovio_cpu_image") else texture.get_image()
-        if source_image == null or source_image.is_empty():
-            return texture
-        pixels = _resample(source_image,size)
+    var source_image: Image = texture.get_meta("verovio_cpu_image") if \
+        texture.has_meta("verovio_cpu_image") else texture.get_image()
+    if source_image == null or source_image.is_empty():
+        return texture
+    var pixels: Image = _resample(source_image,size)
     var sized := ImageTexture.create_from_image(pixels)
     _display_cache[key] = [weakref(texture),sized]
     return sized

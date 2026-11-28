@@ -4,7 +4,6 @@ extends RefCounted
 ## admission in ONE transaction-like order before any stage is painted.
 ## Main owns the scene tree and event requests, not this domain sequence.
 const TempoTimeline := preload("res://tempo_timeline.gd")
-const StatusHeadPreloader := preload("res://status_head_preloader.gd")
 
 var visual_clock
 var score_flow
@@ -22,7 +21,6 @@ var source_groups: Array = []
 var frame_diagnostics := false
 var listen_diagnostics := false
 var smoke := false
-var _status_preloader := StatusHeadPreloader.new()
 
 func _init(clock, flow, guided_owner, assets, score_runway,
         score_gateway, practice, effects, demo) -> void:
@@ -76,7 +74,6 @@ func _score_published(revision: int) -> void:
     var renderer = practice_view.stage.renderer
     print("NATIVE_MODEL_READY: ",revision," NOTES: ",renderer.timeline.notes.size(),
         " DENSITY: ",renderer.timeline.pixels_per_beat)
-    _status_preloader.warm(renderer)
 
 func _score_failed(message: String) -> void:
     if smoke:

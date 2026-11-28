@@ -259,7 +259,7 @@ func install_prepared_score(prepared) -> bool:
     density_locked = false
     practice_contract_error = ""
     notice = ""
-    if not _stream_controller.bind_source(timeline.model):
+    if not _stream_controller.bind_source(timeline.model,prepared.stream_source_key):
         failure_reason = "Cannot recover offline score material: " + \
             _stream_controller.source_identity_error()
         notice = failure_reason

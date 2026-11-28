@@ -156,6 +156,12 @@ func begin_upload() -> void:
         for part in catalog:
             _upload_queue.append([catalog,part,""])
 
+# These exclusively owned dictionaries hold derived CPU images, just like
+# the regular atlas. Rewind restores their images through the same catalog.
+func append_upload_catalog(catalog: Dictionary) -> void:
+    for key in catalog:
+        _upload_queue.append([catalog,key,""])
+
 func upload_step(budget_usec: int = 2000) -> bool:
     var deadline: int = Time.get_ticks_usec()+budget_usec
     while _upload_index < _upload_queue.size():

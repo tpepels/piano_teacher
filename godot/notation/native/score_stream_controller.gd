@@ -60,9 +60,11 @@ func online_snapshot() -> Array:
     # Admission PREPARE reads a frozen copy, never the live FIFO array.
     return queue.online.duplicate(true)
 
-func bind_source(candidate: Dictionary) -> bool:
-    # Offline/history continuity is owned by the sole immutable FIFO.
-    return queue.bind_score(StreamQueue.source_identity(candidate))
+func bind_source(candidate: Dictionary, prepared_key: String = "") -> bool:
+    # Production jobs hash the validated immutable score before installation.
+    # Geometry-only test fixtures can still compute the key here.
+    var key: String = prepared_key if not prepared_key.is_empty() else StreamQueue.source_identity(candidate)
+    return queue.bind_score(key)
 
 func source_identity_error() -> String:
     return queue.last_error

@@ -16,6 +16,8 @@ const NotationClipPlanner := preload("res://notation/native/notation_clip_planne
 const RenderPass := preload("res://notation/native/render_pass.gd")
 const MAX_STAFF_GAP := ViewportFit.MAX_STAFF_GAP
 var timeline
+# Precomputed by the detached preparation job, independent of viewport.
+var stream_source_key := ""
 var glyphs = VerovioGlyphs.new():
     set(value):
         glyphs = value
@@ -63,6 +65,7 @@ func _init(axis) -> void:
     context_painter = ContextPainter.new(layout,symbols)
 
 func clear(axis) -> void:
+    stream_source_key = ""
     timeline = axis
     layout.timeline = axis
     annotations.clear()
