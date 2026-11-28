@@ -413,13 +413,36 @@ func _timed_suffix_size(passes: Array, world: float, density: float,
         return 0
     return suffix.size()
 
+# A source already exposed cannot be removed, but its unexposed trailing
+# preparation rest is not source material. A replacement count-in will
+# print its own rest. Preserve the admitted source and its original journal
+# plan; never archive a rest as a new recoverable source.
+func _unseen_trailing_rest(passes: Array, world: float, density: float,
+        gap: float, duration: float, width: float, playhead: float) -> bool:
+    if passes.size() < 2:
+        return false
+    var rest: Dictionary = passes[-1]
+    var source: Dictionary = passes[-2]
+    if str(rest.get("kind","")) != "rest" or \
+            str(rest.get("rest_position","after")) != "after" or \
+            str(source.get("kind","source")) != "source" or \
+            owner_id(rest) != owner_id(source) or bool(rest.get("ever_visible",false)):
+        return false
+    var bounds: Vector2 = Admission.clip_bounds(rest,density,gap,duration)
+    var first_x: float = playhead+(float(rest["world_origin"])-world-.25)*density+bounds.x
+    return first_x > width
+
 func preview_timed_withdrawal(world: float, density: float, gap: float,
         duration: float, width: float, playhead: float) -> Array:
     var preview: Dictionary = preview_tail_withdrawal(
         world,density,gap,duration,width,playhead)
     var remaining: Array = preview["remaining"]
     var count: int = _timed_suffix_size(remaining,world,density,gap,duration,width,playhead)
-    return remaining.slice(0,remaining.size()-count) if count > 0 else remaining
+    if count > 0:
+        return remaining.slice(0,remaining.size()-count)
+    if _unseen_trailing_rest(remaining,world,density,gap,duration,width,playhead):
+        remaining.pop_back()
+    return remaining
 
 func withdraw_timed_tail(owner: Control, world: float, density: float,
         gap: float, duration: float, width: float, playhead: float,
@@ -428,6 +451,10 @@ func withdraw_timed_tail(owner: Control, world: float, density: float,
         width,playhead,reason)
     var count: int = _timed_suffix_size(online,world,density,gap,duration,width,playhead)
     if count <= 0:
+        if _unseen_trailing_rest(online,world,density,gap,duration,width,playhead):
+            var rest: Dictionary = online.pop_back()
+            removed.append(int(rest["serial"]))
+            Lifecycle.retire(owner,rest)
         return removed
     var first: int = online.size()-count
     var serial: int = owner_id(online[-1])

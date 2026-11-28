@@ -25,6 +25,7 @@ var retry_countdown_seen := false
 var retry_audio_seen := false
 var retry_audio_at_request := -1
 var retry_rest_seen := false
+var retry_playing_since := -1
 var resumed_bpm := 0.0
 var selected_bpm := 0.0
 var selected_revision := -1
@@ -314,6 +315,12 @@ func _process(_delta: float) -> bool:
                     "ready=%s matched=%s early=%s rest=%s" % [
                     str(_ready_score()),str(reserved_match),
                     str(wrong_side),str(retry_rest_seen)])
+                return false
+            if retry_playing_since < 0:
+                retry_playing_since = now
+            # Capture at least one full stable-tempo analysis window after
+            # the real Retry downbeat before switching to Listen.
+            if now-retry_playing_since < 1250:
                 return false
             if not _press(app.practice_view.listen_button,"Listen"):
                 return false

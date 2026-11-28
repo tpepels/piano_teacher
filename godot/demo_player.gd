@@ -18,6 +18,24 @@ var acknowledged := false
 var started := false
 var downloading := false
 var audio_error := false
+
+# A Listen response may contain megabytes of PCM. Decode an exclusively
+# owned resource off the scene thread; only publish the matching token
+# after the task finishes. Never wait for a running decode during navigation.
+class DecodeJob extends RefCounted:
+    var body: PackedByteArray
+    var generation: int
+    var stream: AudioStreamWAV
+    func run() -> void:
+        stream = AudioStreamWAV.load_from_buffer(body)
+        body = PackedByteArray()
+        if stream != null and stream.data.is_empty():
+            stream = null
+
+var _decode_generation := 0
+var _decode_id := -1
+var _decode_job: DecodeJob
+var _queued_decode: DecodeJob
 # Independent local gain for the recorded piano; no MIDI output changes.
 var listen_volume_db := 6.0
 
@@ -134,25 +152,47 @@ func _downloaded(code: int, body: PackedByteArray) -> void:
         audio_error = true
         failed.emit("Listen audio could not load. Try Listen again.")
         return
-    # Listen owns its private audio file, rather than asking a generic
-    # command adapter to emulate HTTP downloads.
-    var output := FileAccess.open(audio_path, FileAccess.WRITE)
-    if output == null:
-        audio_error = true
-        failed.emit("Cannot save prepared Listen audio.")
+    var job := DecodeJob.new()
+    job.generation = _decode_generation
+    job.body = body
+    downloading = true
+    _queued_decode = job
+    _start_decode()
+
+func _start_decode() -> void:
+    if _decode_id >= 0 or _queued_decode == null:
         return
-    output.store_buffer(body)
-    output.close()
-    var stream := AudioStreamWAV.load_from_file(audio_path)
-    if stream == null or stream.data.is_empty():
+    _decode_job = _queued_decode
+    _queued_decode = null
+    _decode_id = WorkerThreadPool.add_task(_decode_job.run,false,"Decode Listen PCM")
+    if _decode_id < 0:
+        _decode_job = null
+        downloading = false
         audio_error = true
-        failed.emit("Listen audio could not be decoded. Try Listen again.")
-        return
-    player.stream = stream
-    loaded = true
-    prepared.emit(token, revision)
+        failed.emit("Cannot start Listen audio decoding.")
+
+func _process(_delta: float) -> void:
+    if _decode_id >= 0 and WorkerThreadPool.is_task_completed(_decode_id):
+        var joined: Error = WorkerThreadPool.wait_for_task_completion(_decode_id)
+        var job: DecodeJob = _decode_job
+        _decode_job = null
+        _decode_id = -1
+        if job.generation == _decode_generation and not token.is_empty():
+            downloading = false
+            if joined != OK or job.stream == null:
+                audio_error = true
+                failed.emit("Listen audio could not be decoded. Try Listen again.")
+            else:
+                player.stream = job.stream
+                loaded = true
+                prepared.emit(token,revision)
+    _start_decode()
 
 func clear() -> void:
+    if token.is_empty() and not downloading and not loaded and not started and not audio_error:
+        return
+    _decode_generation += 1
+    _queued_decode = null
     if is_instance_valid(request):
         request.cancel_request()
     if is_instance_valid(player):
@@ -174,3 +214,7 @@ func clear() -> void:
 
 func _exit_tree() -> void:
     clear()
+    if _decode_id >= 0:
+        WorkerThreadPool.wait_for_task_completion(_decode_id)
+        _decode_id = -1
+    _decode_job = null

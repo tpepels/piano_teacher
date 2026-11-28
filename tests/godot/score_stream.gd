@@ -209,6 +209,33 @@ func run() -> void:
         "Detached rest reset cannot duplicate the already archived original source")
     slow_canvas.free()
 
+    # Resume must not drag an unseen trailing rest behind already printed
+    # source ink before adding ANOTHER complete count-in.
+    var trim_canvas := Control.new()
+    root.add_child(trim_canvas)
+    var trim_pool := Pool.new()
+    var trim_controller := Controller.new()
+    trim_pool.install(trim_canvas,windows)
+    trim_controller.bind_surface(trim_canvas,trim_pool,
+        func(_beat: float) -> Array[Vector2]: return windows)
+    check(not trim_controller.place_timeline_take(geometry(0.0),0.0,10.0,6.7,0.4,4.0).is_empty(),
+        "Trailing-rest fixture is admitted")
+    acknowledge(trim_controller,0.0,"piece|7|10|practice","trim")
+    var trim_queue = trim_controller.queue
+    var source: Dictionary = trim_queue.online[-2]
+    var rest: Dictionary = trim_queue.online[-1]
+    source["ever_visible"] = true
+    var source_slot: String = str(source["slot_id"])
+    var preview: Array = trim_queue.preview_timed_withdrawal(0.0,100.0,10.0,4.0,670.0,200.0)
+    check(preview.size() == trim_queue.online.size()-1 and str(preview[-1]["slot_id"]) == source_slot,
+        "Preview drops only unseen trailing silence")
+    var removed: Array[int] = trim_queue.withdraw_timed_tail(trim_canvas,0.0,100.0,10.0,4.0,670.0,200.0,"resume")
+    check(removed.size() == 1 and str(trim_queue.online[-1]["slot_id"]) == source_slot,
+        "Withdrawal matches preview and keeps the source identity")
+    check(trim_queue.has_take(int(source["take_owner"])), "Rest removal cannot discard its source take")
+    check(trim_queue.offline.is_empty(),"Unseen silence is not a separate recoverable source")
+    trim_canvas.free()
+
     # Free (owner report 2026-11-25): Python holds the staff at the target
     # it schedules from the view's reported travel distance; the passage
     # must be drawn exactly there, on an empty staff and after a take.
