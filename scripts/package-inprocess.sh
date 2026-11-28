@@ -20,31 +20,10 @@ test -e "$PY_LIB_DIR/libpython$PY_VERSION.so" || {
 "$PY" -c 'import mido, rtmidi, verovio, cairosvg, PIL, onnxruntime'
 STAGE="$PWD/dist/piano-teacher-linux-x86_64"
 rm -rf "$STAGE"
-mkdir -p "$STAGE/runtime" "$STAGE/bin" "$STAGE/piano_teacher/fingering/models"
-cp -a godot "$STAGE/godot"
-tar -C piano_teacher --exclude='./fingering' -cf - . | tar -C "$STAGE/piano_teacher" -xf -
-install -m 644 piano_teacher/fingering/*.py piano_teacher/fingering/THIRD_PARTY_NOTICES.md \
-  "$STAGE/piano_teacher/fingering/"
-for hand in left right; do
-  install -m 644 "piano_teacher/fingering/models/fingering_transformer_$hand.onnx" \
-    "$STAGE/piano_teacher/fingering/models/"
-done
-# Imported test/repertoire MIDI files are development data, not redistributable app assets.
-# Stage only the actual Python runtime. Copying the complete hosted-toolcache
-# prefix also copies developer tools, headers and caches; its audit timed out.
-mkdir -p "$STAGE/runtime/python/bin" "$STAGE/runtime/python/lib"
-cp -L "$PIANO_BUNDLED_PYTHON_HOME/bin/python3" "$STAGE/runtime/python/bin/python3"
-chmod +x "$STAGE/runtime/python/bin/python3"
-for library in "$PY_LIB_DIR"/*.so*; do
-  [[ -e "$library" ]] || continue
-  cp -a "$library" "$STAGE/runtime/python/lib/"
-done
-tar -C "$PY_LIB_DIR" \
-  --exclude='*/__pycache__' --exclude='*.pyc' \
-  --exclude="python$PY_VERSION/site-packages/piano_teacher" \
-  -cf - "python$PY_VERSION" | tar -C "$STAGE/runtime/python/lib" -xf -
+mkdir -p "$STAGE/bin" "$STAGE/licenses"
+PYTHONDONTWRITEBYTECODE=1 "$PY" scripts/release/stage.py "$STAGE"
+install -m 644 scripts/release/Verovio-fonts.txt scripts/release/godot-cpp-LICENSE.md "$STAGE/licenses/"
 cp "$PIANO_GODOT_BINARY" "$STAGE/bin/godot"
-find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
 cat > "$STAGE/PianoTeacher" <<'LAUNCH'
 #!/usr/bin/env bash
 set -Eeuo pipefail
@@ -56,43 +35,27 @@ export LD_LIBRARY_PATH="$HERE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_
 PY_VER="$("$HERE/runtime/python/bin/python3" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 export PYTHONPATH="$HERE:$HERE/runtime/python/lib/python$PY_VER/site-packages"
 export PATH="$HERE/bin:$PATH"
+export PYTHONNOUSERSITE=1
 # CI verifies the installed *package*, from a relocated clean extraction.
 # This opt-in mode never touches normal desktop startup or the score clock.
 if [[ "${PIANO_TEACHER_HEADLESS_SMOKE:-0}" == "1" ]]; then
-  exec "$HERE/bin/godot" --headless --audio-driver Dummy --quit-after 1200 \
+  exec "$HERE/bin/godot" --headless --audio-driver Dummy --max-fps 60 --quit-after 1800 \
     --path "$HERE/godot" -- --in-process
 fi
 exec "$HERE/bin/godot" --path "$HERE/godot" -- --in-process "$@"
 LAUNCH
 chmod +x "$STAGE/PianoTeacher"
-# Distribution must not contain project development plugins that open
-# localhost services. Keep the application runtime independent of MCP.
-python3 - "$STAGE/godot/project.godot" <<'PY'
-from pathlib import Path
-import sys
-p = Path(sys.argv[1])
-s = p.read_text()
-s = s.replace('[autoload]\n\nMCPRuntimeServer="*res://addons/godot_mcp_toolkit/runtime/mcp_runtime_server.gd"\n\n', '')
-s = s.replace('[editor_plugins]\n\nenabled=PackedStringArray("res://addons/godot_mcp_toolkit/plugin.cfg")\n\n', '')
-p.write_text(s)
-PY
-# Development smoke fixtures are source-only. The standalone package has
-# one entry scene; test scripts and their imported .uid files are excluded.
-rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot"
-rm -f "$STAGE/godot/.mcp.json"
-for fixture in native_bridge_smoke production_ui_smoke production_session_journey production_fake_midi_journey; do
-  rm -f "$STAGE/godot/$fixture.gd" "$STAGE/godot/$fixture.gd.uid"
-done
-python3 scripts/verify-package-contents.py --root "$STAGE" --package
 # The released folder cannot rely on the editor's first-launch importer.
 # Compile real Ogg/assets into the staged project with the bundled Godot
 # editor in CI, then preserve ONLY its required imported runtime bytes.
 # The editor cache itself, development scripts and test sources stay out.
-env PYTHONHOME="$STAGE/runtime/python" \
+env PYTHONDONTWRITEBYTECODE=1 PYTHONHOME="$STAGE/runtime/python" \
   PYTHONPATH="$STAGE:$STAGE/runtime/python/lib/python$PY_VERSION/site-packages" \
   LD_LIBRARY_PATH="$STAGE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
   timeout 90s "$STAGE/bin/godot" --headless --editor --import --path "$STAGE/godot"
 test -d "$STAGE/godot/.godot/imported"
+"$STAGE/bin/godot" --headless --path "$STAGE/godot" --script "$PWD/scripts/release/godot_licenses.gd" \
+  -- "$STAGE/licenses/Godot.txt"
 for name in ichi ni san shi; do
   test -s "$STAGE/godot/assets/countin/$name.ogg"
   test -s "$STAGE/godot/assets/countin/$name.ogg.import"
@@ -105,14 +68,15 @@ for name in ichi ni san shi; do
 done
 find "$STAGE/godot/.godot" -mindepth 1 -maxdepth 1 \
   ! -name imported -exec rm -rf {} +
+find "$STAGE" -name __pycache__ -type d -prune -exec rm -rf {} +
 # Verify that the runtime's independently built import bytes are included.
 python3 scripts/verify-package-contents.py --root "$STAGE" --package
 # Validate imports through the assembled prefix, not the builder environment.
-env PYTHONHOME="$STAGE/runtime/python" \
+env PYTHONDONTWRITEBYTECODE=1 PYTHONHOME="$STAGE/runtime/python" \
   PYTHONPATH="$STAGE:$STAGE/runtime/python/lib/python$PY_VERSION/site-packages" \
   LD_LIBRARY_PATH="$STAGE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  "$STAGE/runtime/python/bin/python3" - <<'PY'
-import piano_teacher, mido, rtmidi, verovio, cairosvg, PIL, onnxruntime
+  "$STAGE/runtime/python/bin/python3" -P - <<'PY'
+import piano_teacher, music21, mido, rtmidi, verovio, cairosvg, PIL, onnxruntime
 from piano_teacher.fingering.model_assets import ONNX_RUNTIME_VERSION
 
 if onnxruntime.__version__ != ONNX_RUNTIME_VERSION:
@@ -120,6 +84,7 @@ if onnxruntime.__version__ != ONNX_RUNTIME_VERSION:
 if "CPUExecutionProvider" not in onnxruntime.get_available_providers():
     raise SystemExit("Bundled ONNX Runtime must provide the CPU execution provider")
 PY
+python3 scripts/release/inventory.py "$STAGE" > dist/runtime-inventory.json
 # Phase 5 gates the assembled real runtime. Creating and clean-machine
 # executing the compressed distributable is a separate Phase 7 release gate.
 if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then
@@ -127,4 +92,5 @@ if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 tar -C dist -czf dist/piano-teacher-linux-x86_64.tar.gz piano-teacher-linux-x86_64
-echo "Package: dist/piano-teacher-linux-x86_64.tar.gz"
+du -sb "$STAGE" dist/piano-teacher-linux-x86_64.tar.gz
+echo "Package: dist/piano-teacher-linux-x86_64.tar.gz (inventory: dist/runtime-inventory.json)"

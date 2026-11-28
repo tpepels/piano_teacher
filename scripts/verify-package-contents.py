@@ -8,9 +8,17 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
+import re
+from importlib.metadata import distributions
 from pathlib import Path
 
-DEV_ONLY_GODOT_PATHS = (
+DEVELOPMENT_PATHS = (
+    "godot/addons",
+    "godot/.mcp.json",
+    "midi",
+    "godot/tests",
+    "piano_teacher/research",
     "godot/native_bridge_smoke.gd",
     "godot/production_ui_smoke.gd",
     "godot/production_session_journey.gd",
@@ -43,6 +51,28 @@ def audit_fingering_assets(root: Path) -> list[str]:
     return errors
 
 
+def audit_dependencies(root: Path) -> list[str]:
+    sites = list(root.glob("runtime/python/lib/python*/site-packages"))
+    inventory = root / "wheel-inventory.json"
+    if not inventory.is_file() or len(sites) != 1:
+        return ["Package missing wheel inventory or Python site-packages"]
+    versions = {re.sub(r"[-_.]+", "-", d.metadata["Name"]).lower(): d.version
+                for d in distributions(path=[str(sites[0])])}
+    expected = {name: data["version"] for name, data in json.loads(inventory.read_text()).items()}
+    errors = []
+    if versions != expected:
+        errors.append("Installed wheel versions differ from the resolved runtime inventory")
+    forbidden = {"pip", "pytest", "scons", "coverage", "ruff", "gdtoolkit", "setuptools"}
+    if unexpected := versions.keys() & forbidden:
+        errors.append(f"Development wheels installed: {sorted(unexpected)}")
+    if next(root.rglob("__pycache__"), None) or next(root.rglob("*.pyc"), None):
+        errors.append("Package includes compiled Python caches")
+    for notice in ("Godot.txt", "Verovio-fonts.txt", "godot-cpp-LICENSE.md"):
+        if not (root / "licenses" / notice).is_file() or not (root / "licenses" / notice).stat().st_size:
+            errors.append(f"Empty release license: {notice}")
+    return errors
+
+
 def audit_tree(root: Path, *, package: bool = False) -> list[str]:
     root = Path(root).resolve()
     result: list[str] = []
@@ -57,8 +87,6 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
             continue
         relative = file.relative_to(root)
         parts = relative.parts[:-1]
-        if file.name == "__init__.py":
-            parts = relative.parts[:-1]
         for node in ast.walk(module):
             if not isinstance(node, ast.ImportFrom):
                 continue
@@ -73,55 +101,62 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
             if not (base.with_suffix(".py").is_file() or base.is_dir()):
                 result.append(f"{relative}:{node.lineno}: missing relative import {'.'.join(target)}")
     if package:
-        for path in (
-            "PianoTeacher", "bin/godot",
-            "godot/project.godot", "godot/native/piano_bridge.gdextension",
-            "godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so",
-            "runtime/python/bin/python3",
-            "piano_teacher/application/score_worker.py",
-        ):
-            if not (root / path).is_file():
-                result.append(f"Package missing required asset: {path}")
-        result.extend(audit_fingering_assets(root))
-        if (root / "godot/addons/godot_mcp_toolkit").exists():
-            result.append("Package includes a development-only MCP server")
-        import_dir = root / "godot/.godot"
-        if import_dir.exists():
-            # A source distribution of a Godot app MUST carry its imported
-            # runtime audio/graphics. Never ship editor layouts, filesystem
-            # caches, editor plugins or test-generated scene data.
-            unexpected = sorted(p.name for p in import_dir.iterdir()
-                                if p.name != "imported")
-            if unexpected:
-                result.append("Package includes the Godot editor cache: " +
-                              ", ".join(unexpected))
-            prebuilt = import_dir / "imported"
-            if not prebuilt.is_dir() or not any(prebuilt.iterdir()):
-                result.append("Package has no compiled Godot imported runtime assets")
-            for word in ("ichi", "ni", "san", "shi"):
-                declared = root / "godot" / "assets" / "countin" / f"{word}.ogg.import"
-                source = root / "godot" / "assets" / "countin" / f"{word}.ogg"
-                if not declared.is_file() or not source.is_file():
-                    result.append(f"Package missing count-in source/import: {word}")
-                    continue
-                import re
-                record = declared.read_text()
-                paths = re.findall(r'^path="res://([^"]+)"' + r'$', record, flags=re.M)
-                if len(paths) != 1 or not (root / "godot" / paths[0]).is_file():
-                    result.append(f"Package missing compiled count-in audio: {word}")
-        if (root / "godot/.mcp.json").exists():
-            result.append("Package includes a development-only MCP configuration")
-        if (root / "midi").exists():
-            result.append("Package includes developer MIDI repertoire")
-        for path in DEV_ONLY_GODOT_PATHS:
-            if (root / path).exists():
-                result.append(f"Package includes developer-only Godot fixture: {path}")
-            if path.endswith(".gd") and (root / (path+".uid")).exists():
-                result.append(f"Package includes developer-only Godot UID: {path}.uid")
-        project = root / "godot/project.godot"
-        if project.is_file() and ("MCPRuntimeServer" in project.read_text()
-                                  or "godot_mcp_toolkit" in project.read_text()):
-            result.append("Package still starts a development-only runtime")
+        result.extend(audit_runtime_files(root))
+    return result
+
+
+def audit_godot_imports(root):
+    result = []
+    import_dir = root / "godot/.godot"
+    if not import_dir.is_dir():
+        result.append("Missing imported Godot runtime resources")
+    else:
+        # A source distribution of a Godot app MUST carry its imported
+        # runtime audio/graphics. Never ship editor layouts, filesystem
+        # caches, editor plugins or test-generated scene data.
+        unexpected = sorted(p.name for p in import_dir.iterdir()
+                            if p.name != "imported")
+        if unexpected:
+            result.append("Package includes the Godot editor cache: " +
+                          ", ".join(unexpected))
+        prebuilt = import_dir / "imported"
+        if not prebuilt.is_dir() or not any(prebuilt.iterdir()):
+            result.append("Package has no compiled Godot imported runtime assets")
+        for word in ("ichi", "ni", "san", "shi"):
+            declared = root / "godot" / "assets" / "countin" / f"{word}.ogg.import"
+            source = root / "godot" / "assets" / "countin" / f"{word}.ogg"
+            if not declared.is_file() or not source.is_file():
+                result.append(f"Package missing count-in source/import: {word}")
+                continue
+            record = declared.read_text()
+            paths = re.findall(r'^path="res://([^"]+)"' + r'$', record, flags=re.M)
+            if len(paths) != 1 or not (root / "godot" / paths[0]).is_file():
+                result.append(f"Package missing compiled count-in audio: {word}")
+    return result
+
+
+def audit_runtime_files(root):
+    result = audit_godot_imports(root)
+    for path in (
+        "PianoTeacher", "bin/godot",
+        "godot/project.godot", "godot/native/piano_bridge.gdextension",
+        "godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so",
+        "runtime/python/bin/python3",
+        "piano_teacher/application/score_worker.py",
+    ):
+        if not (root / path).is_file():
+            result.append(f"Package missing required asset: {path}")
+    result.extend(audit_fingering_assets(root))
+    result.extend(audit_dependencies(root))
+    for path in DEVELOPMENT_PATHS:
+        if (root / path).exists():
+            result.append(f"Package includes development files: {path}")
+        if path.endswith(".gd") and (root / (path+".uid")).exists():
+            result.append(f"Package includes developer-only Godot UID: {path}.uid")
+    project = root / "godot/project.godot"
+    if project.is_file() and ("MCPRuntimeServer" in project.read_text()
+                              or "godot_mcp_toolkit" in project.read_text()):
+        result.append("Package still starts a development-only runtime")
     return result
 
 

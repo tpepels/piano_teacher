@@ -19,8 +19,8 @@ if [[ -n "${PIANO_PATHETIQUE_II_MIDI:-}" ]]; then
   export PIANO_PATHETIQUE_II_MIDI
 fi
 MODE="${1:-full}"
-if [[ "$MODE" != full && "$MODE" != --without-package ]]; then
-  echo "Usage: bash scripts/verify-embedded-production-local.sh [--without-package]" >&2
+if [[ "$MODE" != full && "$MODE" != --without-package && "$MODE" != --package-only ]]; then
+  echo "Usage: bash scripts/verify-embedded-production-local.sh [--without-package | --package-only]" >&2
   exit 2
 fi
 PYTHON="${PIANO_PYTHON:-$ROOT/.venv/bin/python}"
@@ -39,13 +39,15 @@ if ! "$PYTHON" -c 'import sys; assert sys.version_info[:2] == (3,14); import mid
   exit 2
 fi
 LOG="$(mktemp /tmp/piano-embedded-production.XXXXXX.log)"
-WORK="$(mktemp -d "$ROOT/.piano-embedded-verify.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/piano-embedded-verify.XXXXXX")"
 cleanup() {
   if [[ "${PIANO_KEEP_VERIFY_TMP:-0}" != 1 ]]; then
     rm -rf "$WORK"
   fi
 }
 trap cleanup EXIT
+sample_bank="${PIANO_TEACHER_SOUNDFONT:-$HOME/.local/share/piano-teacher/soundfonts/salamander-grand-piano.sf2}"
+export sample_bank
 export HOME="$WORK/home"
 mkdir -p "$HOME/Music/Piano Teacher"
 PIANO_TEACHER_PYTHON_HOME="$("$PYTHON" -c 'import sys; print(sys.base_prefix)')"
@@ -204,28 +206,8 @@ verify_fixture_ui() {
 }
 verify_score_recovery() {
   set_case score-recovery
-  export PIANO_TEST_FINGERING_HOLD="$WORK/hold-fingering"
-  # Hold the real production inference call on the command lane for several
-  # musical tick intervals, then run the provider and return its real result.
-  cat > "$WORK/delayed-fingering-python" <<'SH'
-#!/bin/sh
-if [ -f "$PIANO_TEST_FINGERING_HOLD" ]; then
-  exec "$PIANO_PYTHON" -S -c '
-import os
-import time
-with open(os.environ["PIANO_TEST_FINGERING_HOLD"], "w") as marker:
-    marker.write(str(os.getpid()))
-time.sleep(4.5)
-raise SystemExit(1)
-  '
-fi
-sleep 1
-exec "$PIANO_PYTHON" "$@"
-SH
-  chmod +x "$WORK/delayed-fingering-python"
-  timeout 150s env PIANO_FINGERING_PYTHON="$WORK/delayed-fingering-python" \
-    "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
-    --script "$ROOT/tests/godot/score_worker_recovery.gd"
+  bash scripts/release/verify-score-recovery.sh "$WORK/source-recovery" "$GODOT_BIN" \
+    "$ROOT/godot" "$ROOT/tests/godot/score_worker_recovery.gd"
 }
 verify_fake_midi_ui() {
   # $1: fixture meter, "normal" (4/4) or "two-four" (2/4).
@@ -385,6 +367,22 @@ assert plan["provider"]["runtime"] == "onnxruntime@1.30.0/cpu", plan["provider"]
 assert {note["hand"] for note in plan["assignments"].values()
         if note["finger"] is not None} == {"left", "right"}, plan["status"]
 PY
+  local release="${launcher%/*}"
+  local -a packaged=(env -i HOME="$clean_home" PATH="$package_tools"
+    PIANO_PYTHON="$release/runtime/python/bin/python3" PYTHONNOUSERSITE=1
+    PIANO_TEACHER_PYTHON_HOME="$release/runtime/python" PYTHONHOME="$release/runtime/python"
+    LD_LIBRARY_PATH="$release/runtime/python/lib" PYTHONPATH="$release")
+  "${packaged[@]}" "$release/runtime/python/bin/python3" -P "$ROOT/scripts/release/verify-relocated.py" "$WORK"
+  if [[ -f "$sample_bank" ]]; then
+    "${packaged[@]}" PIANO_TEACHER_SOUNDFONT="$sample_bank" \
+      "$release/runtime/python/bin/python3" -P "$ROOT/scripts/release/verify-relocated.py" "$WORK"
+  fi
+  cp "$HOME/Music/Piano Teacher/ci_state_journey"{,_two_four}.mid "$(dirname "$fixture")/"
+  ln -s "$(command -v sleep)" "$(command -v timeout)" "$(command -v mkdir)" "$(command -v cat)" \
+    "$(command -v chmod)" "$(command -v env)" "$package_tools"
+  # Carry the existing recovery journey outside the installed project.
+  "${packaged[@]}" bash "$ROOT/scripts/release/verify-score-recovery.sh" "$WORK/package-recovery" \
+    "$release/bin/godot" "$release/godot" "$ROOT/tests/godot/score_worker_recovery.gd"
   echo "Relocated standalone package generated both hands' fingerings and native notation"
 }
 
@@ -403,6 +401,11 @@ if ! "$PYTHON" scripts/dev_runtime_state.py check-native >> "$LOG" 2>&1; then
       printf 'Native bridge build failed; dependent scenarios cannot run.\n' >&2
       exit 1
     }
+fi
+if [[ "$MODE" == --package-only ]]; then
+  check "Create isolated two-hand MIDI fixture" make_fixture
+  check "Relocated standalone runtime package audit" audit_package
+  exit 0
 fi
 check "Create isolated two-hand MIDI fixture" make_fixture || :
 check "Embedded Godot + Python registration and real score" verify_bridge || :
