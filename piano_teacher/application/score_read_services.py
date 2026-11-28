@@ -98,19 +98,26 @@ class ScoreReadServices:
                     or selected.revision != self.lesson.revision
                     or (cancelled is not None and cancelled()))
 
-        status, body = self.process.request(
-            operation, selected.binding,
-            lambda checkpoint: self._source_document(selected, timing, checkpoint),
-            generation=expected.get("generation", generation), cancelled=obsolete,
-            rejected_generation=expected.get("rejected_generation"),
-            timeout=deadline-monotonic(), validate_json=cancelled is None)
-        with self.lock:
-            if (obsolete() or self.lesson.plan is None
-                    or self.selection().identity != selected.identity):
-                raise ScoreCancelled("Score request was superseded during preparation")
-            if monotonic() >= deadline:
-                raise TimeoutError("Score request exceeded its publication deadline")
-        return status, body
+        while True:
+            status, body = self.process.request(
+                operation, selected.binding,
+                lambda checkpoint, selection=selected: self._source_document(selection, timing, checkpoint),
+                generation=expected.get("generation", generation), cancelled=obsolete,
+                rejected_generation=expected.get("rejected_generation"),
+                timeout=deadline-monotonic(), validate_json=cancelled is None)
+            with self.lock:
+                if obsolete() or self.lesson.plan is None:
+                    raise ScoreCancelled("Score request was superseded during preparation")
+                current = self.selection()
+                if current.identity != selected.identity:
+                    raise ScoreCancelled("Score request was superseded during preparation")
+                if monotonic() >= deadline:
+                    raise TimeoutError("Score request exceeded its publication deadline")
+                if current.piece is selected.piece:
+                    return status, body
+                # A correction retains the geometry revision. Capture its new
+                # annotations and retry within the original request deadline.
+                selected = current
 
     def guided_marks(self, snapshot: dict) -> list[dict]:
         return self.lesson.guided_marks(snapshot)
