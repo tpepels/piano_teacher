@@ -330,6 +330,11 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                 for note in list(measure):
                     if note.tag == "note" and note.find("grace") is not None:
                         measure.remove(note)
+                    elif note.tag == "note":
+                        # An ornament's slur may end on this timed attack.
+                        # The timing-only engraving needs neither endpoint.
+                        for slur in note.findall("notations/slur"):
+                            note.find("notations").remove(slur)
             timed_toolkit = create_verovio_toolkit(verovio)
             if not timed_toolkit.setOptions(options) or not timed_toolkit.loadData(
                     ET.tostring(stable, encoding="unicode")):

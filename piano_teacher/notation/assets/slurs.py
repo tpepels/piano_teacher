@@ -8,13 +8,14 @@ independent native beat/pitch positions without constructing a curve.
 from __future__ import annotations
 
 import base64
+from copy import deepcopy
 from io import BytesIO
 import math
 import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 3
+VERSION = 4
 
 
 def _slur_sources_from_xml(musicxml: str) -> dict[tuple[str,str], str | None]:
@@ -63,14 +64,101 @@ def _classes(node):
 
 
 def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
+    notes = {str(event["id"]) for event in model.get("notation_events", ())
+             if event.get("kind") == "note" and event.get("id")}
+    desired = {pair: source for pair, source in _slur_sources_from_xml(musicxml).items()
+               if all(endpoint in notes for endpoint in pair)}
+    found = _page_slurs(svgs, desired)
+    missing = {pair: source for pair, source in desired.items() if "|".join(pair) not in found}
+    if missing:
+        found.update(_unbroken_slurs(musicxml, missing))
+    return found
+
+
+def _unbroken_slurs(musicxml, missing):
+    """Re-engrave the original measures together across printed system breaks."""
+    import verovio
+    from .runtime import create_verovio_toolkit
+
+    root = ET.fromstring(musicxml)
+    toolkit = create_verovio_toolkit(verovio)
+    if not toolkit.setOptions({"inputFrom": "xml", "breaks": "none", "svgViewBox": True,
+                               "adjustPageHeight": True, "adjustPageWidth": True}):
+        raise RuntimeError("Verovio rejected continuous slur engraving options")
+    found = {}
+    for part in root.findall("part"):
+        measures = part.findall("measure")
+        positions = {note.get("id"): index for index, measure in enumerate(measures)
+                     for note in measure.findall("note")}
+        for pair, source in missing.items():
+            first, last = pair
+            if first not in positions or last not in positions:
+                continue
+            start, end = positions[first], positions[last]
+            subset = ET.Element("score-partwise", version="4.0")
+            part_list = ET.SubElement(subset, "part-list")
+            info = root.find(f"part-list/score-part[@id='{part.get('id')}']")
+            part_list.append(deepcopy(info))
+            excerpt = ET.SubElement(subset, "part", id=part.get("id"))
+            context = {}
+            for measure in measures[:start]:
+                for attr in measure.findall("attributes/*"):
+                    context[attr.tag, attr.get("number")] = attr
+            start_number = None
+            for index in range(start, end + 1):
+                copied = deepcopy(measures[index])
+                if index == start and context:
+                    inherited = ET.Element("attributes")
+                    inherited.extend(deepcopy(attr) for attr in context.values())
+                    copied.insert(0, inherited)
+                # Other spans may start outside this excerpt or reuse the
+                # same MusicXML number in a simultaneous worksheet voice.
+                for note in copied.findall("note"):
+                    notation = note.find("notations")
+                    for mark in note.findall("notations/slur"):
+                        if not ((note.get("id") == first and mark.get("id") == source)
+                                or (note.get("id") == last and mark.get("type") == "stop"
+                                    and mark.get("number", "1") == start_number)):
+                            notation.remove(mark)
+                        elif note.get("id") == first:
+                            start_number = mark.get("number", "1")
+                excerpt.append(copied)
+            if toolkit.loadData(ET.tostring(subset, encoding="unicode")):
+                page = toolkit.renderToSVG(1)
+                fragment = _identified_slur(page, pair, source)
+                if fragment:
+                    found["|".join(pair)] = fragment
+    return found
+
+
+def _identified_slur(page, pair, source):
+    from ...source_svg import isolate, parse_svg_geometry
+    from .vector_art import local_vector_art
+
+    root = ET.fromstring(page)
+    marks = [node for node in root.iter() if node.get("id") == source
+             and "slur" in _classes(node)]
+    geometry = parse_svg_geometry(root)
+    if len(marks) != 1 or not all(endpoint in geometry.elements for endpoint in pair):
+        return None
+    x0, y0, system = geometry.elements[pair[0]]
+    x1, y1, last_system = geometry.elements[pair[1]]
+    lines = geometry.staff_systems[system]["staff_lines"]
+    if system != last_system or x1 <= x0 or len(lines) < 5:
+        return None
+    space = lines[1] - lines[0]
+    art = local_vector_art(isolate(root, marks[0]), space, (x0, y0), "verovio-engraved-slur")
+    if art:
+        art.update(note_ids=list(pair), span=(x1-x0)*geometry.width/geometry.height*250/space,
+                   original_end_y=(y1-y0)*250/space)
+    return art
+
+
+def _page_slurs(svgs, desired):
     import cairosvg
     from ...source_svg import parse_svg_geometry
     from ...source_svg import isolate
 
-    notes={str(e["id"]):e for e in model.get("notation_events",[])
-           if e.get("kind")=="note" and e.get("id")}
-    desired={pair:source for pair,source in _slur_sources_from_xml(musicxml).items()
-             if all(id in notes for id in pair)}
     if not desired:
         return {}
     out={}

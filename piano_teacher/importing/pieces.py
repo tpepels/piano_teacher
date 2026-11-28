@@ -55,7 +55,8 @@ def load_musicxml(path: Path, data: bytes) -> Piece:
             element.tag = element.tag.rsplit("}", 1)[-1]
         if root.tag != "score-partwise":
             raise ValueError("Only score-partwise MusicXML is supported")
-        written = _index_notes(root)
+        _written_limits(root, warnings)
+        written = _index_notes(root, warnings)
         reader = MusicXMLImporter()
         reader.xmlRootToScore(root, reader.stream)
     except Exception as exc:
@@ -91,10 +92,35 @@ def _score_bytes(data):
         return declared, set()
 
 
-def _index_notes(root):
+def _written_limits(root, warnings):
+    """Tell the learner which printed cues require the original score."""
+    omitted = set()
+    for direction in root.iterfind("part/measure/direction/direction-type/*"):
+        omitted.add(direction.tag.replace("-", " "))
+    for notation in root.iterfind("part/measure/note/notations/*"):
+        if notation.tag == "articulations":
+            omitted.update(mark.tag.replace("-", " ") for mark in notation
+                           if mark.tag not in ("staccato", "tenuto", "accent"))
+        elif notation.tag == "technical":
+            omitted.update(mark.tag.replace("-", " ") for mark in notation
+                           if mark.tag != "fingering")
+        elif notation.tag not in ("slur", "tied", "tuplet"):
+            omitted.add(notation.tag.replace("-", " "))
+    if root.find("part/measure/note/lyric") is not None:
+        omitted.add("lyrics")
+    if root.find("part/measure/harmony") is not None:
+        omitted.add("chord symbols")
+    if omitted:
+        warnings.add("Refer to the original score for these printed markings: "
+                     + ", ".join(sorted(omitted)) + ".")
+
+
+def _index_notes(root, warnings):
     written = {}
+    unmatched_slur = False
     for pi, part in enumerate(root.findall("part"), 1):
         divisions = 1
+        open_slurs = {}
         for mi, measure in enumerate(part.findall("measure"), 1):
             for ordinal, note in enumerate(measure):
                 if note.tag == "attributes":
@@ -102,7 +128,20 @@ def _index_notes(root):
                 if note.tag != "note":
                     continue
                 identifier = f"xml-p{pi}-m{mi}-n{ordinal}"
-                written[identifier] = ET.tostring(note, encoding="unicode"), divisions
+                destinations = {}
+                written[identifier] = ET.tostring(note, encoding="unicode"), divisions, destinations
+                for mark in note.findall("notations/slur"):
+                    number = mark.get("number", "1")
+                    key = note.findtext("staff", "1"), note.findtext("voice", "1"), number
+                    if mark.get("type") == "start":
+                        if key in open_slurs:
+                            unmatched_slur = True
+                        open_slurs[key] = destinations
+                    elif mark.get("type") == "stop":
+                        if key in open_slurs:
+                            open_slurs.pop(key)[number] = identifier
+                        else:
+                            unmatched_slur = True
                 # music21 does not import MusicXML note IDs. Its public
                 # editorial reference survives staff splitting, chord
                 # assembly and repeats, including each individual tone.
@@ -111,6 +150,9 @@ def _index_notes(root):
                 if level is None:
                     level = ET.SubElement(note, "level")
                 level.text = identifier
+        unmatched_slur |= bool(open_slurs)
+    if unmatched_slur:
+        warnings.add("Refer to the original score for slurs without a matching endpoint in one voice and staff.")
     return written
 
 
@@ -151,19 +193,47 @@ def _anchor_graces(lane, written, warnings):
     pending = []
     for element in list(lane.notesAndRests):
         if element.duration.isGrace:
-            markup = written.get(_written_id(element), ("", 0))[0]
-            pending.append(markup if element.isNote and element.duration.type in ("eighth", "16th") else "")
+            members = element.notes if element.isChord else (element,)
+            for member in members:
+                markup = written.get(_written_id(member), ("", 0))[0]
+                pending.append(markup if member.isNote and
+                               member.duration.type in ("eighth", "16th") else "")
             lane.remove(element)
         elif pending:
             if element.isRest:
                 warnings.add("Grace notes before rests are not displayed.")
-            elif len(pending) == 1 and pending[0]:
-                element.editorial.graceBefore = pending[0]
+            elif all(pending):
+                element.editorial.graceBefore = tuple(pending)
+                _grace_limits(element, pending, written, warnings)
             else:
-                warnings.add("Chordal, grouped or unusual-duration grace notes are not displayed.")
+                warnings.add("Refer to the original score for grace notes with an unsupported duration or pitch.")
             pending.clear()
     if pending:
         warnings.add("Grace notes without a following attack are not displayed.")
+
+
+def _grace_limits(anchor, ornaments, written, warnings):
+    opened = set()
+    outside = False
+    for markup in ornaments:
+        grace = ET.fromstring(markup)
+        if len(ornaments) == 1 and grace.find("accidental") is not None:
+            warnings.add("Refer to the original score for printed accidentals on isolated grace notes.")
+        for slur in grace.findall("notations/slur"):
+            number = slur.get("number", "1")
+            if slur.get("type") == "start":
+                opened.add(number)
+            elif slur.get("type") == "stop":
+                outside |= number not in opened
+                opened.discard(number)
+    if opened and len(ornaments) > 1:
+        member = anchor.notes[0] if anchor.isChord else anchor
+        markup = written.get(_written_id(member), ("",))[0]
+        if markup:
+            for stop in ET.fromstring(markup).findall("notations/slur[@type='stop']"):
+                opened.discard(stop.get("number", "1"))
+    if outside or opened:
+        warnings.add("Refer to the original score for slurs extending beyond the displayed grace group.")
 
 
 def _performed_piece(score, written, path, warnings):
@@ -262,7 +332,7 @@ def _attack(packet, source_id, written, occurrence, warnings, ticks):
                 if float(alter).is_integer() and written_pitch.ps == pitch else None)
     component = element.notes[member] if element.isChord else element
     written_id = _written_id(component)
-    markup, divisions = written.get(written_id, ("", 0))
+    markup, divisions, slur_ends = written.get(written_id, ("", 0, {}))
     source = ET.fromstring(markup) if markup else None
     if source is not None:
         finger = source.findtext("notations/technical/fingering")
@@ -274,8 +344,8 @@ def _attack(packet, source_id, written, occurrence, warnings, ticks):
     note = Note(tick/ticks, (tick+packet["duration"])/ticks, pitch, track, event.channel-1,
                 source_id=source_id, voice=f"xml-t{track}-v{voice}",
                 spelling=spelling, velocity=event.velocity, written_id=written_id,
-                written_note=markup, written_divisions=divisions,
-                grace_before=getattr(element.editorial, "graceBefore", "") if member == 0 else "")
+                written_note=markup, written_divisions=divisions, slur_ends=tuple(slur_ends.items()),
+                grace_before=getattr(element.editorial, "graceBefore", ()) if member == 0 else ())
     return note, authored_finger
 
 
@@ -287,6 +357,8 @@ def _source_clefs(piece, parts, warnings):
     clefs = []
     for track, part in enumerate(parts):
         if len(hands[track]) != 1:
+            if hands[track] and part.recurse().getElementsByClass(clef.Clef):
+                warnings.add("The practice staves use automatic clefs for a part split between hands.")
             continue
         for mark in part.recurse().getElementsByClass(clef.Clef):
             beat = float(mark.getOffsetInHierarchy(part))

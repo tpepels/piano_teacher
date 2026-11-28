@@ -6,7 +6,7 @@ const GlyphAssets := preload("res://notation/native/glyph_assets.gd")
 const ASSET_KEYS := [
     "native_glyphs", "native_note_templates", "native_tie_templates",
     "native_chord_templates", "native_beam_fragments",
-    "native_tuplet_fragments", "native_slur_fragments",
+    "native_tuplet_fragments", "native_slur_fragments", "native_grace_fragments",
 ]
 
 ## Shared source and structural check for current and pre-engraved future
@@ -44,6 +44,9 @@ static func bundle_error(bundle: Variant, expected: Dictionary) -> String:
     for grace in graces:
         if not grace is Dictionary:
             return "Score bundle has a malformed grace note"
+        if grace.has("group_ids") and not layout["native_grace_fragments"].has(
+                grace.get("before_note_id", "")):
+            return "Score bundle lacks grouped grace-note ink"
         if (grace.get("slashed", false) and
                 not layout["native_note_templates"].has_all(GlyphAssets.GRACE_TEMPLATES)):
             return "Score bundle lacks slashed grace-note ink"
@@ -83,4 +86,5 @@ static func prepare_engraving(engraving, source: Dictionary) -> bool:
         source.get("native_required_slur_pairs", []),
         bool(source.get("native_slurs_complete", false)),
         source.get("native_required_beam_groups", []),
-        bool(source.get("native_beams_complete", false)))
+        bool(source.get("native_beams_complete", false)),
+        source.get("native_grace_fragments", {}))

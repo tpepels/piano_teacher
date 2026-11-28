@@ -29,7 +29,18 @@ class Note:
     written_id: str = ""  # Shared by repeated occurrences of one written note.
     written_note: str = ""  # Original note markup, including authored notations.
     written_divisions: int = 0
-    grace_before: str = ""  # Untimed MusicXML note attached to this attack.
+    slur_ends: tuple[tuple[str, str], ...] = ()  # Number and original destination note ID.
+    grace_before: tuple[str, ...] = ()  # Untimed written notes before this attack.
+
+    @classmethod
+    def from_score_document(cls, data):
+        values = dict(data)
+        if values.get("spelling") is not None:
+            values["spelling"] = tuple(values["spelling"])
+        values["slur_ends"] = tuple(map(tuple, values.get("slur_ends", ())))
+        graces = values.get("grace_before", ())
+        values["grace_before"] = (graces,) if isinstance(graces, str) and graces else tuple(graces)
+        return cls(**values)
 
     def performance_document(self) -> dict:
         """The performed attack stored in predictions and learner evidence."""

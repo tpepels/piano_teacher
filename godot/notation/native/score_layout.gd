@@ -478,6 +478,8 @@ func event_ink_rect(event: Dictionary, gap: float,
         right = maxf(right,head_x+gap*(1.05+float(dots-1)*.63)+ \
             float(glyphs.bounds["augmentation_dot"][2])*unit*.5)
     var rect := Rect2(left,top,right-left,bottom-top)
+    if glyphs.grace_textures.has(id):
+        rect = rect.merge(glyphs.grace_group_rect(id, Vector2(head_x, y), gap))
     if chord_members.has(id):
         # Bottom to top in template note order, bound by event id.
         var group: Array = ordered_chord_members(id)

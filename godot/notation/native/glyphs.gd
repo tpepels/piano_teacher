@@ -46,6 +46,8 @@ var tuplet_textures: Dictionary:
     get: return _assets.tuplet_textures
 var tuplet_metadata: Dictionary:
     get: return _assets.tuplet_metadata
+var grace_textures: Dictionary:
+    get: return _assets.grace_textures
 var slur_textures: Dictionary:
     get: return _assets.slur_textures
 var slur_metadata: Dictionary:
@@ -104,6 +106,13 @@ func load_beam_fragments(items: Dictionary) -> bool:
 
 func load_tuplet_fragments(items: Dictionary) -> bool:
     return _assets.load_tuplet_fragments(items)
+
+func load_grace_fragments(items: Dictionary) -> bool:
+    return _assets.load_grace_fragments(items)
+
+func grace_group_rect(anchor: String, head: Vector2, gap: float) -> Rect2:
+    var bounds: Rect2 = _assets.grace_bounds.get(anchor, Rect2())
+    return Rect2(head + bounds.position * gap / 250.0, bounds.size * gap / 250.0)
 
 func load_slur_fragments(items: Dictionary) -> bool:
     return _assets.load_slur_fragments(items)

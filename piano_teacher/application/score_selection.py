@@ -58,8 +58,7 @@ def _fingering_document(plan: FingeringPlan | None) -> dict | None:
 
 
 def _notes(values: list[dict]) -> tuple[Note, ...]:
-    return tuple(Note(**{**note, "spelling": tuple(note["spelling"])
-                        if note["spelling"] is not None else None}) for note in values)
+    return tuple(Note.from_score_document(note) for note in values)
 
 
 def decode_selection(binding: dict, document: dict) -> ScoreSelection:

@@ -321,8 +321,15 @@ def _grace_notes(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
                 binding = score.note_bindings.get(child.get("id"))
                 if not binding or not binding.get("is_attack") or not group:
                     continue
-                # Isolated grace notes use the corresponding Verovio template.
-                if len(group) != 1:
+                if len(group) > 1:
+                    projected.append({
+                        "id": group[0].get("id"), "before_note_id": child.get("id"),
+                        "group_ids": [item.get("id") for item in group],
+                        "slur_ids": [mark.get("id") for item in group
+                                     for mark in item.findall("notations/slur[@type='start']")],
+                        "hand": hand, "measure": score.phrase.first_bar + mi,
+                        "beat": round(binding["display_beat"], 8),
+                    })
                     continue
                 item = group[0]
                 if item.findtext("type") not in ("eighth", "16th"):

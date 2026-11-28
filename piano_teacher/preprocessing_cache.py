@@ -17,16 +17,9 @@ from .music import BarlineChange, ClefChange, KeySignature, Note, Phrase, Piece
 
 # Bump this whenever the importer, exercise generation, musical notation
 # contract or engraving algorithm changes. All historical entries then miss.
-CACHE_VERSION = "2026-11-28-authored-attacks-v7"
+CACHE_VERSION = "2026-11-28-authored-ornaments-v8"
 MAX_CACHE_BYTES = 256 * 1024 * 1024
 MAX_ENTRY_BYTES = 20 * 1024 * 1024
-
-
-def _note(data: dict) -> Note:
-    values = dict(data)
-    if values.get("spelling") is not None:
-        values["spelling"] = tuple(values["spelling"])
-    return Note(**values)
 
 
 def _import_document(piece: Piece) -> dict:
@@ -40,7 +33,7 @@ def _import_document(piece: Piece) -> dict:
 
 
 def _piece_from_json(data: dict) -> Piece:
-    notes = tuple(_note(n) for n in data["notes"])
+    notes = tuple(Note.from_score_document(n) for n in data["notes"])
     by_id = {note.source_id: note for note in notes}
     return Piece(
         title=str(data["title"]),

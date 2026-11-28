@@ -240,6 +240,12 @@ func build(gap: float, bins: Dictionary, cell: float, play_from_beat: float = 0.
         var target: Dictionary = score_layout.expression_note_index.get(str(grace.get("before_note_id","")),{})
         if target.is_empty():
             continue
+        if grace.has("group_ids"):
+            var anchor: String = str(target["id"])
+            var head := Vector2(float(target["beat"])*density + float(
+                score_layout.cached_head_offsets.get(anchor, 0.0)), score_layout.event_y(target, gap))
+            block(score_layout.glyphs.grace_group_rect(anchor, head, gap), bins, cell)
+            continue
         var hand: String = score_layout.display_staff(grace)
         var step: int = Geometry.staff_step(grace.get("spelling",{}),score_layout.clef_for(hand,score_layout.measure_for(grace)))
         var y: float = Geometry.note_y(step,score_layout.staff_center(hand)+gap*2.0,gap)

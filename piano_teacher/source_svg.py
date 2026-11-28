@@ -83,8 +83,9 @@ class PageGeometry:
     stem_x: dict[str, float] = field(default_factory=dict)
 
 
-def parse_svg_geometry(svg: str) -> PageGeometry:
-    root = ET.fromstring(svg)
+def parse_svg_geometry(svg: str | ET.Element, *,
+                       ledger_paths: dict[str, list[ET.Element]] | None = None) -> PageGeometry:
+    root = ET.fromstring(svg) if isinstance(svg, str) else svg
     bounds = [float(x) for x in NUMBERS.findall(root.get("viewBox", ""))]
     if len(bounds) != 4 or bounds[2] <= 0 or bounds[3] <= 0:
         raise ValueError("Verovio SVG has no valid viewBox")
@@ -155,7 +156,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                 x1, y1, x2, y2 = map(float, match.groups())
                 left, _ = apply_svg_transform(matrix[item], x1, y1)
                 right, _ = apply_svg_transform(matrix[item], x2, y2)
-                ledgers[staffs[group]].append((min(left, right), max(left, right)))
+                ledgers[staffs[group]].append((min(left, right), max(left, right), item))
     # Verovio puts each staff's five horizontal paths directly inside a
     # staff group, repeated in every measure. Only inspect those children:
     # descendants also contain note stems, beams and ledger lines.
@@ -212,9 +213,11 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                 if rw > 0 and rh > 0:
                     left = min(left, *(apply_svg_transform(matrix[rect], cx, cy)[0]
                         for cx, cy in ((rx, ry), (rx+rw, ry), (rx, ry+rh), (rx+rw, ry+rh))))
-        for ledger_left, ledger_right in ledgers.get(staffs[elem], []):
+        for ledger_left, ledger_right, path in ledgers.get(staffs[elem], []):
             if ledger_left <= x <= ledger_right:
                 left = min(left, ledger_left)
+                if ledger_paths is not None:
+                    ledger_paths.setdefault(identifier, []).append(path)
         ink_left[identifier] = (left-bx)/width
     # Use only actual Verovio right barlines for terminal held-note timing.
     # Accept SVG lines and absolute move-to paths; unknown glyphs are ignored.
@@ -292,43 +295,35 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
 
 def isolate(root: ET.Element, target: ET.Element) -> str:
     """Keep the original XML graphics and inherited transforms/defs."""
-    clone = copy.deepcopy(root)
-    # Node identity changes on deepcopy: retain the child-index path.
-    path=[]
-    def locate(node):
-        if node is target:
-            return True
-        for index,child in enumerate(node):
-            path.append(index)
-            if locate(child):
-                return True
-            path.pop()
-        return False
-    if not locate(root):
-        raise ValueError("Detached Verovio source node")
-    selected=clone
-    for index in path:
-        selected=selected[index]
+    return isolate_elements(root, {target})
 
-    def trim(node):
-        if node is selected:
-            for el in node.iter():
+
+def isolate_elements(root: ET.Element, targets: set[ET.Element]) -> str:
+    selected = set()
+
+    def copy_ink(node):
+        if node in targets:
+            selected.add(node)
+            ink = copy.deepcopy(node)
+            for el in ink.iter():
                 for child in list(el):
-                    if set(child.get("class","").split()) & {"bounding-box","content-bounding-box"}:
+                    if _classes(child) & {"bounding-box", "content-bounding-box"}:
                         el.remove(child)
-            return True
-        if node.tag.rsplit("}",1)[-1] in {"defs","style"}:
-            return True
-        yes=False
-        for child in list(node):
-            if trim(child):
-                yes=True
-            else:
-                node.remove(child)
-        return yes
-    trim(clone)
-    return ET.tostring(clone,encoding="unicode")
+            return ink
+        if node.tag.rsplit("}", 1)[-1] in {"defs", "style"}:
+            return copy.deepcopy(node)
+        children = [kept for child in node if (kept := copy_ink(child)) is not None]
+        if children:
+            ancestor = ET.Element(node.tag, node.attrib)
+            ancestor.extend(children)
+            return ancestor
+        return None
+
+    subtree = copy_ink(root)
+    if selected != targets or subtree is None:
+        raise ValueError("Detached or overlapping Verovio source nodes")
+    return ET.tostring(subtree, encoding="unicode")
 
 
 __all__ = ("Matrix", "IDENTITY", "TRANSFORM", "NUMBERS", "PageGeometry",
-           "parse_svg_geometry", "isolate")
+           "parse_svg_geometry", "isolate", "isolate_elements")

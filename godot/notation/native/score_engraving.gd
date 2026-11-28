@@ -92,7 +92,8 @@ func load_assets(items: Dictionary, note_items: Dictionary = {},
         tuplet_items: Dictionary = {},
         slur_items: Dictionary = {},
         required_slurs: Array = [], slurs_complete: bool = true,
-        required_beams: Array = [], beams_complete: bool = true) -> bool:
+        required_beams: Array = [], beams_complete: bool = true,
+        grace_items: Dictionary = {}) -> bool:
     annotations.obstacles.clear()
     connector_geometry.clear_cache()
     ink_geometry.clear_cache()
@@ -100,6 +101,9 @@ func load_assets(items: Dictionary, note_items: Dictionary = {},
         failure_reason = glyphs.error
         return false
     if not glyphs.load_note_templates(note_items):
+        failure_reason = glyphs.error
+        return false
+    if not glyphs.load_grace_fragments(grace_items):
         failure_reason = glyphs.error
         return false
     if not glyphs.load_tie_templates(tie_items):

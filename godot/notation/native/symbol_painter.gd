@@ -324,12 +324,17 @@ func paint_grace_notes(canvas, frame: RenderPass, gap: float) -> void:
         var target: String = str(grace.get("before_note_id", ""))
         if not frame.pass_noteheads.has(target):
             continue
+        var head: Vector2 = frame.pass_noteheads[target]
+        if grace.has("group_ids"):
+            var rect: Rect2 = score_layout.glyphs.grace_group_rect(target, head, gap)
+            canvas.draw_texture_rect(score_layout.glyphs.grace_textures[target],
+                rect, false, frame.event_ink(score_layout,grace))
+            continue
         var hand: String = score_layout.display_staff(grace)
         var spelling: Dictionary = grace.get("spelling", {})
         var clef: Dictionary = score_layout.clef_for(hand, score_layout.measure_for(grace))
         var step: int = Geometry.staff_step(spelling, clef)
         var y: float = Geometry.note_y(step, score_layout.staff_center(hand)+gap*2.0,gap)
-        var head: Vector2 = frame.pass_noteheads[target]
         var kind: String = str(grace.get("note_type", "eighth"))
         var grace_scale := 0.66
         if grace.get("slashed", false):

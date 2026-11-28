@@ -71,6 +71,8 @@ var beam_textures: Dictionary = {}
 var beam_metadata: Dictionary = {}
 var tuplet_textures: Dictionary = {}
 var tuplet_metadata: Dictionary = {}
+var grace_textures: Dictionary = {}
+var grace_bounds: Dictionary = {}
 var slur_textures: Dictionary = {}
 var slur_metadata: Dictionary = {}
 var error := ""
@@ -146,7 +148,7 @@ func begin_upload() -> void:
             _upload_queue.append([_prepared_interiors,head,"interior|"+str(_font_keys[head])])
     for catalog in [note_textures,note_stem_textures,tie_textures,
             chord_textures,chord_heads_textures,chord_stem_textures,
-            beam_textures,slur_textures]:
+            beam_textures,slur_textures,grace_textures]:
         for key in catalog:
             _upload_queue.append([catalog,key,""])
     for key in tuplet_textures:
@@ -569,6 +571,24 @@ func load_tuplet_fragments(items: Dictionary) -> bool:
         descriptions[str(key)] = data
     tuplet_textures = prepared
     tuplet_metadata = descriptions
+    return true
+
+func load_grace_fragments(items: Dictionary) -> bool:
+    var loaded: Dictionary = {}
+    var boxes: Dictionary = {}
+    for anchor in items:
+        var item: Dictionary = items[anchor]
+        var box: Array = item.get("bounds", [])
+        var image := Image.new()
+        if item.get("source") != "verovio-engraved-graces" or \
+                item.get("units_per_space") != 250 or box.size() != 4 or \
+                image.load_png_from_buffer(Marshalls.base64_to_raw(item.get("png_base64", ""))) != OK:
+            error = "Invalid Verovio grace group before " + str(anchor)
+            return false
+        loaded[anchor] = image
+        boxes[anchor] = Rect2(box[0], box[1], box[2], box[3])
+    grace_textures = loaded
+    grace_bounds = boxes
     return true
 
 func load_slur_fragments(items: Dictionary) -> bool:
