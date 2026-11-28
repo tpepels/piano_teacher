@@ -10,8 +10,11 @@ from pathlib import Path
 
 
 def inspect_elf(path):
-    header = subprocess.check_output(["readelf", "-d", path], text=True)
-    return re.findall(r"\(NEEDED\).*?\[(.*?)\]", header)
+    header = subprocess.check_output(["readelf", "-d", "-V", path], text=True)
+    libraries = re.findall(r"\(NEEDED\).*?\[(.*?)\]", header)
+    needs = header.partition("Version needs section")[2]
+    versions = re.findall(r"Name: ((?:GLIBC|GLIBCXX)_[0-9.]+)", needs)
+    return libraries, versions
 
 
 def linked_host_libraries(root, libraries, supplied, environment):
@@ -40,14 +43,16 @@ def inventory(root):
     if any(path.is_symlink() and not path.resolve().is_relative_to(root) for path in paths):
         raise ValueError("Release contains an external symlink")
     libraries = {}
+    required_versions = set()
     assets = {}
     sizes = {}
     for path in paths:
         name = str(path.relative_to(root))
-        sizes[name] = path.stat().st_size
+        sizes[name] = path.lstat().st_size
         with path.open("rb") as source:
             if source.read(4) == b"\x7fELF":
-                libraries[name] = inspect_elf(path)
+                libraries[name], versions = inspect_elf(path)
+                required_versions.update(versions)
         if "/verovio/data/" in name or path.suffix == ".onnx":
             assets[name] = hashlib.sha256(path.read_bytes()).hexdigest()
     supplied = {Path(name).name for name in libraries}
@@ -58,6 +63,8 @@ def inventory(root):
             "cpython": subprocess.check_output([root / "runtime/python/bin/python3", "-V"],
                                               env=environment, text=True).strip(),
             "wheels": json.loads((root / "wheel-inventory.json").read_text()),
+            "file_and_symlink_bytes": sum(sizes.values()),
+            "required_symbol_versions": sorted(required_versions),
             "bytes_by_path": sizes, "elf_needed": libraries, "asset_sha256": assets,
             "external_elf_sonames": sorted(needed - supplied), "resolved_host_sonames": sorted(host),
             "dynamic_host_libraries": {"libcairo.so.2": "CairoSVG engraving rasterization",
@@ -67,4 +74,10 @@ def inventory(root):
 
 if __name__ == "__main__":
     release = Path(sys.argv[1]).resolve()
-    print(json.dumps(inventory(release), indent=2, sort_keys=True))
+    report = inventory(release)
+    if len(sys.argv) == 3:
+        archive = Path(sys.argv[2])
+        with archive.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
+        report["archive"] = {"name": archive.name, "bytes": archive.stat().st_size, "sha256": digest}
+    print(json.dumps(report, indent=2, sort_keys=True))

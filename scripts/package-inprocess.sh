@@ -83,13 +83,14 @@ if onnxruntime.__version__ != ONNX_RUNTIME_VERSION:
 if "CPUExecutionProvider" not in onnxruntime.get_available_providers():
     raise SystemExit("Bundled ONNX Runtime must provide the CPU execution provider")
 PY
-python3 scripts/release/inventory.py "$STAGE" > dist/runtime-inventory.json
 # Phase 5 gates the assembled real runtime. Creating and clean-machine
 # executing the compressed distributable is a separate Phase 7 release gate.
 if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then
+  "$PY" scripts/release/inventory.py "$STAGE" > dist/runtime-inventory.json
   echo "Assembled standalone runtime import/assets audit passed"
   exit 0
 fi
 tar -C dist -czf dist/piano-teacher-linux-x86_64.tar.gz piano-teacher-linux-x86_64
+"$PY" scripts/release/inventory.py "$STAGE" dist/piano-teacher-linux-x86_64.tar.gz > dist/runtime-inventory.json
 du -sb "$STAGE" dist/piano-teacher-linux-x86_64.tar.gz
 echo "Package: dist/piano-teacher-linux-x86_64.tar.gz (inventory: dist/runtime-inventory.json)"
