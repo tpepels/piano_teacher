@@ -32,8 +32,7 @@ export PIANO_TEACHER_PYTHON_HOME="$HERE/runtime/python"
 export PIANO_PYTHON="$HERE/runtime/python/bin/python3"
 export PYTHONHOME="$HERE/runtime/python"
 export LD_LIBRARY_PATH="$HERE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-PY_VER="$("$HERE/runtime/python/bin/python3" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-export PYTHONPATH="$HERE:$HERE/runtime/python/lib/python$PY_VER/site-packages"
+export PYTHONPATH="$HERE"
 export PATH="$HERE/bin:$PATH"
 export PYTHONNOUSERSITE=1
 # CI verifies the installed *package*, from a relocated clean extraction.
