@@ -280,9 +280,10 @@ archive. Individual works in those collections have independent rights.
 Verovio's optional Liberation font is omitted because the renderer leaves
 `fontTextLiberation` disabled. The software still ships the five music
 fonts listed in its font notice. Lumikey's upstream npm declaration covers
-the package containing the weights. The model notice records the absence
-of a separate rights statement for the weights. Any decision about sales
-terms or third-party rights clearance remains with the distributor.
+the package containing the weights. Its training code uses the PIG dataset,
+whose publishers specify nonprofit academic use. The model notice records
+both sources. Commercial permission for the resulting weights remains
+unresolved.
 [Music21 license](https://github.com/cuthbertLab/music21/blob/master/music21/LICENSE) · [Model notice](../piano_teacher/fingering/THIRD_PARTY_NOTICES.md) · [Verovio font notice](../scripts/release/Verovio-fonts.txt)
 
 Run the existing full [production verifier](../scripts/verify-embedded-production-local.sh)

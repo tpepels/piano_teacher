@@ -13,6 +13,15 @@ copyright notice, LICENSE or NOTICE file in the inspected upstream artifact
 or checkout. The publisher's MIT declaration for the artifact is the basis
 for this use of its inference logic and weights.
 
+The upstream training code loads a PIG fingering dataset for each hand. The
+dataset publishers describe nonprofit academic use and request citation of
+Eita Nakamura, Yasuyuki Saito and Kazuyoshi Yoshii, “Statistical Learning and
+Estimation of Piano Fingering,” Information Sciences 517 (2020), 68–85.
+Piano Teacher distributes the exported weights and inference code. The
+publication terms for the data and the MIT declaration for the npm package
+leave commercial rights for the resulting weights unresolved in this audit.
+[Upstream training code](https://github.com/lumikey/piano-fingering-model/blob/e03c0da6bfe6b4299dbdacb421bd5792f1721631/python/train.py#L74) · [Dataset publisher and terms](https://beam.kisarazu.ac.jp/saito/research/PianoFingeringDataset/)
+
 Registry metadata for the exact artifact:
 https://registry.npmjs.org/@lumikey%2Fpiano-fingering-model/0.3.0
 
