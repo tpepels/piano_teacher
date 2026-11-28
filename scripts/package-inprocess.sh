@@ -93,6 +93,7 @@ if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then
 fi
 bash scripts/release/library-sources.sh "$STAGE" dist/piano-teacher-library-sources.tar
 tar -C dist -czf dist/piano-teacher-linux-x86_64.tar.gz piano-teacher-linux-x86_64
-"$PY" scripts/release/inventory.py "$STAGE" dist/piano-teacher-linux-x86_64.tar.gz > dist/runtime-inventory.json
+"$PY" scripts/release/inventory.py "$STAGE" dist/piano-teacher-linux-x86_64.tar.gz \
+  dist/piano-teacher-library-sources.tar > dist/runtime-inventory.json
 du -sb "$STAGE" dist/piano-teacher-linux-x86_64.tar.gz
 echo "Package: dist/piano-teacher-linux-x86_64.tar.gz (inventory: dist/runtime-inventory.json)"

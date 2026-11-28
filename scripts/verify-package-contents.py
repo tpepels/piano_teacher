@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import json
 import re
 from importlib.metadata import distributions
@@ -147,6 +148,10 @@ def audit_runtime_files(root):
     ):
         if not (root / path).is_file():
             result.append(f"Package missing required asset: {path}")
+    bank = root / "piano_teacher/soundfonts/UprightPianoKW-small.sf2"
+    if bank.is_file() and hashlib.sha256(bank.read_bytes()).hexdigest() != (
+            "cf2a98eb38a32c4954b4b6e2caae4112d62dd8e892eceefdd7942b0e7d01ac2f"):
+        result.append("Bundled FreePats sample bank differs from the credited upstream release")
     result.extend(audit_fingering_assets(root))
     result.extend(audit_dependencies(root))
     for path in DEVELOPMENT_PATHS:

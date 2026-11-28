@@ -67,16 +67,17 @@ def inventory(root):
             "required_symbol_versions": sorted(required_versions),
             "bytes_by_path": sizes, "elf_needed": libraries, "asset_sha256": assets,
             "external_elf_sonames": sorted(needed - supplied), "resolved_host_sonames": sorted(host),
-            "dynamic_host_libraries": {"libcairo.so.2": "CairoSVG engraving rasterization"},
+            "dynamic_host_libraries": {"libcairo.so.2": "CairoSVG engraving rasterization",
+                                       "libfluidsynth (optional)": "External sample bank support"},
             "device_requirements": "Host MIDI sequencer, display and audio drivers"}
 
 
 if __name__ == "__main__":
     release = Path(sys.argv[1]).resolve()
     report = inventory(release)
-    if len(sys.argv) == 3:
-        archive = Path(sys.argv[2])
+    for field, filename in zip(("archive", "library_sources"), sys.argv[2:]):
+        archive = Path(filename)
         with archive.open("rb") as stream:
             digest = hashlib.file_digest(stream, "sha256").hexdigest()
-        report["archive"] = {"name": archive.name, "bytes": archive.stat().st_size, "sha256": digest}
+        report[field] = {"name": archive.name, "bytes": archive.stat().st_size, "sha256": digest}
     print(json.dumps(report, indent=2, sort_keys=True))

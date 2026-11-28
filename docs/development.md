@@ -232,14 +232,18 @@ export PIANO_GODOT_BINARY=/absolute/path/to/godot
 bash scripts/package-inprocess.sh
 ```
 
-The build requires `readelf` and `ldd` to inspect the staged ELF files. It writes
+The release builder needs a C/C++ compiler, CMake, curl and GNU tar for the
+bundled FluidSynth renderer and library sources, plus `readelf` and `ldd` to
+inspect the staged ELF files. It writes
 `dist/runtime-inventory.json` alongside the archive with wheel versions and
 owners, per-file sizes, hashes for model and font assets, and native library
 requirements. The desktop uses host graphics, MIDI and audio drivers and
-Cairo. Sampled Listen also uses the installed FluidSynth library and SF2.
+Cairo. Sampled Listen loads the bundled minimal FluidSynth library and the
+FreePats Upright Piano KW SF2. An explicitly selected external bank can use
+the host FluidSynth when installed.
 Run `bash scripts/verify-embedded-production-local.sh --package-only` for the
 relocated-package checks. Set `PIANO_TEACHER_SOUNDFONT` to exercise a custom
-bank in addition to the clean installation's basic piano.
+bank in addition to the default bundled upright.
 
 The Python prefix must include shared libpython, the CPU ONNX Runtime wheel
 with its license and third-party notices, and the other runtime dependencies.
@@ -255,8 +259,31 @@ or architecture shape.
 
 End users do not need a compiler, pip, system Python or a separate Godot install
 for that assembled package. The host still supplies compatible OS/ELF runtime,
-MIDI/ALSA and graphics/display drivers. A second-machine run verifies
-portability.
+MIDI/ALSA and graphics/display drivers. Each platform claim needs a run of the exact archive in
+that target environment.
+
+Distribute `dist/piano-teacher-library-sources.tar` alongside the desktop
+archive. It contains the matching Verovio 5.7.0 Python extension sources
+and the AlmaLinux GCC source RPM for NumPy's bundled Fortran and quadmath
+libraries. Both ELF build IDs match the vendor RPMs. The application includes
+the FluidSynth source and build instructions, the CairoSVG Python sources,
+wheel notices and the instrument, model and count-in attributions.
+The package builder verifies downloaded source hashes. For an offline
+rebuild supply `PIANO_RELEASE_SOURCE_CACHE` containing the named GCC RPM
+and original Verovio sdist, and `PIANO_FLUIDSYNTH_SOURCE` pointing to the
+source archive included under `licenses/FluidSynth/`.
+[Bundled library sources](../scripts/release/Library-sources.txt) · [GNU distribution FAQ](https://www.gnu.org/licenses/gpl-faq.html#UnchangedJustBinary)
+
+The music21 importer uses its Python modules and MusicXML schema. The
+export excludes its optional repertoire, format samples and Scala scale
+archive. Individual works in those collections have independent rights.
+Verovio's optional Liberation font is omitted because the renderer leaves
+`fontTextLiberation` disabled. The software still ships the five music
+fonts listed in its font notice. Lumikey's upstream npm declaration covers
+the package containing the weights. The model notice records the absence
+of a separate rights statement for the weights. Any decision about sales
+terms or third-party rights clearance remains with the distributor.
+[Music21 license](https://github.com/cuthbertLab/music21/blob/master/music21/LICENSE) · [Model notice](../piano_teacher/fingering/THIRD_PARTY_NOTICES.md) · [Verovio font notice](../scripts/release/Verovio-fonts.txt)
 
 Run the existing full [production verifier](../scripts/verify-embedded-production-local.sh)
 to exercise the strict relocated build/boot path. Preserve the distinction
