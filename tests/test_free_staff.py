@@ -67,7 +67,7 @@ def test_a_key_while_the_next_target_moves_in_earns_nothing(practice_session):
     assert found["mode"] != "learn" or found["teaching"]["target_index"] == 2
 
 
-def test_a_move_takes_at_most_one_and_a_half_seconds(practice_session):
+def test_free_movement_uses_duration_target_without_excessive_acceleration(practice_session):
     session = practice_session(bars=2, bpm=20)     # a very slow piece
     state = free(session)
     session.strike(state["teaching"]["expected_notes"][0]["pitch"])
@@ -76,7 +76,10 @@ def test_a_move_takes_at_most_one_and_a_half_seconds(practice_session):
     move = segments[-2]
     assert move["kind"] == "rest"
     seconds = move["beats"]*60/move["spans"][0][1]
-    assert seconds <= 1.5+1e-6
+    # A 3-beat move cannot complete in 1.5 s at an 80 BPM cap.
+    # Preserve the independent long-gap no-sprint requirement.
+    assert move["spans"][0][1] == pytest.approx(min(80, max(20, move["beats"]*40)))
+    assert seconds <= max(1.5, move["beats"]*60/80)+1e-6
 
 
 def test_after_a_pause_in_the_travel_keys_wait_for_the_note(practice_session):

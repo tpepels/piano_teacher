@@ -333,3 +333,12 @@ def test_a_configured_end_key_in_the_exercise_remains_a_musical_note(practice_se
     state = session.ready_score()
     assert state["flow"]["step"] == "tempo" and not state["paused"]
     assert state["bpm"] == 80
+
+
+def test_discovery_only_chooses_unambiguous_initial_or_matching_piano():
+    from piano_teacher.application.midi_connection import MidiConnection
+    candidate = MidiConnection._candidate
+    assert candidate(("Other Piano",), "USB Piano") is None
+    assert candidate(("USB Piano 24:0",), "USB Piano 20:0") == "USB Piano 24:0"
+    assert candidate(("USB Piano 24:0", "USB Piano 25:0"), "USB Piano 20:0") is None
+    assert candidate(("MIDI Through", "USB Piano"), "") == "USB Piano"

@@ -32,8 +32,9 @@ RUN_LEAD_SECONDS = 0.35
 # A Free move starts this much after the played target, so the state that
 # carries it reaches Godot first and the staff glides instead of jumping.
 MOVE_LEAD_SECONDS = 0.12
-# Free moves from one found target to the next within this time, however
-# slow the piece, so the next target is soon at the line.
+# Free aims to move between targets within this time, subject to the
+# anti-sprint limit (and never slower than the selected practice tempo).
+# Longer gaps necessarily take longer than the target duration.
 MAX_MOVE_SECONDS = 1.5
 FREE_MOVE_RATE_FLOOR = 80.0
 # Past segments kept in the published snapshot (their ink is still leaving).

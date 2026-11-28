@@ -170,6 +170,10 @@ class MidiConnection:
         matches = [name for name in names if preferred and stable(name) == stable(preferred)]
         if len(matches) == 1:
             return matches[0]
+        # Once a device was selected, never silently select a different
+        # physical keyboard. Automatic discovery is for the initial setup.
+        if preferred:
+            return None
         physical = [name for name in names if not any(
             marker in name.casefold() for marker in (
                 "midi through", "rtmidi", "virtual midi", "system:timer", "system:announce"))]

@@ -91,9 +91,12 @@ def test_automatic_repeat_follows_after_one_count_in_bar(practice_session):
     # attempt repeats at target and a second masters this hand.
     for bpm, next_bpm in ((80,80),):
         start = take["deadline_ms"]/1000
-        # Where the repeat will start is published while this take plays,
-        # so its notes can be drawn early and scroll in from the right.
-        predicted = session.snapshot()["musical_timeline"]["next_take"]["world_start"]
+        # No speculative take: compute the expected committed repeat from
+        # the outgoing authorized take and the one full count-in bar.
+        timeline = session.snapshot()["musical_timeline"]
+        assert timeline["next_take"] is None
+        outgoing = next(s for s in timeline["segments"] if s["take_id"] == take["segment_id"])
+        expected_world = outgoing["world_start"] + 4 + 4
         for beat, pitch, on in ((0,72,True), (1,72,False), (3,79,True), (4,79,False)):
             session.clock.at = start+beat*60/bpm
             session.key(pitch, on, after=0)
@@ -107,7 +110,7 @@ def test_automatic_repeat_follows_after_one_count_in_bar(practice_session):
             start+4*60/bpm+spans_seconds(count_in_spans(4,bpm,next_bpm)))
         placed = next(segment for segment in state["musical_timeline"]["segments"]
                       if segment["take_id"] == incoming["segment_id"])
-        assert placed["world_start"] == pytest.approx(predicted)
+        assert placed["world_start"] == pytest.approx(expected_world)
         if bpm == 80:
             assert state["streak"] == 1
         final = [event for event in session.ask("feedback.events")["events"]

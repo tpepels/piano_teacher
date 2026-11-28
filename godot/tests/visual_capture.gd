@@ -51,7 +51,9 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
             # source note by pitch, selected score and nearest reading axis.
             var source_pitches: Dictionary = {}
             for note in renderer.timeline.notes:
-                source_pitches[str(note.get("id",""))] = int(note.get("pitch",-1))
+                # The canonical semantic source uses midi_pitch, not pitch;
+                # rendered heads use source_id rather than engraved event_id.
+                source_pitches[str(note.get("id",""))] = int(note.get("midi_pitch",-1))
             var nearest := INF
             for head in renderer.drawn_note_instances:
                 var source: String = str(head.get("source_id",""))
