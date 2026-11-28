@@ -28,7 +28,7 @@ var _midi_until_ms := -1.0
 
 # Test-only markers taken BEFORE the real input is sent. They are attached
 # to the next completed viewport frame, not reconstructed from phase names.
-func mark(kind: String, label: String = "", pitch: int = -1) -> void:
+func mark(kind: String, label: String = "", pitch: int = -1, attack_offset: float = 0.0) -> void:
     if not _enabled or _failed:
         return
     if _pacing_only and kind != "midi":
@@ -49,26 +49,31 @@ func mark(kind: String, label: String = "", pitch: int = -1) -> void:
             for note in teaching.get("expected_notes",[]):
                 targets.append(str(note.get("source_id","")))
         else:
-            # The synthetic journey plays the first attack of its
-            # authorized take. Resolve that expected source before MIDI,
-            # independently of whether a physical head has been projected.
+            # The journey supplies the authored attack offset, not a
+            # nearest-note guess or a notehead observed after injection.
             var current: Variant = state.get("playback_timeline",{}).get("current")
             if current is Dictionary:
                 var source: Dictionary = current.get("source",{})
                 if int(source.get("revision",-1)) == renderer.timeline.revision:
                     targets = correct_probe_targets(renderer.timeline.model,pitch,
-                        float(source.get("from_beat",NAN)))
+                        float(source.get("from_beat",NAN))+attack_offset)
         baseline = _painted_heads(stage,viewport_size)
     _events.append({"kind":kind,"label":label,"pitch":pitch,"targets":targets,"baseline_feedback":baseline,
-        "take":"%s|%d|%d|%s" % [str(state.get("piece_fingerprint","")),int(state.get("revision",-1)),
-            int(state.get("transport_id",-1)),str(state.get("mode",""))],
+        "take":_take_key(state),
         "at_ms":float(Time.get_ticks_usec())*.001,
         "world":float(flow.beat),"bpm":float(state.get("bpm",0.0)),
         "paused":bool(state.get("paused",false)),
         "button_text":str(_app.practice_view.start_button.text),
         "transport":int(state.get("transport_id",-1)),
         "midi_count":int(state.get("midi_input_count",0)),
-        "layers":_layers(stage,viewport_size) if kind == "transition" else []})
+        "layers":_layers(stage,viewport_size) if kind == "transition" else [],
+        "primary_layer":stage.renderer.get_instance_id() if kind == "transition" else -1,
+        "opening_header_beats":maxf(stage.renderer._stream_header_beats(0.0),
+            stage.renderer._stream_header_beats(1.0))+.25 if kind == "transition" else 0.0})
+
+static func _take_key(state: Dictionary) -> String:
+    return "%s|%d|%d|%s" % [str(state.get("piece_fingerprint","")),int(state.get("revision",-1)),
+        int(state.get("transport_id",-1)),str(state.get("mode",""))]
 
 # Only active source attacks at the authored onset can satisfy this
 # probe. The separate painted-feedback witness still requires the
@@ -201,6 +206,7 @@ func _midi_sample(now_ms: float) -> Dictionary:
     var state: Dictionary = _app.current_state()
     var size: Vector2 = _window.get_visible_rect().size
     return {"midi_count":int(state.get("midi_input_count",0)),
+        "midi_pitch":state.get("midi_input_note"),"midi_take":_take_key(state),
         "painted_feedback":_painted_heads(_app.practice_view.stage,size)}
 
 func _layers(stage, viewport_size: Vector2) -> Array:
@@ -236,6 +242,7 @@ func _sample() -> Dictionary:
         "events":_events.duplicate(true),
         "painted_feedback":_painted_heads(stage,size) if float(Time.get_ticks_usec())*.001 <= _midi_until_ms else [],
         "midi_count":int(state.get("midi_input_count",0)),
+        "midi_pitch":state.get("midi_input_note"),"midi_take":_take_key(state),
         "teaching":state.get("teaching"),
         "button_text":str(_app.practice_view.start_button.text),
         "button_disabled":bool(_app.practice_view.start_button.disabled),

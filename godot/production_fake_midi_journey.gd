@@ -543,6 +543,7 @@ func _process(_delta: float) -> bool:
                 played_first = true
             if played_first and not played_second and beat >= SECOND_BEAT and \
                     beat < SECOND_BEAT+.10:
+                _visual_capture.mark("midi","correct_later",79,SECOND_BEAT)
                 _strike(79)
                 played_second = true
             if played_second:

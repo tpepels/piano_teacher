@@ -147,6 +147,24 @@ def _clearance(event):
     return max([0.,*(end-world for end in ends)])
 
 
+def _transition_clearance(event, bar):
+    """Independent physical bound: only current-layer trailing rest is reusable."""
+    world = event["world"]
+    occupied = _clearance(event)
+    if "primary_layer" not in event or "opening_header_beats" not in event:
+        return occupied
+    blockers = [0.]
+    for layer in event.get("layers", []):
+        for strip in layer.get("strips", []):
+            if not strip.get("ever_visible") or strip.get("world_end") is None:
+                continue
+            if layer.get("id") != event["primary_layer"] or strip.get("kind") != "rest":
+                blockers.append(float(strip["world_end"])-world)
+    # At least the whole count-in after source ink, and room for the new
+    # header after ALL ink. No engine scheduling helper is consulted.
+    return max(max(blockers), occupied - max(0., bar-event["opening_header_beats"]))
+
+
 def _take(meta, event):
     playback = meta.get("playback") or {}
     current = playback.get("current") or {}
@@ -265,7 +283,7 @@ class TimingReview:
                     take,count = placed
                     bar = float(count["beats"])
                     bpm = max(1.,event["bpm"])
-                    clearance = _clearance(event)
+                    clearance = _transition_clearance(event,bar)
                     start = take["world_start"]+new.get("run_offset",0.)
                     distance = start-event["world"]
                     # One complete count-in, physical clearance, header
@@ -275,7 +293,8 @@ class TimingReview:
                     duration_limit = maximum*60000/bpm+TRANSITION_SLACK_MS
                     if distance>maximum and not event.get("distance_reported"):
                         reasons.append("unnecessary_transition_travel")
-                        metrics.update(transition_distance=distance,transition_limit=maximum,clearance=clearance)
+                        metrics.update(transition_distance=distance,transition_limit=maximum,clearance=clearance,
+                                       occupied=_clearance(event))
                         event["distance_reported"] = True
                     if new.get("phase")=="playing":
                         self.completed.append({"kind":"transition","label":label,"response_ms":event["response_ms"],"onset_ms":elapsed,"limit_ms":duration_limit,"distance":distance,"limit_beats":maximum})

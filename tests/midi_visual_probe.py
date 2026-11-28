@@ -48,8 +48,18 @@ class MidiProbeReview:
         for probe in self.pending:
             elapsed=max(0.,now-probe["at_ms"])
             label=probe["label"]
-            if meta.get("midi_count",0)>probe["midi_count"] and "receipt_ms" not in probe:
-                probe["receipt_ms"]=elapsed
+            if "receipt_ms" not in probe:
+                count = meta.get("midi_count", 0)
+                if count == probe["midi_count"]+1 and meta.get("midi_pitch") == probe["pitch"] and meta.get("midi_take") == probe["take"]:
+                    probe["receipt_ms"]=elapsed
+                elif count > probe["midi_count"]:
+                    result={"kind":"midi","label":label,"failed":True,
+                            "expected_pitch":probe["pitch"],"actual_pitch":meta.get("midi_pitch"),
+                            "expected_count":probe["midi_count"]+1,"actual_count":count}
+                    self.completed.append(result)
+                    reasons.append("midi_receipt_identity_mismatch")
+                    metrics["midi_probe"]=result
+                    continue
             statuses=("missed",) if label=="wrong" else ("hit","sounding","early_release")
             matching=[h for h in meta.get("painted_feedback",[])
                       if h["take"]==probe["take"] and h["source"] in probe["targets"]
@@ -77,6 +87,6 @@ class MidiProbeReview:
         failures=[]
         if self.pending:
             failures.append({"reasons":["unfinished_midi_probes"],"labels":[p["label"] for p in self.pending]})
-        if required and not {"wrong","correct"}<={p["label"] for p in self.completed if not p.get("failed")}:
+        if required and not {"wrong","correct","correct_later"}<={p["label"] for p in self.completed if not p.get("failed")}:
             failures.append({"reasons":["missing_midi_probe_coverage"]})
         return failures

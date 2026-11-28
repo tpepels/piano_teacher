@@ -59,11 +59,15 @@ func _run() -> void:
     var model := {"active_note_ids":["a","b"],"notes":[
         {"id":"a","midi_pitch":72,"onset_beats":0.0},
         {"id":"b","midi_pitch":72,"onset_beats":1.0},
-        {"id":"c","midi_pitch":72,"onset_beats":0.0}]}
+        {"id":"c","midi_pitch":72,"onset_beats":0.0},
+        {"id":"d","midi_pitch":79,"onset_beats":2.5}]}
     check(VisualCapture.correct_probe_targets(model,72,0.0) == ["a"],
         "MIDI witness resolves the active canonical source at its authorized onset")
     check(VisualCapture.correct_probe_targets(model,72,1.0) == ["b"],
         "Repeated pitches bind to distinct source identities")
+    model["active_note_ids"].append("d")
+    check(VisualCapture.correct_probe_targets(model,79,2.5) == ["d"],
+        "A delayed authored attack resolves independently of take opening")
     check(VisualCapture.correct_probe_targets(model,79,0.0).is_empty(),
         "A different pitch cannot establish the expected source")
     var view = renderer()

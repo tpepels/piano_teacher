@@ -1,7 +1,7 @@
 """Fault injection for the independent rendered timing review."""
 from copy import deepcopy
 from PIL import Image, ImageDraw
-from visual_timing import TimingReview, _policy_rate, _clearance
+from visual_timing import TimingReview, _policy_rate, _clearance, _transition_clearance
 
 def meta(t=0, world=0, bpm=40, kind="take", speed=None):
     speed = bpm if speed is None else speed
@@ -105,7 +105,7 @@ def test_retry_rejects_excessive_placement_even_with_correct_rendering():
 def test_full_capture_uses_same_midi_probe_as_lightweight():
     r=TimingReview()
     old,new=meta(),meta(40,.02)
-    new.update(midi_count=1,events=[{"kind":"midi","label":"wrong","pitch":61,
+    new.update(midi_count=1,midi_pitch=61,midi_take="take",events=[{"kind":"midi","label":"wrong","pitch":61,
                     "at_ms":1,"midi_count":0,"targets":["target"],"take":"take"}],
                painted_feedback=[{"take":"take","source":"target","event":"note",
                     "slot":"slot","layer":1,"status":"missed","x":.5,"y":.5,
@@ -143,3 +143,30 @@ def test_span_uses_sample_time_and_rejects_boundary():
     before=_span(m)
     m["timeline"]["segments"][0]["beats"]=10
     assert _span(m)!=before
+
+
+
+def test_transition_bound_reuses_only_current_layer_trailing_rest():
+    event={"world":0,"primary_layer":1,"opening_header_beats":.75,
+           "layers":[{"id":1,"strips":[{"kind":"source","ever_visible":True,"world_end":.5},
+                 {"kind":"rest","ever_visible":True,"world_end":3.5}]}]}
+    assert _transition_clearance(event,4)==.5
+    assert _transition_clearance(event,2)==2.25
+    event["layers"].append({"id":2,"strips":[{"kind":"rest","ever_visible":True,"world_end":3.}]})
+    assert _transition_clearance(event,4)==3.
+
+
+def test_retry_rejects_old_double_wait():
+    r=TimingReview()
+    old,new=meta(),meta(40,.02)
+    event={"kind":"transition","label":"retry","at_ms":1,"world":0,"bpm":40,
+           "transport":1,"button_text":"Pause","primary_layer":1,"opening_header_beats":.75,
+           "layers":[{"id":1,"strips":[{"kind":"source","ever_visible":True,"world_end":.5},
+                 {"kind":"rest","ever_visible":True,"world_end":3.5}]}]}
+    new.update(events=[event],transport=2,phase="count_in",
+        playback={"current":{"segment_id":"new"},"presentation_confirmed":True})
+    new["timeline"]["segments"]=[
+        {"kind":"rest","world_start":0,"start_ms":0,"beats":3.5,"spans":[[3.5,40,40]]},
+        {"kind":"count_in","world_start":3.5,"start_ms":5250,"beats":4,"spans":[[4,40,40]]},
+        {"kind":"take","world_start":7.5,"start_ms":11250,"beats":4,"spans":[[4,40,40]],"take_id":"new"}]
+    assert "unnecessary_transition_travel" in observe(r,old,new)

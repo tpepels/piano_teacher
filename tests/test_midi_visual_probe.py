@@ -10,8 +10,9 @@ def event(label="wrong",baseline=()):
     return {"kind":"midi","label":label,"pitch":61,"targets":["target"],"take":"take",
             "at_ms":1,"midi_count":0,"baseline_feedback":list(baseline)}
 
-def sample(t,heads=(),events=(),count=1):
-    return {"time_ms":t,"midi_count":count,"painted_feedback":list(heads),"events":list(events)}
+def sample(t,heads=(),events=(),count=1,pitch=61,take="take"):
+    return {"time_ms":t,"midi_count":count,"midi_pitch":pitch,"midi_take":take,
+            "painted_feedback":list(heads),"events":list(events)}
 
 def painted(color,at=(256,120)):
     im=Image.new("RGB",(640,400),(15,45,35))
@@ -44,3 +45,21 @@ def test_receipt_is_required_even_with_real_core_draw():
     r=MidiProbeReview()
     r.observe(sample(40,[head()],[event()],count=0))
     assert "midi_feedback_missing_or_late" in r.observe(sample(300,[head()],count=0))[0]
+
+
+
+def test_another_attack_cannot_supply_the_receipt():
+    for count,pitch,take in ((1,62,"take"),(2,61,"take"),(1,61,"obsolete")):
+        r=MidiProbeReview()
+        reasons,_=r.observe(sample(40,[head()],[event()],count=count,pitch=pitch,take=take))
+        assert "midi_receipt_identity_mismatch" in reasons
+        assert r.completed[0]["failed"]
+
+
+def test_later_attack_coverage_is_required():
+    r=MidiProbeReview()
+    for label in ("wrong","correct"):
+        r.observe(sample(40,[head("missed" if label=="wrong" else "hit")],[event(label)]))
+    assert r.finish(required=True)==[{"reasons":["missing_midi_probe_coverage"]}]
+    r.observe(sample(40,[head("hit")],[event("correct_later")]))
+    assert not r.finish(required=True)
