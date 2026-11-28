@@ -54,6 +54,7 @@ class MidiConnection:
         self.next_scan_at = 0.0
         self.retry_after = 0.0
         self.auto_discovery = True
+        self._last_device = ""
         self.input_count = 0
         self.input_note = None
         self.input_at = None
@@ -117,6 +118,7 @@ class MidiConnection:
         if not isinstance(name, str):
             raise ValueError("MIDI input name must be text")
         self.auto_discovery = bool(name)
+        self._last_device = name
         result = DeviceSelection()
         port = self._release("device_changed")
         try:
@@ -182,7 +184,7 @@ class MidiConnection:
         if not (self.enabled and self.auto_discovery and not self.connected
                 and now >= self.retry_after):
             return None
-        name = self._candidate(names, preferred)
+        name = self._candidate(names, self._last_device or preferred)
         if name is None:
             return None
         try:
@@ -194,6 +196,7 @@ class MidiConnection:
                 "Check the cable or Bluetooth, or choose the piano in Settings.",
                 "Switch it on or plug it in again; it is found automatically.")
         self.port, self.device = port, name
+        self._last_device = name
         return MidiNotice(f"Piano connected again: {name}.",
             "Press Play when you are ready.", connected=True, sampled_at=now)
 

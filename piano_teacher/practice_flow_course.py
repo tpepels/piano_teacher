@@ -85,9 +85,11 @@ def _initial_tempo(course):
     # the learner already failed.
     if dict(course.progress.free_returns).get(course.key, 0):
         return floor_bpm(int(course.progress.target_bpm))
-    return initial_bpm(int(course.progress.target_bpm),
+    bpm = initial_bpm(int(course.progress.target_bpm),
         notes=course.stage.variant.notes, hand=course.hand,
         final=course.exercise.kind == "perform")
+    return min((tempo for key, tempo, count in course.progress.tempo_failures
+                if key == course.key and count >= 2 and tempo < bpm), default=bpm)
 
 
 def _entry_tempo(event, state, decision):

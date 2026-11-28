@@ -100,3 +100,9 @@ def test_auto_selection_prefers_piano_and_preserves_active_connection():
     assert midi.restore_preferred(midi.scan().names, "Another piano", callback=callback) is None
     assert backend.opened == ["Kawai CA49 24:0"]
     assert midi._candidate(tuple(backend.names), "") is None
+    with midi.disconnected():
+        pass
+    clock.at += midi.RETRY_SECONDS
+    backend.names[2] = "Kawai CA49 28:0"
+    assert midi.restore_preferred(midi.scan().names, "", callback=callback).connected
+    assert midi.device == "Kawai CA49 28:0"

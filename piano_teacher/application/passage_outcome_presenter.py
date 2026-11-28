@@ -42,6 +42,8 @@ def next_action(pending, *, target_bpm: float, start_beat: float,
     if decision.verdict is not None and decision.verdict.accepted:
         label = "Clean" if decision.verdict.clean else "Accepted"
         if pending.state.progress.bpm < pending.state.progress.target_bpm:
+            if decision.progress_after.tempo_clean:
+                return f"{label} passage — once more at {decision.progress_after.bpm} BPM."
             message = (f"{label} passage — restore tempo to "
                        f"{decision.progress_after.bpm} BPM toward {target_bpm} BPM.")
         else:
