@@ -32,7 +32,7 @@ jobs:
         run: docker build -f scripts/release/verify-linux.Dockerfile -t piano-release-verifier .
       - name: Verify exported archive offline
         run: |
-          docker run --rm --network none --user 1000:1000 \
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
             --mount "type=bind,source=$RUNNER_TEMP/piano-release,target=/archives,readonly" \
             --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/release,target=/verification/scripts/release,readonly" \
             --mount "type=bind,source=$GITHUB_WORKSPACE/tests/fixtures/pieces/bach-invention-1.midi,target=/verification/tests/fixtures/pieces/bach-invention-1.midi,readonly" \

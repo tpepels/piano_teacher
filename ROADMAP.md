@@ -126,11 +126,43 @@ import and cache restore matched across all 22 MIDI and MusicXML fixtures.
   numeric UID/GID, preserving unprivileged execution and read-only mounts.
   Re-run the exact artifact offline; this is a verification-environment blocker,
   not evidence that the application passed or failed at runtime.
-- Local automated verification is requested before the next physical test.
-  See [developer commands](docs/development.md#local-automated-verification).
-  Local logs and any remaining Codex working-tree changes are not available
-  in this checkpoint. Do not promote historical benchmark or test results
-  to the latest revision.
+- Owner-provided local automated logs, clean checkout 7b1adb82, Arch Linux,
+  Godot 4.7.2, CPython 3.14: dependencies passed; 384 Python tests passed
+  (248.98 s, three existing music21 pedal-import warnings; 81.7% line and
+  64.8% branch coverage); Godot syntax and all five behaviour suites passed.
+  The separate current core CI on documentation-only b8dbcba passed
+  ([46150605966](https://github.com/tpepels/piano_teacher/actions/runs/46150605966)).
+  The earlier core Python job was cancelled by a newer push.
+- Native local verification passed registration, real score preparation,
+  cancellation/backpressure/crash recovery/restart (38 ms shutdown during
+  fingering), Play/Pause/Resume, Moonlight, all 16 other MIDI repertoire
+  journeys and the 2/4 synthetic MIDI journey. The external Pathétique II
+  source was not supplied. Two independent scenarios failed:
+  (1) the 4/4 synthetic MIDI journey at Tempo-to-Free after two failed takes:
+  `Staff jumped 0.066 beats in 1 ms (allowed 0.065)`;
+  (2) the developer-host package tar write: `gzip: stdout: Disk quota exceeded`.
+  The latter is an environment failure, not an application startup failure.
+  The 2/4 deliberate frame-hitch scenario recovered and passed but emitted
+  TAKE_WITHOUT_SCORE (expected segment 6:10, bound 6:6); four repertoire
+  runs warned of two ObjectDB instances leaked on exit. Investigate these
+  diagnostics; preserve the continuity assertion and admission guarantees.
+- The independent local Debian 12 release build passed (171,380,820-byte
+  desktop archive; 412,400,967 staged bytes). Relocated verification of that
+  exact archive on Arch passed: MusicXML, sampled FreePats Upright Piano KW
+  (32,000 frames), progress, MIDI discovery, both-hand fingering, native
+  notation, worker recovery with zero failures and shutdown during held
+  fingering in 36 ms. This is build-target/host software evidence, not
+  verification of execution on clean Debian or a physical keyboard.
+- Correct the release CI mount access by matching the runner UID/GID instead
+  of assuming UID 1000. Retain read-only mounts, no networking and
+  unprivileged execution. Verify the new job before closing the target gate.
+  The native 4/4 continuity defect remains open: reproduce and inspect
+  same-run timeline publication at Tempo-to-Free, measuring exact
+  monotonic frame times and projected/painted world positions. Do not
+  increase test tolerance without evidence of a measurement error.
+  Re-run the native verifier with `--without-package` after correction;
+  use a filesystem with sufficient quota for the separate developer-host
+  package check if required. See [developer commands](docs/development.md#local-automated-verification).
 - The final rendering changes require repeated paired measurements; faster
   fragment extraction alone does not resolve the earlier Bach/Hanon startup
   regressions.

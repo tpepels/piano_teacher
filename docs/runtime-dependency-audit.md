@@ -17,20 +17,23 @@
 | A7 · Score commands | Godot and the player journeys use `score.bundle` for bound semantic and layout data. The two partial operations have been removed from routing, native classification and the child. |
 | A8 · Packaging | The Linux builder stages reachable application code, records wheel and ELF dependencies, and hashes fonts, models and the SF2. The release includes notices and rebuildable FluidSynth source, plus a companion archive of library sources. The Debian 12 target is gated by the offline [release verification workflow](../.github/workflows/linux-release.yml); record its actual outcome separately from historical developer-host results. Commercial rights for the trained fingering weights remain unresolved. [Model provenance](../piano_teacher/fingering/THIRD_PARTY_NOTICES.md) |
 
-### Verification checkpoint (2026-11-28, 7b1adb8)
+### Verification checkpoint (2026-11-28, 7b1adb8; owner local logs received)
 
 | Finding | Remaining acceptance / action |
 | --- | --- |
-| A1 | Direct import and authored marks implemented, including cross-measure slurs and anchored grace groups. Run the full current native repertoire and confirm notation at the piano. Codex reported coverage of 75 cross-measure and 80 same-measure slurs; that report is historical, not a fresh independent run on 7b1adb8. |
-| A2 | Node removal implemented, historical exact parity on 64,771 assignments, current fingering CI passed. Current relocated archive inference remains to be verified. Commercial rights for the original trained weights are a separate open gate. |
-| A3 | Source/command isolation implemented and previously measured. Full current native integration and physical MIDI responsiveness remain open. |
+| A1 | Direct import and authored marks implemented, including cross-measure slurs and anchored grace groups. Owner local Python and all 17 native MIDI repertoire journeys passed. Codex's 75 cross-measure and 80 same-measure slur coverage is historical; physical notation acceptance remains open. |
+| A2 | Node removal implemented, historical exact parity on 64,771 assignments, current fingering CI and relocated Debian-built archive inference on Arch passed. Native held-inference shutdown took 38 ms (source) and 36 ms (archive). Commercial rights for the original trained weights remain open. |
+| A3 | Source/command isolation implemented and previously measured. Native cancellation/backpressure/crash recovery passed; the 4/4 Tempo-to-Free continuity check failed and requires root-cause investigation. Physical MIDI responsiveness remains open. |
 | A4 | Rendering optimizations implemented; final comparative performance acceptance open. Earlier Bach/Hanon cold and warm opening regressions must be remeasured. No automated comparative benchmark runner is checked in. |
-| A5 | Bundled sampled Listen implemented for Linux releases; basic offline synthesis is deliberately retained for source installations lacking FluidSynth. Verify the current archive audio path and actual speakers. |
-| A6–A7 | Production research separation and single score bundle implemented; historical equivalence and current Godot/fingering checks recorded. Await the full current Python/native results. |
-| A8 | Debian 12 build succeeded, 171,687,950-byte desktop archive. Clean offline target execution blocked by archive mount permissions before application startup. Resolve the CI access issue and repeat. Desktop isolation remains the approved scope; iPad is excluded. Commercial redistribution clearance remains open. |
+| A5 | Bundled sampled Listen implemented for Linux releases; basic offline synthesis remains for source installs lacking FluidSynth. Owner archive render passed (FreePats upright, 32,000 frames). Physical speaker acceptance remains open. |
+| A6–A7 | Production research separation and single score bundle implemented; local 384 Python tests, five Godot suites and packaged remediation/recovery passed. The induced 2/4 hitch recovered but logged TAKE_WITHOUT_SCORE; investigate the stale binding and the four shutdown ObjectDB leak warnings. |
+| A8 | Debian 12 builds succeeded in CI and locally. Owner's 171,380,820-byte archive passed relocated execution on Arch; developer-host package build hit disk quota. Clean offline Debian target execution remains unverified: CI failed before startup on archive permissions. Match verifier UID/GID to runner and rerun. Desktop worker isolation remains the approved scope; iPad excluded; commercial redistribution remains open. |
 
 [Exact core run](https://github.com/tpepels/piano_teacher/actions/runs/46150153844):
-quality, Godot and fingering passed; full Python pending at checkpoint.
+quality, Godot and fingering passed; Python was cancelled by a later push.
+The subsequent documentation-only revision's [core CI](https://github.com/tpepels/piano_teacher/actions/runs/46150605966)
+passed, and owner local regression results on 7b1adb8 independently passed
+384 tests (81.7% lines, 64.8% branches). Native integration is not green.
 [Exact release run](https://github.com/tpepels/piano_teacher/actions/runs/46150153849):
 build passed, offline execution failed at archive access. See the
 [roadmap checkpoint](../ROADMAP.md#follow-up-release-verification-2026-11-28)
