@@ -187,7 +187,8 @@ def make_packet(corpus, plan, reviewed, maps, output):
     # Packet content excludes corpus split labels, expected synthetic features,
     # contrast hints and model predictions. Coordinator key stays separate.
     packet = dict(version=1, plan_version=plan["version"],
-                  plan_digest=digest(plan), cases=cases, units=units)
+                  plan_digest=digest(plan), corpus_digest=digest(corpus),
+                  source_review_digest=digest(reviewed), cases=cases, units=units)
     packet_id = digest(packet)
     packet["packet_id"] = packet_id
     save(output / "packet.json", packet)
@@ -228,10 +229,12 @@ def ordinal_alpha(rows):
     return None if expected == 0 else 1-observed/expected
 
 
-def agreement(packet, sheets, plan):
+def agreement(packet, sheets, plan, *, corpus=None):
     packet_id = packet.get("packet_id")
     if packet_id != digest({k: v for k, v in packet.items() if k != "packet_id"}) or packet.get("plan_digest") != digest(plan):
         raise ValueError("Packet or frozen plan identity mismatch")
+    if corpus is not None and packet.get("corpus_digest") != digest(corpus):
+        raise ValueError("Packet belongs to a different frozen corpus")
     units = {unit["unit_id"] for unit in packet["units"]}
     if not units or len(units) != len(packet["units"]):
         raise ValueError("Invalid packet units")
@@ -293,7 +296,13 @@ def agreement(packet, sheets, plan):
             failures.append(f"unreliable category: {category}")
     if not any(v["status"] == "pass" for v in metrics["categories"].values()):
         failures.append("no adequately sampled reliable category")
-    return dict(metrics=metrics, failures=failures, pilot_status="pass" if not failures else "open",
+    provenance = dict(packet_id=packet_id, plan_digest=digest(plan),
+                      corpus_digest=packet.get("corpus_digest"),
+                      source_review_digest=packet.get("source_review_digest"),
+                      rating_digests=sorted(digest(sorted(sheet,key=lambda row: row["unit_id"]))
+                                            for sheet in sheets))
+    return dict(provenance=provenance, metrics=metrics, failures=failures,
+                pilot_status="pass" if not failures else "open",
                 d0_status="requires independent provenance review and threshold sign-off")
 
 
@@ -312,7 +321,7 @@ def main():
     args = parser.parse_args()
     corpus, plan = load(HERE/"corpus-v1.json"), load(HERE/"pilot-plan.json")
     if args.command == "assess":
-        report = agreement(load(args.packet), [read_csv(p) for p in args.ratings], plan)
+        report = agreement(load(args.packet), [read_csv(p) for p in args.ratings], plan, corpus=corpus)
         save(args.output, report)
         print(json.dumps(report, indent=2))
         return int(report["pilot_status"] != "pass")
