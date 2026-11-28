@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "seed": 20261128,
+  "corpus_version": 1,
+  "source_windows": [
+    "bach-prelude-1",
+    "bach-prelude-2",
+    "mozart-k545-1",
+    "mozart-k545-3",
+    "satie-gymnopedie-1",
+    "rachmaninoff-op3-2-1"
+  ],
+  "synthetic": [
+    "melody-slow",
+    "melody-left",
+    "leap-short",
+    "leap-long",
+    "stretch-octave",
+    "stretch-tenth",
+    "run-slow",
+    "run-fast"
+  ],
+  "hands": [
+    "L",
+    "R"
+  ],
+  "tempo_factors": [
+    1,
+    0.5
+  ],
+  "raters": 3,
+  "criteria": {
+    "severity_coverage": 0.85,
+    "ordinal_alpha": 0.67,
+    "positive_agreement": 0.6,
+    "min_positive_units": 20,
+    "min_negative_units": 20,
+    "category_coverage": 0.85
+  }
+}
