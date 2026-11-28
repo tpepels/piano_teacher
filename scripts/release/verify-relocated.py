@@ -11,6 +11,7 @@ from piano_teacher.application.midi_connection import MidiConnection
 from piano_teacher.demo import DemoAudioCache
 from piano_teacher.importing.pieces import import_piece
 from piano_teacher.learning import LearningPlan
+from piano_teacher.lesson_generators import CodaAid, FukudaAid
 from piano_teacher.progress_repository import ProgressRepository
 
 SCORE = b"""<?xml version="1.0"?>
@@ -18,6 +19,19 @@ SCORE = b"""<?xml version="1.0"?>
 </score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions>
 <time><beats>4</beats><beat-type>4</beat-type></time></attributes><note><pitch><step>C</step>
 <octave>5</octave></pitch><duration>4</duration><type>whole</type></note></measure></part></score-partwise>"""
+
+
+def verify_remediation():
+    # Feed an external score to the relocated app. Repertoire stays outside the archive.
+    source = Path(__file__).resolve().parents[2] / "tests/fixtures/pieces/bach-invention-1.midi"
+    plan = LearningPlan(import_piece(source))
+    original = plan.active_variant
+    for aid, technique in ((CodaAid(), "chordified"), (FukudaAid(), "fast-reduction")):
+        stages = aid.passage_stages(plan.piece, original, kind="learn")
+        assert stages[-1].variant == original
+        stage = next(stage for stage in stages if stage.technique == technique)
+        assert all(note.source_id == plan.piece.notes[index].source_id
+                   for note, index in zip(stage.variant.notes, stage.variant.source_indices, strict=True))
 
 
 def verify(work):
@@ -53,3 +67,4 @@ def verify(work):
 if __name__ == "__main__":
     with tempfile.TemporaryDirectory(dir=Path(sys.argv[1])) as scratch:
         verify(Path(scratch))
+        verify_remediation()
