@@ -266,3 +266,29 @@ def test_free_long_inter_target_gap_is_not_compressed_into_a_sprint():
     movement = timeline.segments[-2]
     assert movement.end_bpm <= 80.0
     assert timeline.hold_open_at()-arrival >= 9.0
+
+
+def test_count_in_reuses_only_trailing_silence_and_leaves_header_room():
+    from piano_teacher.visual_transport import VisualTransport
+    transport = VisualTransport()
+    transport.report_ink_ahead(3.5, reusable_rest=3.0, opening_header=.75)
+    # Full 4-beat count-in may occupy retained silence, but not the
+    # half beat of retained source.
+    assert transport.count_in_clearance(4) == pytest.approx(.5)
+    # In shorter meter, preserve remaining silence before the count-in
+    # to keep the incoming header outside all retained ink.
+    assert transport.count_in_clearance(2) == pytest.approx(2.25)
+    assert transport.count_in_clearance(.5) == pytest.approx(3.5)
+    # Legacy/missing geometry must fall back conservatively, not
+    # inherit reuse from a previous source.
+    transport.report_ink_ahead(3.5)
+    assert transport.count_in_clearance(4) == pytest.approx(3.5)
+
+
+def test_invalid_reusable_silence_cannot_change_clearance():
+    from piano_teacher.visual_transport import VisualTransport
+    transport = VisualTransport()
+    transport.report_ink_ahead(4)
+    with pytest.raises(ValueError):
+        transport.report_ink_ahead(2, reusable_rest=3)
+    assert transport.count_in_clearance(4) == 4

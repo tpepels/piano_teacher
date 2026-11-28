@@ -414,9 +414,19 @@ func withdraw_predicted_take(facts: StreamGeometry, owner_serial: int) -> void:
 ## World beat where the ink that cannot be withdrawn ends (this layer and
 ## live peer layers), or -INF when the staff ahead is empty.
 func ink_end(facts: StreamGeometry) -> float:
+    return float(ink_clearance(facts)["end"])
+
+# Retained silence can count toward the new preparation bar, but retained
+# notes cannot. Peers remain conservative: their density/geometry may differ.
+# Derive both facts from the same withdrawal preview and occupied-end rule.
+func ink_clearance(facts: StreamGeometry) -> Dictionary:
     var remaining: Array = queue.preview_timed_withdrawal(facts.world,
         facts.density,facts.gap,facts.duration,facts.width,facts.playhead)
-    return _ink_end(facts,remaining)
+    var end: float = _ink_end(facts,remaining)
+    var sources: Array = remaining.filter(func(item):
+        return str(item.get("kind","source")) != "rest")
+    var source_end: float = _ink_end(facts,sources)
+    return {"end":end,"source_end":source_end}
 
 func _ink_end(facts: StreamGeometry, remaining: Array) -> float:
     var end: float = queue.occupied_end(remaining,facts.density,facts.gap,facts.duration)

@@ -167,7 +167,9 @@ class TransportTiming:
             return
         ahead = kwargs.get("ink_ahead_beats")
         if ahead is not None:
-            self.transport.report_ink_ahead(ahead)
+            self.transport.report_ink_ahead(ahead,
+                reusable_rest=kwargs.get("reusable_rest_beats", 0.0),
+                opening_header=kwargs.get("opening_header_beats", 0.0))
         travel = kwargs.get("free_travel_beats")
         if travel is not None:
             self.transport.report_free_travel(travel)

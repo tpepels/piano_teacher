@@ -58,9 +58,11 @@ class VisualTransport:
     # The declared musical timeline: every timed take is placed on it and
     # Godot draws and counts in from it.
     musical: MusicalTimeline = field(default_factory=MusicalTimeline)
-    # Beats of printed ink Godot last reported ahead of its playhead; a new
-    # run starts its count-in after it.
+    # Physical clearance from the latest matching source. Only trailing
+    # semantic silence can be counted within the next preparation bar.
     ink_ahead_beats: float = 0.0
+    reusable_rest_beats: float = 0.0
+    opening_header_beats: float = 0.0
     # Beats a Free target needs to travel in from off the right edge of the
     # staff (plus the clef header) to the playhead, as Godot measured it.
     free_travel_beats: float = 0.0
@@ -71,11 +73,22 @@ class VisualTransport:
             raise ValueError("Invalid Free travel measurement")
         self.free_travel_beats = value
 
-    def report_ink_ahead(self, beats) -> None:
-        value = float(beats)
-        if not math.isfinite(value) or not 0.0 <= value <= 256.0:
+    def report_ink_ahead(self, beats, *, reusable_rest=0.0, opening_header=0.0) -> None:
+        value, rest, header = map(float, (beats, reusable_rest, opening_header))
+        if (not all(map(math.isfinite, (value, rest, header)))
+                or not 0.0 <= rest <= value <= 256.0 or not 0.0 <= header <= 256.0):
             raise ValueError("Invalid ink-ahead measurement")
         self.ink_ahead_beats = value
+        self.reusable_rest_beats = rest
+        self.opening_header_beats = header
+
+    def count_in_clearance(self, count_in_beats: float) -> float:
+        # The count-in starts after retained notes; its end must leave
+        # enough room for the new header after all retained ink. No
+        # exposed notes or rests are erased and no count-in is shortened.
+        overlap = min(self.reusable_rest_beats,
+                      max(0.0, count_in_beats-self.opening_header_beats))
+        return self.ink_ahead_beats-overlap
 
     def advance_boundary(self, beat: float) -> None:
         """Install the next source checkpoint chosen by AttemptProgression."""

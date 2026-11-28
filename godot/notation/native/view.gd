@@ -316,7 +316,22 @@ func _stream_header_beats(opening: float) -> float:
 
 ## Facts sent with every command that may start a run of timed music.
 func placement_facts() -> Dictionary:
-    return {"ink_ahead_beats":ink_ahead_beats(),"free_travel_beats":free_travel_beats()}
+    var result := {"ink_ahead_beats":0.0,"reusable_rest_beats":0.0,
+        "opening_header_beats":0.0,"free_travel_beats":0.0}
+    if not native_ready or not retained_ready():
+        return result
+    var facts = _stream_facts(stream_world_beat)
+    var clearance: Dictionary = _stream_controller.ink_clearance(facts)
+    var ahead: float = maxf(0.0,float(clearance["end"])-facts.world)
+    var source: float = maxf(0.0,float(clearance["source_end"])-facts.world)
+    result["ink_ahead_beats"] = clampf(ahead,0.0,256.0)
+    result["reusable_rest_beats"] = clampf(ahead-source,0.0,result["ink_ahead_beats"])
+    # The first source header is the conservative bound even when a
+    # resumed window opens partway through the measure.
+    result["opening_header_beats"] = maxf(_stream_header_beats(0.0),
+        _stream_header_beats(1.0))+.25
+    result["free_travel_beats"] = free_travel_beats()
+    return result
 
 ## Beats from the playhead to where a Free passage may open now (the same
 ## rule admission applies), plus a little headroom for the moment between

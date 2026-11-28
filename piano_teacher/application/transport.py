@@ -35,8 +35,11 @@ class Transport:
     def ink_ahead_beats(self) -> float:
         return self._timeline.ink_ahead_beats
 
-    def report_ink_ahead(self, beats) -> None:
-        self._timeline.report_ink_ahead(beats)
+    def report_ink_ahead(self, beats, **kwargs) -> None:
+        self._timeline.report_ink_ahead(beats, **kwargs)
+
+    def count_in_clearance(self, count_in_beats: float) -> float:
+        return self._timeline.count_in_clearance(count_in_beats)
 
     @property
     def free_travel_beats(self) -> float:
