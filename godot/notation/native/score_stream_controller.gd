@@ -361,12 +361,15 @@ func place_timeline_take(facts: StreamGeometry, opening: float,
         start_world: float, right: float, header: float,
         count_in_beats: float) -> Dictionary:
     # The exposure rule applies to every take, including unplayed takes.
-    if not queue.withdraw_timed_tail(canvas(),facts.world,facts.density,
-            facts.gap,facts.duration,facts.width,facts.playhead,
-            "timeline_replaces_unseen").is_empty():
+    var plan: Dictionary = queue.preview_tail_withdrawal(facts.world,facts.density,
+        facts.gap,facts.duration,facts.width,facts.playhead,-1,false,-1,null,true)
+    var result: Dictionary = queue.apply_withdrawal(canvas(),plan,"timeline_replaces_unseen")
+    if not result["removed"].is_empty():
         _binding.reconcile()
-    # Print the count-in bar as a rest where no earlier ink fills it.
-    var before: float = maxf(facts.world,ink_end(facts))
+    if not bool(result["complete"]):
+        return {}
+    # Use the actual committed retained prefix, not a second preview.
+    var before: float = maxf(facts.world,_ink_end(facts,queue.online))
     var leading_rest: float = clampf(start_world-header-before-
         Admission.REST_GAP_BEATS,0.0,count_in_beats)
     timeline_placement = true
@@ -396,11 +399,10 @@ func withdraw_predicted_take(facts: StreamGeometry, owner_serial: int) -> void:
 func ink_end(facts: StreamGeometry) -> float:
     var remaining: Array = queue.preview_timed_withdrawal(facts.world,
         facts.density,facts.gap,facts.duration,facts.width,facts.playhead)
-    var end := -INF
-    for item in remaining:
-        var bounds: Vector2 = Admission.clip_bounds(
-            item,facts.density,facts.gap,facts.duration)
-        end = maxf(end,float(item["world_origin"])+bounds.y/maxf(1.0,facts.density))
+    return _ink_end(facts,remaining)
+
+func _ink_end(facts: StreamGeometry, remaining: Array) -> float:
+    var end: float = queue.occupied_end(remaining,facts.density,facts.gap,facts.duration)
     var peer: float = queue.minimum_peer_opening(facts.density,facts.width,facts.playhead)
     if is_finite(peer):
         end = maxf(end,peer)

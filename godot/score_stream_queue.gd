@@ -227,11 +227,7 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
             batch_left,density,viewport_width,playhead_x):
         return _reject_admission("leading_rest_overlaps_previous_renderer_layer")
     if not online.is_empty():
-        var end_beat := -INF
-        for item in online:
-            var bounds: Vector2 = Admission.clip_bounds(
-                item,density,gap,source_duration)
-            end_beat = maxf(end_beat,float(item["world_origin"])+bounds.y/density)
+        var end_beat: float = occupied_end(online,density,gap,source_duration)
         if batch_left < end_beat-.00001:
             return _reject_admission(
                 "source_or_rest_overlap: incoming=%.6f previous_end=%.6f" % [
@@ -274,34 +270,22 @@ func enqueue(owner: Control, specs: Array, source_pool: Array,
         return _reject_admission("source_journal_write_failed: "+_archive.last_error)
     return true
 
-func _is_safe_tail(passes: Array, owner_serial: int, world: float,
-        density: float, gap: float, duration: float,
-        viewport_width: float, playhead_x: float) -> bool:
-    var found := false
-    var source: Dictionary = {}
-    for index in range(passes.size()-1,-1,-1):
-        var item: Dictionary = passes[index]
-        if owner_id(item) != owner_serial:
-            break
-        found = true
-        if bool(item.get("ever_visible",false)):
-            return false
-        if str(item.get("kind","")) == "source":
-            source = item
-        if not bool(item.get("hidden_until_armed",false)) or bool(item.get("armed",false)):
-            # Even a rejected provisional control cannot retract ink that
-            # might already be visible before the next render callback.
-            var bounds: Vector2 = Admission.clip_bounds(
-                item,density,gap,duration)
-            var first_x: float = playhead_x + \
-                (float(item["world_origin"])-world)*density+bounds.x
-            if first_x <= viewport_width:
-                return false
-    # Once a strip is still entirely unexposed it may be retracted,
-    # even if an earlier strip of the same graded attempt was acknowledged.
-    # That is the essential difference between per-measure strips and an
-    # immutable full-passage owner that wrongly locks its invisible suffix.
-    return found and not source.is_empty()
+# One exposure predicate for every strip, including semantic silence.
+func _unexposed(item: Dictionary, world: float, density: float,
+        gap: float, duration: float, width: float, playhead: float) -> bool:
+    if bool(item.get("ever_visible",false)):
+        return false
+    if bool(item.get("hidden_until_armed",false)) and not bool(item.get("armed",false)):
+        return true
+    var bounds: Vector2 = Admission.clip_bounds(item,density,gap,duration)
+    return playhead+(float(item["world_origin"])-world)*density+bounds.x > width
+
+func occupied_end(passes: Array, density: float, gap: float, duration: float) -> float:
+    var end := -INF
+    for item in passes:
+        var bounds: Vector2 = Admission.clip_bounds(item,density,gap,duration)
+        end = maxf(end,float(item["world_origin"])+bounds.y/maxf(1.0,density))
+    return end
 
 # Takes that sounded: the playhead reached their first note while live.
 var sounded: Dictionary = {}
@@ -336,141 +320,114 @@ func preview_tail_withdrawal(world: float, density: float,
         gap: float, duration: float, viewport_width: float,
         playhead_x: float, protected_take: int = -1,
         just_one_owner: bool = false, protected_strip: int = -1,
-        base: Variant = null) -> Dictionary:
-    # Pure admission preview: the actual withdrawal and a preflight
-    # reservation use IDENTICAL pixel-exposure and protected-owner rules.
-    # No archive, scene tree, or live queue mutation occurs here.
+        base: Variant = null, replacement: bool = false) -> Dictionary:
+    # One pure planner. An ordinary cancellation withdraws complete source
+    # batches; replacement may also retain exposed silence or discard an
+    # unseen terminal rest. The same plan is executed, never recomputed
+    # after the first journal append.
     var remaining: Array = (base as Array).duplicate() if base is Array else online.duplicate()
     var owners: Array[int] = []
+    var operations: Array = []
     while not remaining.is_empty():
         var tail: Dictionary = remaining[-1]
-        if owner_id(tail) == protected_strip:
+        var serial: int = owner_id(tail)
+        if serial == protected_strip or (protected_take >= 0 and
+                int(tail.get("take_owner",serial)) == protected_take):
             break
-        if protected_take >= 0 and int(tail.get(
-                "take_owner",owner_id(tail))) == protected_take:
+        var first: int = remaining.size()-1
+        while first > 0 and owner_id(remaining[first-1]) == serial:
+            first -= 1
+        var cut: int = remaining.size()
+        var has_source := false
+        for i in range(remaining.size()-1,first-1,-1):
+            if not _unexposed(remaining[i],world,density,gap,duration,viewport_width,playhead_x):
+                break
+            cut = i
+            has_source = has_source or str(remaining[i].get("kind","")) == "source"
+        var operation := "whole"
+        if cut != first or not has_source:
+            if not replacement:
+                break
+            # Partial replacement uses the established .25-beat
+            # publication cushion, with the same exposure predicate.
+            cut = remaining.size()
+            has_source = false
+            for i in range(remaining.size()-1,first-1,-1):
+                if not _unexposed(remaining[i],world+.25,density,gap,duration,viewport_width,playhead_x):
+                    break
+                cut = i
+                has_source = has_source or str(remaining[i].get("kind","")) == "source"
+            if cut == first+1 and has_source and \
+                    str(remaining[first].get("kind","")) == "rest" and \
+                    str(remaining[first].get("rest_position","")) == "before":
+                operation = "retain_leading_rest"
+            elif cut == remaining.size()-1 and cut > first and \
+                    str(remaining[cut].get("kind","")) == "rest" and \
+                    str(remaining[cut].get("rest_position","after")) == "after" and \
+                    str(remaining[cut-1].get("kind","")) == "source":
+                operation = "discard_trailing_rest"
+            else:
+                break
+        var slots: Array = []
+        for item in remaining.slice(cut):
+            slots.append(str(item.get("slot_id","")))
+        operations.append({"owner":serial,"operation":operation,"slots":slots})
+        owners.append(serial)
+        remaining.resize(cut)
+        if just_one_owner or operation != "whole":
             break
-        var owner_serial: int = owner_id(tail)
-        if not _is_safe_tail(remaining,owner_serial,world,density,gap,
-                duration,viewport_width,playhead_x):
-            break
-        owners.append(owner_serial)
-        while not remaining.is_empty() and owner_id(remaining[-1]) == owner_serial:
-            remaining.pop_back()
-        if just_one_owner:
-            break
-    return {"remaining":remaining,"owners":owners}
+    return {"remaining":remaining,"owners":owners,"operations":operations}
 
+func apply_withdrawal(owner: Control, preview: Dictionary, reason: String) -> Dictionary:
+    # Journal before removing source, and stop on the FIRST failed batch.
+    # Never proceed with a second partial retraction after a failed write.
+    var withdrawn: Array[int] = []
+    for operation in preview["operations"]:
+        var slots: Array = operation["slots"]
+        var first: int = online.size()-slots.size()
+        var serial: int = int(operation["owner"])
+        if first < 0 or slots.is_empty():
+            return {"complete":false,"removed":withdrawn}
+        var snapshot: Array = []
+        for i in range(slots.size()):
+            var item: Dictionary = online[first+i]
+            if owner_id(item) != serial or str(item.get("slot_id","")) != slots[i]:
+                push_error("Queue tail changed between preflight and withdrawal")
+                return {"complete":false,"removed":withdrawn}
+            snapshot.append(source_record(item))
+        var kind: String = operation["operation"]
+        if kind != "discard_trailing_rest":
+            if not _archive.record("withdrawn",serial,snapshot,reason,0,_writer_id):
+                return {"complete":false,"removed":withdrawn}
+        if kind == "retain_leading_rest":
+            online[first-1]["detached_leading_rest"] = true
+        for i in range(slots.size()):
+            var item: Dictionary = online.pop_back()
+            withdrawn.append(int(item["serial"]))
+            Lifecycle.retire(owner,item)
+    return {"complete":true,"removed":withdrawn}
 
 func withdraw_tail(owner: Control, world: float, density: float,
         gap: float, duration: float, viewport_width: float,
         playhead_x: float, reason: String,
         force_unacknowledged: bool = false,
         protected_take: int = -1, protected_strip: int = -1) -> Array[int]:
-    # The only permitted right-end dequeue operation. A visible/acknowledged
-    # prefix is NEVER changed, even when future musical decisions differ.
-    var withdrawn: Array[int] = []
     var preview: Dictionary = preview_tail_withdrawal(
         world,density,gap,duration,viewport_width,playhead_x,
         protected_take,force_unacknowledged,protected_strip)
-    for serial in preview["owners"]:
-        if online.is_empty() or owner_id(online[-1]) != int(serial):
-            push_error("Queue tail changed between preflight and withdrawal")
-            break
-        var snapshot: Array = []
-        for i in range(online.size()-1,-1,-1):
-            if owner_id(online[i]) != int(serial):
-                break
-            snapshot.push_front(source_record(online[i]))
-        if not _archive.record("withdrawn",int(serial),snapshot,reason,0,
-                _writer_id):
-            break
-        while not online.is_empty() and owner_id(online[-1]) == int(serial):
-            var item: Dictionary = online.pop_back()
-            withdrawn.append(int(item.get("serial",0)))
-            Lifecycle.retire(owner,item)
-    return withdrawn
-
-## A committed replacement may leave the already-exposed leading rest
-## behind when the entire source and trailing rest are still unseen.
-## Other transactions (especially rollback) retain full-batch semantics.
-func _timed_suffix_size(passes: Array, world: float, density: float,
-        gap: float, duration: float, width: float, playhead: float) -> int:
-    if passes.is_empty():
-        return 0
-    var serial: int = owner_id(passes[-1])
-    var first: int = passes.size()-1
-    while first > 0 and owner_id(passes[first-1]) == serial:
-        first -= 1
-    var rest: Dictionary = passes[first]
-    if str(rest.get("rest_position","")) != "before" or \
-            str(rest.get("kind","")) != "rest" or first+1 >= passes.size():
-        return 0
-    # Leave the printed rest at its exact location, and use the same
-    # safe-tail geometry rule for every remaining slot of this batch.
-    # A small lookahead also covers the command/publication interval.
-    var suffix: Array = passes.slice(first+1)
-    if not _is_safe_tail(suffix,serial,world+.25,density,gap,duration,width,playhead):
-        return 0
-    return suffix.size()
-
-# A source already exposed cannot be removed, but its unexposed trailing
-# preparation rest is not source material. A replacement count-in will
-# print its own rest. Preserve the admitted source and its original journal
-# plan; never archive a rest as a new recoverable source.
-func _unseen_trailing_rest(passes: Array, world: float, density: float,
-        gap: float, duration: float, width: float, playhead: float) -> bool:
-    if passes.size() < 2:
-        return false
-    var rest: Dictionary = passes[-1]
-    var source: Dictionary = passes[-2]
-    if str(rest.get("kind","")) != "rest" or \
-            str(rest.get("rest_position","after")) != "after" or \
-            str(source.get("kind","source")) != "source" or \
-            owner_id(rest) != owner_id(source) or bool(rest.get("ever_visible",false)):
-        return false
-    var bounds: Vector2 = Admission.clip_bounds(rest,density,gap,duration)
-    var first_x: float = playhead+(float(rest["world_origin"])-world-.25)*density+bounds.x
-    return first_x > width
+    return apply_withdrawal(owner,preview,reason)["removed"]
 
 func preview_timed_withdrawal(world: float, density: float, gap: float,
         duration: float, width: float, playhead: float) -> Array:
-    var preview: Dictionary = preview_tail_withdrawal(
-        world,density,gap,duration,width,playhead)
-    var remaining: Array = preview["remaining"]
-    var count: int = _timed_suffix_size(remaining,world,density,gap,duration,width,playhead)
-    if count > 0:
-        return remaining.slice(0,remaining.size()-count)
-    if _unseen_trailing_rest(remaining,world,density,gap,duration,width,playhead):
-        remaining.pop_back()
-    return remaining
+    return preview_tail_withdrawal(world,density,gap,duration,width,playhead,
+        -1,false,-1,null,true)["remaining"]
 
 func withdraw_timed_tail(owner: Control, world: float, density: float,
         gap: float, duration: float, width: float, playhead: float,
         reason: String) -> Array[int]:
-    var removed: Array[int] = withdraw_tail(owner,world,density,gap,duration,
-        width,playhead,reason)
-    var count: int = _timed_suffix_size(online,world,density,gap,duration,width,playhead)
-    if count <= 0:
-        if _unseen_trailing_rest(online,world,density,gap,duration,width,playhead):
-            var rest: Dictionary = online.pop_back()
-            removed.append(int(rest["serial"]))
-            Lifecycle.retire(owner,rest)
-        return removed
-    var first: int = online.size()-count
-    var serial: int = owner_id(online[-1])
-    var snapshot: Array = []
-    for index in range(first,online.size()):
-        snapshot.append(source_record(online[index]))
-    # The source is archived once, separately from its retained silent
-    # leading rest. If journaling fails, leave the entire suffix intact.
-    if not _archive.record("withdrawn",serial,snapshot,reason,0,_writer_id):
-        return removed
-    online[first-1]["detached_leading_rest"] = true
-    for _index in range(count):
-        var item: Dictionary = online.pop_back()
-        removed.append(int(item["serial"]))
-        Lifecycle.retire(owner,item)
-    return removed
+    var preview: Dictionary = preview_tail_withdrawal(world,density,gap,duration,
+        width,playhead,-1,false,-1,null,true)
+    return apply_withdrawal(owner,preview,reason)["removed"]
 
 func withdraw_take_tail(owner: Control, take_owner: int, world: float,
         density: float, gap: float, duration: float,

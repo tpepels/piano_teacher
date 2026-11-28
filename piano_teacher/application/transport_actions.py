@@ -53,9 +53,11 @@ class PlaybackAuthorization:
             placed = timeline.continue_after_take(
                 take, now=now, bar_beats=plan.bar_beats, meter=plan.meter,
                 bpm=intent.bpm)
-        elif intent.action == "resume" and timeline.segments:
-            placed = self._resume_placement(timeline, take, now)
         if placed is None:
+            if intent.action == "resume" and timeline.segments:
+                # Resume the musical clock before cutting its old exposure.
+                # The shared replacement branch cuts exactly once.
+                timeline.resume(now)
             if intent.action in ("restart", "resume") and timeline.open:
                 timeline.cut_at(now)
             elif not timeline.open:
@@ -118,16 +120,6 @@ class PlaybackAuthorization:
         elif beat > self._free[1] + 1e-9:
             timeline.move_hold(now=now, beats=beat-self._free[1], bpm=bpm)
             self._free = (key, beat)
-
-    @staticmethod
-    def _resume_placement(timeline, take, now):
-        """Resume always gives the take one complete count-in bar (owner
-        decision 2026-11-08): the run ends where it was paused and the take
-        continues from the paused beat (or its opening, when the pause came
-        in the count-in or rest) after the visible ink and a fresh bar."""
-        timeline.resume(now)
-        timeline.cut_at(now)
-        return None
 
     # Godot could not draw a take (it saw it after its first note, or a
     # running take lost its notes): place the same exposure again, once.

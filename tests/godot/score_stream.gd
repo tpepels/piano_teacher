@@ -237,6 +237,15 @@ func run() -> void:
         "Withdrawal matches preview and keeps the source identity")
     check(trim_queue.has_take(int(source["take_owner"])), "Rest removal cannot discard its source take")
     check(trim_queue.offline.is_empty(),"Unseen silence is not a separate recoverable source")
+    # Re-applying a stale plan must not remove a different physical slot.
+    var stale: Dictionary = {"operations":[{"owner":int(source["owner_serial"]),
+        "operation":"whole","slots":["a","b","c","d","e","f","g","h"]}]}
+    var rejected: Dictionary = trim_queue.apply_withdrawal(trim_canvas,stale,"stale")
+    check(not bool(rejected["complete"]) and rejected["removed"].is_empty(),
+        "A stale plan cannot remove other retained material")
+    var empty: Dictionary = trim_queue.apply_withdrawal(trim_canvas,{"operations":[]},"noop")
+    check(bool(empty["complete"]) and empty["removed"].is_empty(),
+        "A no-op replacement does not mutate the journal")
     trim_canvas.free()
 
     # Free (owner report 2026-11-25): Python holds the staff at the target
