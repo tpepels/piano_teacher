@@ -27,6 +27,9 @@ fingers, original annotations, overrides, provider/model/config versions, input
 digest and diagnostics. Plans are written atomically under an interprocess
 lock. Compatible sources reuse plans; source/config/model changes are isolated.
 Removing an override may reuse the saved uncorrected prediction.
+The Python ONNX provider has its own cache identity. Opening a previously
+predicted piece computes a fresh plan and reads saved corrections from the
+same `overrides.json`.
 
 Plans and corrections live under `$XDG_DATA_HOME/piano-teacher/fingering/`
 (normally `~/.local/share/piano-teacher/fingering/`). Keep `overrides.json` when
@@ -34,10 +37,12 @@ clearing derived caches: it contains manual corrections. A corrupt override
 file is reported, not silently reset; corrupt derived plans can be rebuilt.
 
 The [Lumikey adapter](../piano_teacher/fingering/lumikey.py) uses the published
-`@lumikey/piano-fingering-model` **0.3.0**, its unmodified pretrained ONNX models
-and **ONNX Runtime 1.30.0 CPU**, with one execution thread. Exact package/model
+`@lumikey/piano-fingering-model` **0.3.0** tokenization and unmodified pretrained
+ONNX models. A separate Python process runs both hands concurrently, with one
+**ONNX Runtime 1.30.0 CPU** session and one execution thread per hand.
+The worker verifies the model hashes before loading them. Exact package/model
 hashes, licensing and provenance remain in the
-[third-party notices](../piano_teacher/fingering/lumikey_runtime/THIRD_PARTY_NOTICES.md).
+[third-party notices](../piano_teacher/fingering/THIRD_PARTY_NOTICES.md).
 The publisher declares the package including model files MIT, without a separate
 model license/copyright text. Training source/data are not copied into this
 project. [One-time setup](development.md#build-and-run) is the networked install

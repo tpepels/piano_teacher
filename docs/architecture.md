@@ -28,6 +28,10 @@ Godot 4.7 hosts an embedded CPython engine and a supervised score subprocess.
   expensive work. Fingerprinting and import consume the same captured source
   bytes. The asset lane captures a selection and supervises notation, Verovio
   and asset extraction in the subprocess. [Score worker](asset-worker.md)
+- The command lane starts a separate Python process for uncached fingering.
+  Each hand runs its own sequential ONNX inference concurrently with the
+  other. The worker returns predictions by original source-note identity.
+  The native timing and asset lanes can continue while the command waits.
 - Real MIDI arrives through `MidiConnection` callbacks with arrival
   timestamps and enters the same `PracticeSession` boundary.
 

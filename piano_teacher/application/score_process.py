@@ -3,12 +3,12 @@
 import os
 import signal
 import socket
-import sys
 import time
 from contextlib import suppress
 from pathlib import Path
 from threading import Event, Lock
 
+from .. import python_worker
 from .score_ipc import (
     DEADLINE_SECONDS,
     METADATA_LIMIT,
@@ -24,10 +24,7 @@ from .score_ipc import (
     response_status,
 )
 
-_WORKER_BOOTSTRAP = (
-    "import sys; sys.path[:] = [path for path in sys.path if path]; "
-    "from piano_teacher.application.score_worker import main; main()"
-)
+_WORKER_BOOTSTRAP = python_worker.bootstrap("piano_teacher.application.score_worker")
 
 
 class ScoreCancelled(ValueError):
@@ -36,9 +33,7 @@ class ScoreCancelled(ValueError):
 
 class ScoreProcess:
     def __init__(self, cache: Path, *, executable=None, worker_args=None):
-        home = os.environ.get("PIANO_TEACHER_PYTHON_HOME")
-        self.executable = (executable or os.environ.get("PIANO_PYTHON")
-                           or (str(Path(home) / "bin/python3") if home else sys.executable))
+        self.executable = python_worker.executable(executable)
         self.worker_args = worker_args or ("-c", _WORKER_BOOTSTRAP)
         self.cache = cache
         self._closed = Event()
@@ -52,8 +47,6 @@ class ScoreProcess:
     def _start(self) -> None:
         parent, child = socket.socketpair()
         try:
-            package_root = str(Path(__file__).resolve().parents[2])
-            search_path = os.pathsep.join(dict.fromkeys((package_root, *filter(None, sys.path))))
             actions = [(os.POSIX_SPAWN_CLOSE, parent.fileno()),
                        (os.POSIX_SPAWN_DUP2, child.fileno(), 0)]
             if hasattr(os, "POSIX_SPAWN_CLOSEFROM"):
@@ -63,7 +56,7 @@ class ScoreProcess:
             self._pid = os.posix_spawn(
                 self.executable, (self.executable, "-S", *self.worker_args,
                                   str(os.getpid()), str(self.cache)),
-                {**os.environ, "PYTHONPATH": search_path}, file_actions=actions,
+                python_worker.environment(), file_actions=actions,
                 setsigdef=(signal.SIGPIPE, signal.SIGTERM), setsigmask=())
             with suppress(ProcessLookupError):
                 self._pidfd = os.pidfd_open(self._pid)

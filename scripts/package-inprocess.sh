@@ -6,10 +6,8 @@ set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 : "${PIANO_BUNDLED_PYTHON_HOME:?Set to a self-contained Python prefix with required wheels installed}"
 : "${PIANO_GODOT_BINARY:?Set to a compatible Godot 4.7 x86_64 executable}"
-: "${PIANO_BUNDLED_NODE:?Set to a bundled Node 20+ executable for fingering}"
 test -x "$PIANO_BUNDLED_PYTHON_HOME/bin/python3"
 test -x "$PIANO_GODOT_BINARY"
-test -x "$PIANO_BUNDLED_NODE"
 test -s godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
 test -f godot/native/piano_bridge.gdextension
 PY="$PIANO_BUNDLED_PYTHON_HOME/bin/python3"
@@ -19,12 +17,18 @@ test -e "$PY_LIB_DIR/libpython$PY_VERSION.so" || {
   echo "Bundled CPython must contain a shared libpython$PY_VERSION.so" >&2
   exit 1
 }
-"$PY" -c 'import mido, rtmidi, verovio, cairosvg, PIL'
+"$PY" -c 'import mido, rtmidi, verovio, cairosvg, PIL, onnxruntime'
 STAGE="$PWD/dist/piano-teacher-linux-x86_64"
 rm -rf "$STAGE"
-mkdir -p "$STAGE/runtime" "$STAGE/bin"
+mkdir -p "$STAGE/runtime" "$STAGE/bin" "$STAGE/piano_teacher/fingering/models"
 cp -a godot "$STAGE/godot"
-cp -a piano_teacher "$STAGE/piano_teacher"
+tar -C piano_teacher --exclude='./fingering' -cf - . | tar -C "$STAGE/piano_teacher" -xf -
+install -m 644 piano_teacher/fingering/*.py piano_teacher/fingering/THIRD_PARTY_NOTICES.md \
+  "$STAGE/piano_teacher/fingering/"
+for hand in left right; do
+  install -m 644 "piano_teacher/fingering/models/fingering_transformer_$hand.onnx" \
+    "$STAGE/piano_teacher/fingering/models/"
+done
 # Imported test/repertoire MIDI files are development data, not redistributable app assets.
 # Stage only the actual Python runtime. Copying the complete hosted-toolcache
 # prefix also copies developer tools, headers and caches; its audit timed out.
@@ -37,9 +41,9 @@ for library in "$PY_LIB_DIR"/*.so*; do
 done
 tar -C "$PY_LIB_DIR" \
   --exclude='*/__pycache__' --exclude='*.pyc' \
+  --exclude="python$PY_VERSION/site-packages/piano_teacher" \
   -cf - "python$PY_VERSION" | tar -C "$STAGE/runtime/python/lib" -xf -
 cp "$PIANO_GODOT_BINARY" "$STAGE/bin/godot"
-cp "$PIANO_BUNDLED_NODE" "$STAGE/bin/node"
 find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
 cat > "$STAGE/PianoTeacher" <<'LAUNCH'
 #!/usr/bin/env bash
@@ -107,8 +111,15 @@ python3 scripts/verify-package-contents.py --root "$STAGE" --package
 env PYTHONHOME="$STAGE/runtime/python" \
   PYTHONPATH="$STAGE:$STAGE/runtime/python/lib/python$PY_VERSION/site-packages" \
   LD_LIBRARY_PATH="$STAGE/runtime/python/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-  "$STAGE/runtime/python/bin/python3" -c \
-  'import piano_teacher, mido, rtmidi, verovio, cairosvg, PIL'
+  "$STAGE/runtime/python/bin/python3" - <<'PY'
+import piano_teacher, mido, rtmidi, verovio, cairosvg, PIL, onnxruntime
+from piano_teacher.fingering.model_assets import ONNX_RUNTIME_VERSION
+
+if onnxruntime.__version__ != ONNX_RUNTIME_VERSION:
+    raise SystemExit(f"Expected ONNX Runtime {ONNX_RUNTIME_VERSION}, found {onnxruntime.__version__}")
+if "CPUExecutionProvider" not in onnxruntime.get_available_providers():
+    raise SystemExit("Bundled ONNX Runtime must provide the CPU execution provider")
+PY
 # Phase 5 gates the assembled real runtime. Creating and clean-machine
 # executing the compressed distributable is a separate Phase 7 release gate.
 if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then

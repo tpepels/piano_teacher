@@ -126,7 +126,7 @@ class SourcePreparationSession:
                   "ms",source.name,flush=True)
             checkpoint = now
 
-        # The external Node/ONNX fingering worker does not participate in
+        # The isolated Python/ONNX fingering worker does not participate in
         # learning decisions. Both prepare from the same original source.
         def prepare_fingering():
             started = time.perf_counter()

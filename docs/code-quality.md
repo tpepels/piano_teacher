@@ -10,7 +10,7 @@ exact-commit status is `piano-teacher/quality`.
 - gdlint: GDScript lint rules. Native Godot syntax and behavior remain
   separate checks (the third-party parser may lag Godot).
 - ShellCheck: shell lint, plus strict Bash syntax.
-- Python compilation and Node syntax: strict for all tracked source.
+- Python compilation and, for tracked JavaScript, Node syntax checks.
 - actionlint: strict workflow YAML, expressions and embedded shell.
 - Unit tests for the diagnostic comparator.
 
@@ -29,7 +29,7 @@ Native syntax checks and workflow checks have no baseline exception.
 
 ## Run locally
 
-Use Python 3.12, Node 22, Go and a Git checkout containing the baseline.
+Use Python 3.12, Go and a Git checkout containing the baseline.
 
 ```sh
 python -m pip install -r requirements-quality.txt

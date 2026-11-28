@@ -5,14 +5,16 @@
 `@lumikey/piano-fingering-model` **0.3.0**, published by the Lumikey project:
 https://github.com/lumikey/piano-fingering-model/tree/e03c0da6bfe6b4299dbdacb421bd5792f1721631/js
 
-The published npm artifact declares **MIT** in its `package.json`. Its published
-files include the supported JavaScript inference implementation and both
-pretrained ONNX models. There is no separate model license, copyright notice,
-LICENSE or NOTICE file in that artifact (or the inspected upstream checkout).
-We retain the artifact unchanged via npm, including its README and license
-metadata; the lockfile records its exact integrity. This integration relies on
-the publisher's MIT declaration for that complete package, including its models.
-It does not copy the separately published Python source or training data.
+The published npm artifact declares **MIT** in its `package.json` and contains
+the JavaScript inference implementation and both pretrained ONNX models.
+Piano Teacher ports the published tokenization and inference to Python and
+ships the two model files byte for byte. There is no separate model license,
+copyright notice, LICENSE or NOTICE file in the inspected upstream artifact
+or checkout. The publisher's MIT declaration for the artifact is the basis
+for this use of its inference logic and weights.
+
+Registry metadata for the exact artifact:
+https://registry.npmjs.org/@lumikey%2Fpiano-fingering-model/0.3.0
 
 Package tarball SHA-1: `40c99fbfd228f81e00d765438119de0795a2b58f`.
 
@@ -45,7 +47,7 @@ No missing Lumikey copyright statement has been invented here.
 
 ## ONNX Runtime
 
-`onnxruntime-node` and `onnxruntime-common` **1.30.0**.
+`onnxruntime` **1.30.0** (Python, CPU).
 https://github.com/microsoft/onnxruntime/tree/v1.30.0
 
 MIT License
@@ -70,5 +72,5 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-Transitive dependency notices remain in the installed npm packages. Keep their
-complete package directories and this file if distributing an installed runtime.
+The Python runtime distribution includes the wheel's `onnxruntime/LICENSE`
+and `onnxruntime/ThirdPartyNotices.txt` with its compiled libraries.

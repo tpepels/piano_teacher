@@ -67,7 +67,8 @@ software tests establish teaching efficacy or physical MIDI/audio acceptance.
 
 The application uses Godot 4.7, an embedded CPython musical engine and authentic
 Verovio notation prepared in a supervised subprocess. Automatic fingering
-currently uses an isolated Node/ONNX worker. The technical details live in:
+runs in a separate Python process with the bundled ONNX models. The technical
+details live in:
 
 | Document | Read it for |
 | --- | --- |

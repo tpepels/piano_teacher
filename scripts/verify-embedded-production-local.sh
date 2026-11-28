@@ -34,15 +34,10 @@ if [[ -z "$GODOT_BIN" || ! -x "$GODOT_BIN" ]] || \
   echo "Godot 4.7.2 must be installed (or specify GODOT_BIN)." >&2
   exit 2
 fi
-if ! "$PYTHON" -c 'import sys; assert sys.version_info[:2] == (3,14); import mido, rtmidi, verovio, cairosvg, PIL'; then
+if ! "$PYTHON" -c 'import sys; assert sys.version_info[:2] == (3,14); import mido, rtmidi, verovio, cairosvg, PIL, onnxruntime'; then
   echo "Install Python 3.14 packages: .venv/bin/python -m pip install -e '.[godot,test]'" >&2
   exit 2
 fi
-if [[ "$MODE" == full ]] && ! command -v node >/dev/null 2>&1; then
-  echo "A local package audit also needs Node.js (node)." >&2
-  exit 2
-fi
-
 LOG="$(mktemp /tmp/piano-embedded-production.XXXXXX.log)"
 WORK="$(mktemp -d "$ROOT/.piano-embedded-verify.XXXXXX")"
 cleanup() {
@@ -53,8 +48,8 @@ cleanup() {
 trap cleanup EXIT
 export HOME="$WORK/home"
 mkdir -p "$HOME/Music/Piano Teacher"
-export PIANO_PYTHON="$PYTHON" GODOT_BIN
-export PIANO_TEACHER_PYTHON_HOME="$("$PYTHON" -c 'import sys; print(sys.base_prefix)')"
+PIANO_TEACHER_PYTHON_HOME="$("$PYTHON" -c 'import sys; print(sys.base_prefix)')"
+export PIANO_PYTHON="$PYTHON" GODOT_BIN PIANO_TEACHER_PYTHON_HOME
 PY_SITE="$("$PYTHON" -c 'import site; print(site.getsitepackages()[0])')"
 PY_LIB="$("$PYTHON" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')"
 export PYTHONPATH="$ROOT:$PY_SITE${PYTHONPATH:+:$PYTHONPATH}"
@@ -209,24 +204,26 @@ verify_fixture_ui() {
 }
 verify_score_recovery() {
   set_case score-recovery
-  export PIANO_TEST_REAL_NODE
-  PIANO_TEST_REAL_NODE="$(command -v node)"
   export PIANO_TEST_FINGERING_HOLD="$WORK/hold-fingering"
   # Hold the real production inference call on the command lane for several
   # musical tick intervals, then run the provider and return its real result.
-  cat > "$WORK/delayed-fingering-node" <<'SH'
+  cat > "$WORK/delayed-fingering-python" <<'SH'
 #!/bin/sh
 if [ -f "$PIANO_TEST_FINGERING_HOLD" ]; then
-  exec "$PIANO_TEST_REAL_NODE" -e '
-    require("node:fs").writeFileSync(process.env.PIANO_TEST_FINGERING_HOLD, String(process.pid));
-    setTimeout(() => process.exit(1), 4500);
+  exec "$PIANO_PYTHON" -S -c '
+import os
+import time
+with open(os.environ["PIANO_TEST_FINGERING_HOLD"], "w") as marker:
+    marker.write(str(os.getpid()))
+time.sleep(4.5)
+raise SystemExit(1)
   '
 fi
 sleep 1
-exec "$PIANO_TEST_REAL_NODE" "$@"
+exec "$PIANO_PYTHON" "$@"
 SH
-  chmod +x "$WORK/delayed-fingering-node"
-  timeout 150s env PIANO_FINGERING_NODE="$WORK/delayed-fingering-node" \
+  chmod +x "$WORK/delayed-fingering-python"
+  timeout 150s env PIANO_FINGERING_PYTHON="$WORK/delayed-fingering-python" \
     "$GODOT_BIN" --headless --audio-driver Dummy --path godot \
     --script "$ROOT/tests/godot/score_worker_recovery.gd"
 }
@@ -329,7 +326,6 @@ audit_package() {
   (
     cd "$workspace"
     export PIANO_BUNDLED_PYTHON_HOME="$bundled"
-    export PIANO_BUNDLED_NODE="$(command -v node)"
     export PIANO_GODOT_BINARY="$GODOT_BIN"
     export PYTHONPATH=""
     # Build the actual distributable, then test only its relocated bytes.
@@ -346,8 +342,11 @@ audit_package() {
   # This child inherits neither the builder's venv nor any PYTHONPATH,
   # PIANO_TEACHER_PYTHON_HOME or compiled project import cache.
   local package_log="$WORK/clean-package-boot.log"
+  local package_tools="$WORK/package-tools"
   local fixture="$clean_home/Music/Piano Teacher/phase6_native_fixture.mid"
-  mkdir -p "$(dirname "$fixture")"
+  mkdir -p "$(dirname "$fixture")" "$package_tools"
+  # Only the launcher utilities are on PATH. There is no host Node or Python.
+  ln -s "$(command -v bash)" "$(command -v dirname)" "$package_tools"
   cp "$HOME/Music/Piano Teacher/phase6_native_fixture.mid" "$fixture"
   "$PYTHON" - "$clean_home" "$fixture" <<'PY'
 from pathlib import Path
@@ -359,7 +358,7 @@ library.update(music_dir=str(fixture.parent), fullscreen=False)
 library.mark_opened(fixture.name)
 PY
   timeout 45s env -i \
-    HOME="$clean_home" USER="${USER:-runner}" PATH="/usr/bin:/bin" \
+    HOME="$clean_home" USER="${USER:-runner}" PATH="$package_tools" \
     PIANO_TEACHER_HEADLESS_SMOKE=1 PIANO_TEACHER_TIMING_DIAGNOSTICS=1 \
     "$launcher" > "$package_log" 2>&1 || {
       tail -n 100 "$package_log" >&2
@@ -373,7 +372,20 @@ PY
     tail -n 100 "$package_log" >&2
     return 1
   fi
-  echo "Relocated standalone package generated and installed native notation"
+  "$PYTHON" - "$clean_home" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+cache = Path(sys.argv[1]) / ".local/share/piano-teacher/fingering"
+plans = [json.loads(file.read_text()) for file in cache.glob("*/plan-*.json")]
+assert len(plans) == 1, "Relocated package did not save the new score's fingering plan"
+plan = plans[0]
+assert plan["provider"]["runtime"] == "onnxruntime@1.30.0/cpu", plan["provider"]
+assert {note["hand"] for note in plan["assignments"].values()
+        if note["finger"] is not None} == {"left", "right"}, plan["status"]
+PY
+  echo "Relocated standalone package generated both hands' fingerings and native notation"
 }
 
 # Export only this runner's local case helpers. Each subprocess inherits

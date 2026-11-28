@@ -9,8 +9,8 @@ without authorization. The desktop has one embedded runtime; starting
 ## Build and run
 
 The current Linux development setup uses Godot 4.7.2, Python 3.14, a C++ compiler
-and SCons. Python packaging metadata permits older versions for core code; the
-native extension must match the actual interpreter ABI. On Arch Linux:
+and SCons. The Python package supports 3.11 and later, as required by the pinned
+ONNX Runtime. The native extension must match the interpreter ABI. On Arch Linux:
 
 ```bash
 sudo pacman -S --needed godot python base-devel scons git
@@ -20,15 +20,10 @@ bash scripts/build-inprocess.sh
 ./run.sh
 ```
 
-For local automatic fingering, install Node.js 20+ and npm, then run:
-
-```bash
-bash scripts/setup-fingering.sh
-```
-
-Setup installs the pinned CPU runtime locally, verifies both model hashes and
-runs real inference for both hands. Inference never downloads models during
-practice. See [fingering provenance](reference.md#fingering).
+The Python installation includes the pinned CPU ONNX Runtime. Automatic
+fingering runs in a Python subprocess that verifies both bundled model hashes
+before inference. The hands run concurrently and use the local model files.
+See [fingering provenance](reference.md#fingering).
 
 [build-inprocess.sh](../scripts/build-inprocess.sh) builds an isolated output
 then installs it by atomic replacement, preserving any old library inode mapped
@@ -115,9 +110,10 @@ failure/retry. [Syntax checking](../scripts/check-godot-syntax.sh) and
 Expected negative asset fixtures print diagnostics; declared failure counters
 and wrapper exit status still determine success.
 
-Only genuinely absent optional audio/model runtimes skip, with a stated
-reason; installed-but-broken runtimes fail. Required CI dependencies do not
-become optional. The expanded run has 107 passed/one absent-system-SF2
+Optional sampled-audio checks skip with a stated reason if the SoundFont or
+FluidSynth is missing. The real fingering tests require the production
+ONNX Runtime and models.
+The expanded run has 107 passed/one absent-system-SF2
 skip, 69.5% Python line coverage and 49.4% branch coverage. These percentages
 are an inventory of execution, not a completeness claim.
 
@@ -227,18 +223,18 @@ actual piano input. Headless software acceptance does not certify those.
 ## Standalone Linux package
 
 [package-inprocess.sh](../scripts/package-inprocess.sh) assembles Godot, the
-compiled GDExtension, CPython and runtime wheels, private Node, pinned fingering
-models and count-in assets. Required builder inputs are:
+compiled GDExtension, CPython and runtime wheels, pinned fingering models and
+count-in assets. Set these builder inputs:
 
 ```bash
 export PIANO_BUNDLED_PYTHON_HOME=/absolute/path/to/private-python-prefix
 export PIANO_GODOT_BINARY=/absolute/path/to/godot
-export PIANO_BUNDLED_NODE=/absolute/path/to/node
 bash scripts/package-inprocess.sh
 ```
 
-The Python prefix must include shared libpython and the runtime dependencies;
-the native extension must use its matching ABI. Output is
+The Python prefix must include shared libpython, the CPU ONNX Runtime wheel
+with its license and third-party notices, and the other runtime dependencies.
+The native extension must use its matching ABI. Output is
 `dist/piano-teacher-linux-x86_64/` with a `PianoTeacher` launcher and a tar archive.
 The packager verifies imports through the assembled prefix and prepares actual
 Godot imported count-in bytes. It excludes developer repertoire, test smoke
@@ -250,8 +246,8 @@ or architecture shape.
 
 End users do not need a compiler, pip, system Python or a separate Godot install
 for that assembled package. The host still supplies compatible OS/ELF runtime,
-MIDI/ALSA and graphics/display drivers. A successful assembly/import audit is
-not proof of second-machine portability or a published release.
+MIDI/ALSA and graphics/display drivers. A second-machine run verifies
+portability.
 
 Run the existing full [production verifier](../scripts/verify-embedded-production-local.sh)
 to exercise the strict relocated build/boot path. Preserve the distinction

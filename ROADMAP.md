@@ -1,6 +1,6 @@
 # Piano Teacher — roadmap
 
-**Updated 2026-11-27 · MIDI input only · Timeline rebuild and score-worker migration in software · Piano acceptance pending**
+**Updated 2026-11-28 · MIDI input only · Python ONNX fingering and multiprocess score generation · Piano acceptance pending**
 
 [Practice flow](docs/practice-flow.md) is the learner-visible contract.
 [Architecture](docs/architecture.md), [development](docs/development.md) and
@@ -17,6 +17,60 @@ Each authored measure is learned alone, then with up to three preceding
 measures: **1; 2, 1–2; 3, 2–3, 1–3; 4, 3–4, 2–4, 1–4; 5, 4–5, 3–5, 2–5**.
 Each window advances Right → Left → Together and Listen → Free → Tempo.
 The separate final examination uses the whole original piece.
+
+## Python ONNX fingering (A2, 2026-11-28)
+
+The existing Lumikey 0.3.0 weights run through Python ONNX Runtime 1.30.0 CPU.
+The subprocess verifies both SHA-256 hashes and runs left and right hands
+concurrently. Each hand retains its own sequential model history. The source
+revision, original note IDs, correction precedence and score publication
+continue through the existing practice engine. Closing the app cancels and
+reaps the inference child. The bundle and CI no longer install Node or npm
+for fingering.
+
+Before removing JavaScript, the production Python provider matched all
+**64,771 assignments across 31 requests** by source ID, finger, reason,
+and authored/manual provenance. The comparison covered all 17 repertoire
+pieces, five pieces with authored and manual constraints, and nine targeted
+or seeded cases for chords, shared thumbs, overlapping held notes and
+unplayable notes. It included 626 fixed assignments and 2,704 diagnostic
+reasons. An independent comparison matched 4,320 additional assignments
+across six tempos and challenging overlaps. A cache migration check preserved
+the existing overrides byte for byte and confirmed that opening a piece
+regenerates the old derived plan under the Python provider identity, then
+reuses the new plan. [Model and license provenance](piano_teacher/fingering/THIRD_PARTY_NOTICES.md)
+records the upstream MIT declaration and the two weight hashes.
+
+Five alternating cold runs per piece on Linux with a Ryzen AI 7 350 used
+Node 26.13.1 and CPython 3.14.10 with ONNX Runtime 1.30.0 CPU. Peak RSS is
+for the inference child only. Values are medians.
+
+| Piece | Notes | Node → Python latency | Node → Python peak RSS |
+| --- | ---: | ---: | ---: |
+| Bach Invention No. 1 | 472 | 172 → 217 ms | 98.2 → 76.7 MiB |
+| Moonlight Sonata I | 1,164 | 284 → 329 ms | 103.7 → 77.2 MiB |
+| Hanon, exercises 1–20 | 18,058 | 2,729 → 1,816 ms | 148.8 → 88.5 MiB |
+
+Three paired cold Hanon opens used the production Godot scene with software
+OpenGL and synthetic MIDI at the normal callback. Median time to a retained
+score was **12.19 → 10.80 s**. Median run p95 during the source open was
+**0.184 → 0.180 ms** for MIDI callback processing, **106 → 66 ms** for
+engine tick processing and **8.36 → 8.69 ms** for Godot frame intervals.
+During notation preparation after the source commit, frame p95 was
+**14.43 → 14.87 ms**. Long-source opening and software rendering can still
+hitch. The responsiveness run shared the host with regression checks and
+measures software processing on that host.
+
+The existing suite passed 384 tests on CPython 3.12 and 3.14. Godot syntax,
+its five player scenarios, the native mailbox and the quality gate passed.
+The full embedded verifier passed 24 cases, including both synthetic MIDI
+meters and all 17 checked-in repertoire files.
+The native recovery journey continued ticking during a deliberately delayed
+inference call. Closing the bridge reaped a held inference worker in 34–42 ms.
+A standalone Linux x86-64 archive generated fingerings for both hands and
+installed notation after relocation with only launcher utilities on PATH.
+Physical MIDI, audio and display acceptance and a second-machine installation
+are pending. The optional original Pathétique II MIDI was unavailable.
 
 ## Owner decisions
 

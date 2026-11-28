@@ -32,20 +32,17 @@ For each candidate, record the production entry point and transitive call path, 
 | music21 | MusicXML parsing, repeat handling, MIDI conversion | Required for current XML import | A1: evaluate direct canonical import; remove only after functional replacement |
 | Verovio and its music fonts | Authentic engraving, glyphs and score geometry | Required | Keep; not a duplicate renderer of the interactive scene |
 | CairoSVG / Cairo, Pillow | Rasterizing and manipulating genuine engraving fragments | Required by current asset pipeline | A4: investigate redundant transformations and alternatives |
-| Node.js 20+ | External Lumikey fingering inference | Required for current fingering | A2: replace with Python ONNX Runtime after parity |
-| @lumikey/piano-fingering-model 0.3.0 | Original tokenization, inference and model assets | Required for current fingering | Preserve exact model weights, semantics, provenance and licensing |
-| onnxruntime-node/common 1.30.0 | CPU inference | Required for current fingering | A2: replace runtime binding, not weights |
-| npm | Install pinned Node dependencies | Build/setup | Remove fingering-specific use after A2; not a normal application runtime requirement |
+| Lumikey model weights 0.3.0 | Original left- and right-hand ONNX weights | Bundled fingering data | A2: exact weights verified before inference |
+| Python ONNX Runtime 1.30.0 | CPU inference in an isolated Python process | Required for automatic fingering | A2: replaces the Node binding |
 | FluidSynth / SF2 SoundFont | Optional sampled Listen audio via ctypes | Optional runtime | A5: choose one supported audio synthesis path |
 | Python basic synthesizer | Listen when no SoundFont exists | Current fallback runtime | A5: retire only after replacement works offline everywhere supported |
 | SQLite / standard-library persistence | Local learner progress, evidence and caches | Required | Keep; preserve old data and migration semantics |
-| NumPy (coda-research extra) | Research/curriculum dependency candidate | Optional declaration; verify actual production closure | A6: identify every import and required extra |
+| NumPy | Fingering input tensors via Python ONNX Runtime, plus research and curriculum | Runtime dependency | A6: identify other production imports and required extras |
 | pytest, coverage, PyYAML, Ruff, gdtoolkit, ShellCheck, actionlint, SCons, compiler | Tests, quality, native build | Development/build | Exclude from release unless independently needed at runtime |
-| Node 22 in CI | JavaScript/fingering tests and tooling | Development/test | Re-evaluate once A2 is complete |
 | Godot MCP toolkit, editor cache, smoke journeys | Development/editor/verification | Development/test | A8: exclude from package; current project has no active MCP autoload/plugin entry |
 | Linux device/graphics/audio drivers and shared libraries | Native platform integration | Host/runtime | Document actual minimum system requirements; audit ELF/library closure |
 
-Evidence: [pyproject.toml](../pyproject.toml), [package-inprocess.sh](../scripts/package-inprocess.sh), [setup-fingering.sh](../scripts/setup-fingering.sh), [CI](../.github/workflows/ci.yml), [sample_piano.py](../piano_teacher/sample_piano.py). This is a source-level inventory, not an exhaustive lockfile/SBOM or measured binary inventory. In particular, verify music21's transitive dependencies and the research extra in a clean runtime rather than assuming NumPy is development-only.
+Evidence: [pyproject.toml](../pyproject.toml), [package-inprocess.sh](../scripts/package-inprocess.sh), [CI](../.github/workflows/ci.yml), [sample_piano.py](../piano_teacher/sample_piano.py). This source-level inventory leaves exhaustive dependency and binary accounting to A8.
 
 ## 3. Findings
 
@@ -65,15 +62,21 @@ Evidence:
 
 **Verification/removal gate:** compare MIDI equivalence and MusicXML fidelity on real single/multi-staff scores, compressed MXL, pickups, meter/key/clef changes, ties across bars, tuplets, grace notes, same-pitch voices, transposition, repeats/voltas and malformed input. Check attack identity, fingering associations, expected/graded durations, held endings, score layout and navigation. Define explicit handling for unsupported notation; no silent lossy fallback. Migrate or invalidate versioned import caches without losing learner progress or overrides. Prove import closure, performance and packaged offline behaviour before removing Music21.
 
-### A2 — Separate Node runtime solely for fingering
+### A2 — Migrate fingering inference to Python
 
-**Priority:** high (runtime and packaging reduction). **Status:** confirmed dependency; replacement pending.
+**Status:** implemented. [ROADMAP](../ROADMAP.md#python-onnx-fingering-a2-2026-11-28)
+records the software acceptance and performance comparison.
 
-Evidence: [fingering/lumikey.py](../piano_teacher/fingering/lumikey.py) invokes Node with bridge.cjs for uncached whole-piece predictions; the [bridge](../piano_teacher/fingering/lumikey_runtime/bridge.cjs) loads two exact ONNX weights and runs upstream sequential inference while masking logits with custom physical constraints. [fixed_overlap_index.cjs](../piano_teacher/fingering/lumikey_runtime/fixed_overlap_index.cjs) indexes sustained fixed notes. [package.json](../piano_teacher/fingering/lumikey_runtime/package.json) pins the three npm dependencies; the package builder explicitly copies Node.
-
-**Target:** port the upstream preprocessing/tokenization, autoregressive history, logits selection and custom constraint logic to Python ONNX Runtime CPU. Retain separate bounded/cancellable subprocess execution; do not run inference in the musical or notation lane. Evaluate model-session reuse and independent hand concurrency against memory and latency, without changing history ordering or inference semantics.
-
-**Verification/removal gate:** acquire the exact original weights with recorded SHA-256, verify model asset and code licensing (see [THIRD_PARTY_NOTICES.md](../piano_teacher/fingering/lumikey_runtime/THIRD_PARTY_NOTICES.md)); do not assume the separately distributed Python/training sources carry the same license. Compare existing and new predictions on representative pieces, authored/manual overrides, same-pitch voices, simultaneous adjacent thumb sharing, fixed overlaps, long holds, impossible chords, deterministic tie-breaks and unknown predictions. Verify model hashes, source identity, inference timeout/cancellation and correction durability. Measure cold/warm latency, total RSS and responsiveness. Version the provider/cache identity, preserve overrides, remove superseded Node/JS/npm production assets and setup/package requirements only after parity and offline packaged acceptance. Keep a single production inference implementation.
+The [provider](../piano_teacher/fingering/lumikey.py) runs whole-piece inference
+in a bounded, cancellable Python subprocess. It uses the original
+[tokenization and sequential model history](../piano_teacher/fingering/inference.py)
+with the ported [chord and overlap constraints](../piano_teacher/fingering/overlap.py).
+The same model files, SHA-256 hashes and license provenance are recorded in
+[third-party notices](../piano_teacher/fingering/THIRD_PARTY_NOTICES.md).
+Exact JavaScript comparison covered repertoire, authored and manual overrides,
+same-pitch voices, shared thumbs, sustained notes, overlapping constraints and
+unplayable chords. The new provider identity regenerates prediction caches
+while reading corrections from the same override file.
 
 ### A3 — Source preparation still blocks the command lane
 
@@ -133,11 +136,11 @@ Evidence: [application/score_ipc.py](../piano_teacher/application/score_ipc.py) 
 
 **Priority:** medium-low, revisit after A1–A7. **Status:** confirmed exclusion-based packaging.
 
-Evidence: [scripts/package-inprocess.sh](../scripts/package-inprocess.sh) copies all of godot and piano_teacher, a Python library subtree and Node; removes the MCP toolkit, four named smoke fixtures, caches and selected development files. [scripts/verify-package-contents.py](../scripts/verify-package-contents.py) audits imports and selected exclusions, but does not explicitly exclude godot/tests or prove every copied Python module/wheel is used. The tracked godot/tests/test_transient_pitch_spelling.gd is therefore a packaging candidate. The current project.godot has no MCP autoload/plugin entry; the development toolkit is already removed by packaging. Do not claim it is an active production server. The package import smoke explicitly imports mido, rtmidi, verovio, cairosvg and PIL; it does not itself establish MusicXML import or sampled-piano availability.
+Evidence: [scripts/package-inprocess.sh](../scripts/package-inprocess.sh) stages Godot, the application, the exact fingering files and a Python library subtree. It removes the MCP toolkit, four named smoke fixtures, caches and selected development files. [scripts/verify-package-contents.py](../scripts/verify-package-contents.py) audits imports, models, license notices and selected exclusions. The tracked godot/tests/test_transient_pitch_spelling.gd remains a packaging candidate. The package import smoke includes Python ONNX Runtime. MusicXML import and sampled-piano availability need their own packaged verification.
 
 **Target:** use a reviewed allowlist/runtime manifest or an equivalent deterministic export process; include transitive Python/native/shared-library dependencies, required assets, exact model/font provenance and licenses. Separate application and developer artifacts, preserve standalone launch, explicitly validate actual imported Godot assets and dynamic loads. Generate a dependency/version/size report from the assembled artifact and check for development-only packages, binaries, source trees and caches. Keep migrations and real runtime worker entry points.
 
-**Verification gate:** unpack in a clean relocated environment with no system Node, Python or Godot (once A2 is complete); verify offline source import, fingering, Listen audio, score worker restart, native renderer, saved progress and device discovery. Inspect package contents and native linkage; compare archive/unpacked sizes before/after; test real supported host drivers separately. A static import audit alone is not release acceptance.
+**Verification gate:** extend the relocated package run to Listen audio, score worker restart, saved progress and device discovery. Inspect package contents and native linkage, compare archive and unpacked sizes, and test real supported host drivers separately.
 
 ## 4. Related checks, not new rewrite mandates
 
@@ -169,7 +172,7 @@ Before each change, use the same checkout/workload on the same hardware, CPU aff
 | --- | --- | --- |
 | 0 | Inventory and benchmark | Complete dependency/caller/asset closure and record baseline; no speculative deletion |
 | 1 | A1 MusicXML fidelity design and direct import | Agree written/performed representation and compatibility first; do not remove features |
-| 2 | A2 Python fingering inference | Keep current weights and parity oracle until full replacement accepted; may proceed independently of A1 with stable note identities |
+| 2 | A2 Python fingering inference | Implemented with exact model and prediction parity |
 | 3 | A3 asynchronous source preparation | Build on stable source/fingering contracts; protect current cancellation and durable settlement |
 | 4 | A4 render pipeline simplification | Profile first; target actual frame/CPU/memory costs, not number of libraries |
 | 5 | A5 audio consolidation | Select soundfont/license/host policy and validate consistent Listen behaviour |

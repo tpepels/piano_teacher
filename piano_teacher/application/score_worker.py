@@ -1,6 +1,5 @@
 """Exec entry point for the single-threaded Verovio generation process."""
 
-import ctypes
 import os
 import signal
 import socket
@@ -10,6 +9,7 @@ from contextlib import suppress
 from pathlib import Path
 
 from ..preprocessing_cache import PreprocessingCache
+from ..python_worker import exit_on_parent_death
 from .score_ipc import (
     BINDING_FIELDS,
     METADATA_LIMIT,
@@ -22,13 +22,6 @@ from .score_ipc import (
     encode,
 )
 from .score_selection import decode_selection
-
-
-def _exit_on_parent_death(parent: int) -> None:
-    # Linux PR_SET_PDEATHSIG, followed by a check for death before registration.
-    libc = ctypes.CDLL(None, use_errno=True)
-    if libc.prctl(1, signal.SIGKILL, 0, 0, 0) != 0 or os.getppid() != parent:
-        raise SystemExit("Score worker parent is unavailable")
 
 
 def _stop(_signum, _frame) -> None:
@@ -80,7 +73,7 @@ def serve(connection: socket.socket, cache: PreprocessingCache) -> None:
 
 
 def main() -> None:
-    _exit_on_parent_death(int(sys.argv[1]))
+    exit_on_parent_death(int(sys.argv[1]))
     signal.signal(signal.SIGTERM, _stop)
     # Python builds predating POSIX_SPAWN_CLOSEFROM can inherit driver FDs.
     if not hasattr(os, "POSIX_SPAWN_CLOSEFROM"):

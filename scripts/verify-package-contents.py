@@ -18,6 +18,31 @@ DEV_ONLY_GODOT_PATHS = (
 )
 
 
+def audit_fingering_assets(root: Path) -> list[str]:
+    fingering = root / "piano_teacher/fingering"
+    required = [
+        fingering / "worker.py",
+        fingering / "THIRD_PARTY_NOTICES.md",
+        *(fingering / f"models/fingering_transformer_{hand}.onnx" for hand in ("left", "right")),
+    ]
+    errors = [
+        f"Package missing required asset: {path.relative_to(root)}"
+        for path in required if not path.is_file() or not path.stat().st_size
+    ]
+    for notice in ("LICENSE", "ThirdPartyNotices.txt"):
+        pattern = f"runtime/python/lib/python*/site-packages/onnxruntime/{notice}"
+        if not any(path.is_file() and path.stat().st_size for path in root.glob(pattern)):
+            errors.append(f"Package missing ONNX Runtime notice: {notice}")
+    legacy_paths = (
+        root / "bin/node",
+        fingering / "lumikey_runtime",
+        *root.glob("runtime/python/lib/python*/site-packages/piano_teacher/fingering/lumikey_runtime"),
+    )
+    if any(path.exists() for path in legacy_paths):
+        errors.append("Package includes the retired Node fingering runtime")
+    return errors
+
+
 def audit_tree(root: Path, *, package: bool = False) -> list[str]:
     root = Path(root).resolve()
     result: list[str] = []
@@ -49,7 +74,7 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
                 result.append(f"{relative}:{node.lineno}: missing relative import {'.'.join(target)}")
     if package:
         for path in (
-            "PianoTeacher", "bin/godot", "bin/node",
+            "PianoTeacher", "bin/godot",
             "godot/project.godot", "godot/native/piano_bridge.gdextension",
             "godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so",
             "runtime/python/bin/python3",
@@ -57,6 +82,7 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
         ):
             if not (root / path).is_file():
                 result.append(f"Package missing required asset: {path}")
+        result.extend(audit_fingering_assets(root))
         if (root / "godot/addons/godot_mcp_toolkit").exists():
             result.append("Package includes a development-only MCP server")
         import_dir = root / "godot/.godot"
