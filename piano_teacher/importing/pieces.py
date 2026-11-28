@@ -130,18 +130,7 @@ def _index_notes(root, warnings):
                 identifier = f"xml-p{pi}-m{mi}-n{ordinal}"
                 destinations = {}
                 written[identifier] = ET.tostring(note, encoding="unicode"), divisions, destinations
-                for mark in note.findall("notations/slur"):
-                    number = mark.get("number", "1")
-                    key = note.findtext("staff", "1"), note.findtext("voice", "1"), number
-                    if mark.get("type") == "start":
-                        if key in open_slurs:
-                            unmatched_slur = True
-                        open_slurs[key] = destinations
-                    elif mark.get("type") == "stop":
-                        if key in open_slurs:
-                            open_slurs.pop(key)[number] = identifier
-                        else:
-                            unmatched_slur = True
+                unmatched_slur |= _index_slurs(note, identifier, destinations, open_slurs)
                 # music21 does not import MusicXML note IDs. Its public
                 # editorial reference survives staff splitting, chord
                 # assembly and repeats, including each individual tone.
@@ -154,6 +143,23 @@ def _index_notes(root, warnings):
     if unmatched_slur:
         warnings.add("Refer to the original score for slurs without a matching endpoint in one voice and staff.")
     return written
+
+
+def _index_slurs(note, identifier, destinations, open_slurs):
+    unmatched_slur = False
+    for mark in note.findall("notations/slur"):
+        number = mark.get("number", "1")
+        key = note.findtext("staff", "1"), note.findtext("voice", "1"), number
+        if mark.get("type") == "start":
+            if key in open_slurs:
+                unmatched_slur = True
+            open_slurs[key] = destinations
+        elif mark.get("type") == "stop":
+            if key in open_slurs:
+                open_slurs.pop(key)[number] = identifier
+            else:
+                unmatched_slur = True
+    return unmatched_slur
 
 
 def _written_id(element):
@@ -196,8 +202,7 @@ def _anchor_graces(lane, written, warnings):
             members = element.notes if element.isChord else (element,)
             for member in members:
                 markup = written.get(_written_id(member), ("", 0))[0]
-                pending.append(markup if member.isNote and
-                               member.duration.type in ("eighth", "16th") else "")
+                pending.append(markup if member.isNote else "")
             lane.remove(element)
         elif pending:
             if element.isRest:
@@ -206,7 +211,7 @@ def _anchor_graces(lane, written, warnings):
                 element.editorial.graceBefore = tuple(pending)
                 _grace_limits(element, pending, written, warnings)
             else:
-                warnings.add("Refer to the original score for grace notes with an unsupported duration or pitch.")
+                warnings.add("Refer to the original score for unpitched or unidentified grace notes.")
             pending.clear()
     if pending:
         warnings.add("Grace notes without a following attack are not displayed.")
@@ -217,8 +222,6 @@ def _grace_limits(anchor, ornaments, written, warnings):
     outside = False
     for markup in ornaments:
         grace = ET.fromstring(markup)
-        if len(ornaments) == 1 and grace.find("accidental") is not None:
-            warnings.add("Refer to the original score for printed accidentals on isolated grace notes.")
         for slur in grace.findall("notations/slur"):
             number = slur.get("number", "1")
             if slur.get("type") == "start":
@@ -226,7 +229,7 @@ def _grace_limits(anchor, ornaments, written, warnings):
             elif slur.get("type") == "stop":
                 outside |= number not in opened
                 opened.discard(number)
-    if opened and len(ornaments) > 1:
+    if opened:
         member = anchor.notes[0] if anchor.isChord else anchor
         markup = written.get(_written_id(member), ("",))[0]
         if markup:

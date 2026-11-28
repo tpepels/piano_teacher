@@ -86,6 +86,7 @@ class PageGeometry:
 def parse_svg_geometry(svg: str | ET.Element, *,
                        ledger_paths: dict[str, list[ET.Element]] | None = None) -> PageGeometry:
     root = ET.fromstring(svg) if isinstance(svg, str) else svg
+    requested_ledgers = ledger_paths or {}
     bounds = [float(x) for x in NUMBERS.findall(root.get("viewBox", ""))]
     if len(bounds) != 4 or bounds[2] <= 0 or bounds[3] <= 0:
         raise ValueError("Verovio SVG has no valid viewBox")
@@ -216,8 +217,7 @@ def parse_svg_geometry(svg: str | ET.Element, *,
         for ledger_left, ledger_right, path in ledgers.get(staffs[elem], []):
             if ledger_left <= x <= ledger_right:
                 left = min(left, ledger_left)
-                if ledger_paths is not None:
-                    ledger_paths.setdefault(identifier, []).append(path)
+                requested_ledgers.get(identifier, []).append(path)
         ink_left[identifier] = (left-bx)/width
     # Use only actual Verovio right barlines for terminal held-note timing.
     # Accept SVG lines and absolute move-to paths; unknown glyphs are ignored.

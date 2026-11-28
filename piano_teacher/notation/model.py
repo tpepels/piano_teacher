@@ -321,7 +321,15 @@ def _grace_notes(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
                 binding = score.note_bindings.get(child.get("id"))
                 if not binding or not binding.get("is_attack") or not group:
                     continue
-                if len(group) > 1:
+                item = group[0]
+                # The shared flag template represents a plain eighth or
+                # sixteenth. Preserve the actual ink of other written values,
+                # accidentals, directed stems, dots, noteheads and connectors.
+                plain = (item.findtext("type") in ("eighth", "16th")
+                         and all(item.find(path) is None for path in (
+                             "accidental", "pitch/alter", "stem", "dot", "notehead",
+                             "beam", "notations/*")))
+                if len(group) > 1 or not plain:
                     projected.append({
                         "id": group[0].get("id"), "before_note_id": child.get("id"),
                         "group_ids": [item.get("id") for item in group],
@@ -330,9 +338,6 @@ def _grace_notes(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
                         "hand": hand, "measure": score.phrase.first_bar + mi,
                         "beat": round(binding["display_beat"], 8),
                     })
-                    continue
-                item = group[0]
-                if item.findtext("type") not in ("eighth", "16th"):
                     continue
                 pitch = item.find("pitch")
                 if pitch is None:

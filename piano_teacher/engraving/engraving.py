@@ -327,14 +327,11 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
             import xml.etree.ElementTree as ET
             stable = ET.fromstring(xml)
             for measure in stable.findall(".//measure"):
-                for note in list(measure):
-                    if note.tag == "note" and note.find("grace") is not None:
+                for note in measure.findall("note"):
+                    if note.find("grace") is not None:
                         measure.remove(note)
-                    elif note.tag == "note":
-                        # An ornament's slur may end on this timed attack.
-                        # The timing-only engraving needs neither endpoint.
-                        for slur in note.findall("notations/slur"):
-                            note.find("notations").remove(slur)
+                    else:
+                        _remove_timing_slurs(note)
             timed_toolkit = create_verovio_toolkit(verovio)
             if not timed_toolkit.setOptions(options) or not timed_toolkit.loadData(
                     ET.tostring(stable, encoding="unicode")):
@@ -373,6 +370,12 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                     parent.remove(child)
         cleaned.append(ET.tostring(root, encoding="unicode"))
     return EngravedScore(tuple(cleaned), layout)
+
+
+def _remove_timing_slurs(note):
+    # A slur may end on this attack after its untimed graces were removed.
+    for slur in note.findall("notations/slur"):
+        note.find("notations").remove(slur)
 
 
 def _svg_pages(toolkit) -> tuple[str, ...]:

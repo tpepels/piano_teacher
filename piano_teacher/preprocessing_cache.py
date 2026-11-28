@@ -17,7 +17,7 @@ from .music import BarlineChange, ClefChange, KeySignature, Note, Phrase, Piece
 
 # Bump this whenever the importer, exercise generation, musical notation
 # contract or engraving algorithm changes. All historical entries then miss.
-CACHE_VERSION = "2026-11-28-authored-ornaments-v8"
+CACHE_VERSION = "2026-11-28-authored-ornaments-v9"
 MAX_CACHE_BYTES = 256 * 1024 * 1024
 MAX_ENTRY_BYTES = 20 * 1024 * 1024
 

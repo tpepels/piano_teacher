@@ -360,7 +360,8 @@ func nonhead_envelope(kind: String, up: bool, chord_key: String = "") -> Rect2:
     var picture: Image = score_layout.glyphs.source_image(texture)
     var pixel := Vector2(float(box[2])/picture.get_width(),float(box[3])/picture.get_height())
     var head_box: Array = score_layout.glyphs.bounds["head_"+(kind if kind in ["half","whole"] else "black")]
-    var positions: Array = [[0.0,0.0]] if chord_key.is_empty() else score_layout.glyphs.chord_metadata[chord_key]["head_positions"]
+    var positions: Array = [[0.0,0.0]] if chord_key.is_empty() else \
+        score_layout.glyphs.chord_metadata[chord_key]["head_positions"]
     var heads: Array = []
     for position in positions:
         heads.append(Rect2(float(position[0])-float(head_box[2])*.5,

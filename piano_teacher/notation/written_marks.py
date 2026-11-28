@@ -87,12 +87,11 @@ def _attach_grace(measure, head, note, source, spans):
                 first, start = started.pop(number)
                 spans.append((first, grace, start, mark, "ornament"))
         measure.insert(index + offset, grace)
-    if len(note.grace_before) > 1:
-        for stop in source.findall("notations/slur[@type='stop']"):
-            number = stop.get("number", "1")
-            if number in started:
-                first, start = started.pop(number)
-                spans.append((first, head, start, stop, "ornament"))
+    for stop in source.findall("notations/slur[@type='stop']"):
+        number = stop.get("number", "1")
+        if number in started:
+            first, start = started.pop(number)
+            spans.append((first, head, start, stop, "ornament"))
 
 
 def project_written_marks(root, phrase, bindings, divisions, enabled):

@@ -8,7 +8,6 @@ independent native beat/pitch positions without constructing a curve.
 from __future__ import annotations
 
 import base64
-from copy import deepcopy
 from io import BytesIO
 import math
 import xml.etree.ElementTree as ET
@@ -77,14 +76,10 @@ def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
 
 def _unbroken_slurs(musicxml, missing):
     """Re-engrave the original measures together across printed system breaks."""
-    import verovio
-    from .runtime import create_verovio_toolkit
+    from .runtime import measure_excerpt, unbroken_toolkit
 
     root = ET.fromstring(musicxml)
-    toolkit = create_verovio_toolkit(verovio)
-    if not toolkit.setOptions({"inputFrom": "xml", "breaks": "none", "svgViewBox": True,
-                               "adjustPageHeight": True, "adjustPageWidth": True}):
-        raise RuntimeError("Verovio rejected continuous slur engraving options")
+    toolkit = unbroken_toolkit()
     found = {}
     for part in root.findall("part"):
         measures = part.findall("measure")
@@ -95,40 +90,27 @@ def _unbroken_slurs(musicxml, missing):
             if first not in positions or last not in positions:
                 continue
             start, end = positions[first], positions[last]
-            subset = ET.Element("score-partwise", version="4.0")
-            part_list = ET.SubElement(subset, "part-list")
-            info = root.find(f"part-list/score-part[@id='{part.get('id')}']")
-            part_list.append(deepcopy(info))
-            excerpt = ET.SubElement(subset, "part", id=part.get("id"))
-            context = {}
-            for measure in measures[:start]:
-                for attr in measure.findall("attributes/*"):
-                    context[attr.tag, attr.get("number")] = attr
-            start_number = None
-            for index in range(start, end + 1):
-                copied = deepcopy(measures[index])
-                if index == start and context:
-                    inherited = ET.Element("attributes")
-                    inherited.extend(deepcopy(attr) for attr in context.values())
-                    copied.insert(0, inherited)
-                # Other spans may start outside this excerpt or reuse the
-                # same MusicXML number in a simultaneous worksheet voice.
-                for note in copied.findall("note"):
-                    notation = note.find("notations")
-                    for mark in note.findall("notations/slur"):
-                        if not ((note.get("id") == first and mark.get("id") == source)
-                                or (note.get("id") == last and mark.get("type") == "stop"
-                                    and mark.get("number", "1") == start_number)):
-                            notation.remove(mark)
-                        elif note.get("id") == first:
-                            start_number = mark.get("number", "1")
-                excerpt.append(copied)
+            subset = measure_excerpt(root, part, start, end)
+            _retain_slur(subset, first, last, source)
             if toolkit.loadData(ET.tostring(subset, encoding="unicode")):
                 page = toolkit.renderToSVG(1)
                 fragment = _identified_slur(page, pair, source)
                 if fragment:
                     found["|".join(pair)] = fragment
     return found
+
+
+def _retain_slur(subset, first, last, source):
+    # Other spans may start outside this excerpt or reuse the same
+    # MusicXML number in a simultaneous worksheet voice.
+    start_number = None
+    for note in subset.findall("part/measure/note"):
+        for mark in note.findall("notations/slur"):
+            if note.get("id") == first and mark.get("type") == "start" and mark.get("id") == source:
+                start_number = mark.get("number", "1")
+            elif not (note.get("id") == last and mark.get("type") == "stop"
+                      and mark.get("number", "1") == start_number):
+                note.find("notations").remove(mark)
 
 
 def _identified_slur(page, pair, source):
@@ -154,91 +136,108 @@ def _identified_slur(page, pair, source):
     return art
 
 
-def _page_slurs(svgs, desired):
-    from .vector_art import svg_alpha
-    from ...source_svg import parse_svg_geometry
+def _slur_ink(root):
     from ...source_svg import isolate
+    from .vector_art import svg_alpha
 
+    candidates=[]
+    for group in root.iter():
+        if "slur" not in _classes(group) or _classes(group) & {
+                "bounding-box","content-bounding-box"}:
+            continue
+        try:
+            isolated=isolate(root,group)
+            alpha = svg_alpha(isolated, 1600)
+            rect = alpha.getbbox()
+            if rect:
+                # Retain only contour pixels, never one full-page raster
+                # image for every slur in a complete performance.
+                candidates.append((group.get("id"),alpha.crop(rect),rect,alpha.size))
+        except (ValueError,RuntimeError,OverflowError,ET.ParseError):
+            continue
+    return candidates
+
+
+def _matches_endpoints(cut, rect, size, first, last, space):
+    x0, y0 = first
+    x1, y1 = last
+    left,top,right,bottom=rect
+    width,height=size
+    pxspace=space*height
+    # Check both engraved endpoints, not just the overall
+    # bounding box: a different voice may share the same X
+    # interval yet curve towards another final pitch.
+    if (abs(left-x0*width)>pxspace*2.6 or
+            abs(right-x1*width)>pxspace*2.6 or
+            right-left<pxspace*.5 or pxspace<=4):
+        return False
+    edge=max(2,min(int(pxspace*.8),int((right-left)*.08)))
+    start_box=cut.crop((0,0,edge,cut.height)).getbbox()
+    end_box=cut.crop((cut.width-edge,0,cut.width,cut.height)).getbbox()
+    if start_box is None or end_box is None:
+        return False
+    start_y=top+(start_box[1]+start_box[3])*.5
+    end_y=top+(end_box[1]+end_box[3])*.5
+    if (abs(start_y-y0*height)>pxspace*7.0 or
+            abs(end_y-y1*height)>pxspace*7.0):
+        return False
+    return True
+
+
+def _fragment(pair, matched, first_point, last_point, space):
+    first, last = pair
+    x0, y0 = first_point
+    x1, y1 = last_point
+    cut,rect,(width,height)=matched
+    pxspace=space*height
+    if pxspace<=4:
+        return None
+    left,top,right,bottom=rect
+    white=Image.new("RGBA",cut.size,(255,255,255,255))
+    white.putalpha(cut)
+    mem=BytesIO()
+    white.save(mem,format="PNG",optimize=True)
+    bounds=[(left-x0*width)*250/pxspace,
+            (top-y0*height)*250/pxspace,
+            (right-left)*250/pxspace,(bottom-top)*250/pxspace]
+    span=(x1-x0)*width*250/pxspace
+    change=(y1-y0)*height*250/pxspace
+    if all(math.isfinite(v) for v in bounds+[span,change]) and span>0:
+        return {"source":"verovio-engraved-slur",
+                  "units_per_space":250,
+                  "note_ids":[first,last],"bounds":bounds,
+                  "span":span,"original_end_y":change,
+                  "png_base64":base64.b64encode(mem.getvalue()).decode()}
+    return None
+
+
+def _page_slurs(svgs, desired):
+    from ...source_svg import parse_svg_geometry
+
+    out = {}
     if not desired:
-        return {}
-    out={}
+        return out
     for page in svgs:
-        geom=parse_svg_geometry(page)
-        root=ET.fromstring(page)
-        candidates=[]
-        for group in root.iter():
-            if "slur" not in _classes(group) or _classes(group) & {
-                    "bounding-box","content-bounding-box"}:
+        root = ET.fromstring(page)
+        geom = parse_svg_geometry(root)
+        candidates = _slur_ink(root)
+        for pair, source_id in desired.items():
+            key = "|".join(pair)
+            if key in out or not all(i in geom.elements for i in pair):
                 continue
-            try:
-                isolated=isolate(root,group)
-                alpha = svg_alpha(isolated, 1600)
-                rect = alpha.getbbox()
-                if rect:
-                    # Retain only contour pixels, never one full-page raster
-                    # image for every slur in a complete performance.
-                    candidates.append((group.get("id"),alpha.crop(rect),rect,alpha.size))
-            except (ValueError,RuntimeError,OverflowError,ET.ParseError):
+            x0, y0, system = geom.elements[pair[0]]
+            x1, y1, end_system = geom.elements[pair[1]]
+            lines = geom.staff_systems[system]["staff_lines"]
+            if x1 <= x0 or system != end_system or len(lines) < 5:
                 continue
-        for first,last in desired:
-            key=f"{first}|{last}"
-            if key in out or not all(i in geom.elements for i in (first,last)):
-                continue
-            x0,y0,staffid=geom.elements[first]
-            x1,y1,end_staff=geom.elements[last]
-            if x1<=x0 or staffid != end_staff:
-                continue
-            lines=geom.staff_systems[staffid]["staff_lines"]
-            if len(lines)<5:
-                continue
-            space=lines[1]-lines[0]
-            accepted=[]
-            for source,cut,rect,size in candidates:
-                if desired[first,last] and desired[first,last]!=source:
-                    continue
-                left,top,right,bottom=rect
-                width,height=size
-                pxspace=space*height
-                # Check both engraved endpoints, not just the overall
-                # bounding box: a different voice may share the same X
-                # interval yet curve towards another final pitch.
-                if (abs(left-x0*width)>pxspace*2.6 or
-                        abs(right-x1*width)>pxspace*2.6 or
-                        right-left<pxspace*.5 or pxspace<=4):
-                    continue
-                edge=max(2,min(int(pxspace*.8),int((right-left)*.08)))
-                start_box=cut.crop((0,0,edge,cut.height)).getbbox()
-                end_box=cut.crop((cut.width-edge,0,cut.width,cut.height)).getbbox()
-                if start_box is None or end_box is None:
-                    continue
-                start_y=top+(start_box[1]+start_box[3])*.5
-                end_y=top+(end_box[1]+end_box[3])*.5
-                if (abs(start_y-y0*height)>pxspace*7.0 or
-                        abs(end_y-y1*height)>pxspace*7.0):
-                    continue
-                accepted.append((cut,rect,size))
-            if len(accepted)!=1:
-                continue
-            cut,rect,(width,height)=accepted[0]
-            pxspace=space*height
-            if pxspace<=4:
-                continue
-            left,top,right,bottom=rect
-            white=Image.new("RGBA",cut.size,(255,255,255,255))
-            white.putalpha(cut)
-            mem=BytesIO()
-            white.save(mem,format="PNG",optimize=True)
-            bounds=[(left-x0*width)*250/pxspace,
-                    (top-y0*height)*250/pxspace,
-                    (right-left)*250/pxspace,(bottom-top)*250/pxspace]
-            span=(x1-x0)*width*250/pxspace
-            change=(y1-y0)*height*250/pxspace
-            if all(math.isfinite(v) for v in bounds+[span,change]) and span>0:
-                out[key]={"source":"verovio-engraved-slur",
-                          "units_per_space":250,
-                          "note_ids":[first,last],"bounds":bounds,
-                          "span":span,"original_end_y":change,
-                          "png_base64":base64.b64encode(mem.getvalue()).decode()}
+            space = lines[1] - lines[0]
+            matches = [(cut, rect, size) for source, cut, rect, size in candidates
+                       if (not source_id or source_id == source)
+                       and _matches_endpoints(cut, rect, size, (x0,y0), (x1,y1), space)]
+            if len(matches) == 1:
+                art = _fragment(pair, matches[0], (x0, y0), (x1, y1), space)
+                if art:
+                    out[key] = art
     return out
 
 

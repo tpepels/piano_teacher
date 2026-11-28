@@ -222,9 +222,22 @@ actual piano input. Headless software acceptance does not certify those.
 
 ## Standalone Linux package
 
-[package-inprocess.sh](../scripts/package-inprocess.sh) assembles Godot, the
-compiled GDExtension, CPython and runtime wheels, pinned fingering models and
-count-in assets. Set these builder inputs:
+Build the distributable with Docker Buildx from the repository root:
+
+```bash
+bash scripts/build-linux-release.sh dist
+```
+
+The [Linux release builder](../scripts/build-linux-release.sh) compiles the
+native bridge on Debian 12 and pairs the official x86-64 Godot executable
+with embedded CPython, the reviewed binary wheels, fingering models, SF2
+renderer, sample bank and count-in clips. The target directory receives
+the desktop archive, library source companion and runtime inventory.
+The release selects wheels with [binary source constraints](../scripts/release/binary-constraints.txt).
+NumPy 2.5.4 reports x86-64-v2 as its CPU baseline.
+
+To assemble a developer-host build using an existing native bridge and
+private Python prefix, set these inputs:
 
 ```bash
 export PIANO_BUNDLED_PYTHON_HOME=/absolute/path/to/private-python-prefix

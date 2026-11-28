@@ -240,7 +240,7 @@ func load_font(items: Dictionary, octave_clefs: Array) -> bool:
                 error = "Empty Verovio symbol " + name
                 return false
             if name == "brace":
-                image = brace_image()
+                image = _brace_image()
             _font_image_lock.lock()
             if _font_images.has(cache_key):
                 image = _font_images[cache_key]
@@ -257,7 +257,7 @@ func load_font(items: Dictionary, octave_clefs: Array) -> bool:
     error = ""
     return true
 
-static func brace_profile(t: float, width: float) -> Vector2:
+static func _brace_profile(t: float, width: float) -> Vector2:
     var u: float = 2.0*minf(t,1.0-t)  # 0 at the tips, 1 at the cusp
     var centre: float
     if u < 0.38:
@@ -269,7 +269,7 @@ static func brace_profile(t: float, width: float) -> Vector2:
     var thick: float = 0.05+0.40*pow(sin(PI*clampf(u/0.95,0.0,1.0)),1.0)
     return Vector2((centre-thick*.5)*width,(centre+thick*.5)*width)
 
-static func brace_image() -> Image:
+static func _brace_image() -> Image:
     var w: int = BRACE_SIZE.x
     var h: int = BRACE_SIZE.y
     var coverage := PackedFloat32Array()
@@ -278,7 +278,7 @@ static func brace_image() -> Image:
     for y in range(h):
         coverage.fill(0.0)
         for sub in range(BRACE_OVERSAMPLE):
-            var span: Vector2 = brace_profile(
+            var span: Vector2 = _brace_profile(
                 (float(y)+(float(sub)+.5)/float(BRACE_OVERSAMPLE))/float(h),float(w))
             for x in range(maxi(0,floori(span.x)),mini(w,ceili(span.y))):
                 var covered: float = minf(float(x+1),span.y)-maxf(float(x),span.x)
@@ -582,7 +582,8 @@ func load_grace_fragments(items: Dictionary) -> bool:
         var image := Image.new()
         if item.get("source") != "verovio-engraved-graces" or \
                 item.get("units_per_space") != 250 or box.size() != 4 or \
-                image.load_png_from_buffer(Marshalls.base64_to_raw(item.get("png_base64", ""))) != OK:
+                image.load_png_from_buffer(Marshalls.base64_to_raw(
+                    item.get("png_base64", ""))) != OK:
             error = "Invalid Verovio grace group before " + str(anchor)
             return false
         loaded[anchor] = image

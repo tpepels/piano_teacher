@@ -118,12 +118,6 @@ func ready() -> bool:
 func load_font(items: Dictionary, octave_clefs: Array = Assets.OCTAVE_CLEFS) -> bool:
     return _assets.load_font(items,octave_clefs)
 
-static func brace_profile(t: float, width: float) -> Vector2:
-    return Assets.brace_profile(t, width)
-
-static func brace_image() -> Image:
-    return Assets.brace_image()
-
 func note_ready() -> bool:
     return _assets.note_ready()
 

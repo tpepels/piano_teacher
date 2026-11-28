@@ -1,6 +1,8 @@
 """One Verovio runtime and bundled music fonts for native engraving."""
 from __future__ import annotations
+from copy import deepcopy
 import json
+from xml.etree import ElementTree as ET
 from pathlib import Path
 
 def verovio_resources(verovio_module) -> Path:
@@ -30,6 +32,36 @@ def create_verovio_toolkit(verovio_module):
     if not toolkit.setResourcePath(str(resources)):
         raise RuntimeError(f"Verovio could not load its Bravura/Leipzig fonts from {resources}")
     return toolkit
+
+
+def unbroken_toolkit():
+    import verovio
+
+    toolkit = create_verovio_toolkit(verovio)
+    if not toolkit.setOptions({"inputFrom": "xml", "breaks": "none", "svgViewBox": True,
+                               "adjustPageHeight": True, "adjustPageWidth": True}):
+        raise RuntimeError("Verovio rejected continuous excerpt engraving options")
+    return toolkit
+
+
+def measure_excerpt(root, part, start, end):
+    """Copy a single part's measures with its inherited written context."""
+    subset = ET.Element("score-partwise", version="4.0")
+    part_list = ET.SubElement(subset, "part-list")
+    info = root.find(f"part-list/score-part[@id='{part.get('id')}']")
+    part_list.append(deepcopy(info))
+    excerpt = ET.SubElement(subset, "part", id=part.get("id"))
+    measures = part.findall("measure")
+    context = {}
+    for measure in measures[:start]:
+        for attr in measure.findall("attributes/*"):
+            context[attr.tag, attr.get("number")] = attr
+    excerpt.extend(deepcopy(measure) for measure in measures[start:end + 1])
+    if context:
+        inherited = ET.Element("attributes")
+        inherited.extend(deepcopy(attr) for attr in context.values())
+        excerpt[0].insert(0, inherited)
+    return subset
 
 
 def verovio_object(value, description: str):

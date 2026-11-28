@@ -6,7 +6,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /workspace
 COPY pyproject.toml .
-RUN python -c 'import subprocess,sys,tomllib; p=tomllib.load(open("pyproject.toml","rb"))["project"]; subprocess.check_call([sys.executable,"-m","pip","install","--no-cache-dir","scons",*p["dependencies"],*p["optional-dependencies"]["godot"]])'
+COPY scripts/release/binary-constraints.txt /tmp/binary-constraints.txt
+RUN python -c 'import subprocess,sys,tomllib; p=tomllib.load(open("pyproject.toml","rb"))["project"]; subprocess.check_call([sys.executable,"-m","pip","install","--no-cache-dir","-c","/tmp/binary-constraints.txt","scons",*p["dependencies"],*p["optional-dependencies"]["godot"]])'
 RUN curl -fsSL --retry 3 --max-time 180 https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip -o /tmp/godot.zip \
     && echo "9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65  /tmp/godot.zip" | sha512sum -c - \
     && unzip -p /tmp/godot.zip Godot_v4.7.2-stable_linux.x86_64 > /usr/local/bin/godot \
