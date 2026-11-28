@@ -77,7 +77,7 @@ PY
   "${packaged[@]}" bash "$ROOT/scripts/release/verify-score-recovery.sh" "$WORK/package-recovery" \
     "$release/bin/godot" "$release/godot" "$ROOT/tests/godot/score_worker_recovery.gd" \
     2>&1 | tee "$WORK/recovery.log"
-  grep -Eq '^NATIVE_SCORE_RECOVERY_FAILURES:[[:space:]]*0  echo "Relocated standalone package generated both hands' fingerings and native notation" "$WORK/recovery.log"
+  grep -Eq '^NATIVE_SCORE_RECOVERY_FAILURES:[[:space:]]*0$' "$WORK/recovery.log"
   if grep -Fq 'SCRIPT ERROR:' "$WORK/recovery.log"; then
     return 1
   fi
