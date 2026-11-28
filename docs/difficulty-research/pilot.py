@@ -4,6 +4,7 @@ import csv
 import hashlib
 import itertools
 import json
+import math
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 import random
@@ -14,7 +15,7 @@ CATEGORIES = ("displacement", "span", "chord_shape", "chord_transition", "speed"
               "repetition", "crossing", "substitution", "independence", "rhythm")
 PRESENCE = {"present", "absent", "unknown", "not_applicable"}
 SEVERITY = {"0", "1", "2", "3", "unknown"}
-META = ("unit_id", "rater_id", "rater_background", "judgment_mode")
+META = ("packet_id", "unit_id", "rater_id", "rater_background", "judgment_mode")
 RATING_FIELDS = (*META, "severity", *CATEGORIES, "confidence", "evidence", "alternate_fingering")
 REVIEW_FIELDS = ("window", "blob", "note_id", "track", "channel", "onset", "offset",
                  "pitch", "target", "hand", "finger", "fingering_provenance",
@@ -90,8 +91,16 @@ def inventory(corpus, plan):
             maps[wid] = dict(source=source["path"], blob=source["git_blob"],
                              ppq=source["ppq"], tempo_us=tempo, meter=meter,
                              start=window["start_tick"], end=window["end_tick"])
-            # Include the whole score to preserve context for both tempo conditions.
+            # At least four quarter notes AND two seconds at source tempo.
+            # The fastest encoded tempo gives a conservative tick bound;
+            # slower trial conditions therefore have enough context too.
+            ticks_2s = math.ceil(2_000_000 * source["ppq"] / min(v for _, v in tempo))
+            lower = max(0, window["start_tick"] - max(window["context_before_ticks"], ticks_2s))
+            upper = window["end_tick"] + max(window["context_after_ticks"], ticks_2s)
+            maps[wid]["context_ticks"] = [lower, upper]
             for note in sorted(notes, key=lambda n: (n["onset"], n["note_id"])):
+                if note["offset"] <= lower or note["onset"] >= upper:
+                    continue
                 target = window["start_tick"] <= note["onset"] < window["end_tick"]
                 rows.append(dict(window=wid, blob=source["git_blob"], **note, target=int(target),
                                  hand="", finger="", fingering_provenance="", attack_tick=note["onset"],
@@ -149,6 +158,7 @@ def make_packet(corpus, plan, reviewed, maps, output):
                 raise ValueError(f"No reviewed attacks for {wid}/{hand}")
             conditions.append(dict(key=f"{wid}/{hand}/{factor}", hand=hand, factor=factor,
                                    source=meta, edition=notes[0]["edition"], notes=selected,
+                                   unknown_context=[n for n in notes if n["hand"] == "unknown"],
                                    attacks=attacks))
     for case in corpus["synthetic"]:
         if case["id"] not in plan["synthetic"]:
@@ -176,15 +186,20 @@ def make_packet(corpus, plan, reviewed, maps, output):
                                         if n["attack_tick"] == tick]))
     # Packet content excludes corpus split labels, expected synthetic features,
     # contrast hints and model predictions. Coordinator key stays separate.
-    packet = dict(version=1, plan_version=plan["version"], cases=cases, units=units)
-    packet_id = hashlib.sha256(json.dumps(packet, sort_keys=True).encode()).hexdigest()
+    packet = dict(version=1, plan_version=plan["version"],
+                  plan_digest=digest(plan), cases=cases, units=units)
+    packet_id = digest(packet)
     packet["packet_id"] = packet_id
     save(output / "packet.json", packet)
     save(output / "coordinator-key.json", dict(packet_id=packet_id, mapping=keymap))
-    rows = [dict(unit_id=u["unit_id"]) for u in units]
+    rows = [dict(packet_id=packet_id, unit_id=u["unit_id"]) for u in units]
     for rater in range(1, plan["raters"]+1):
         write_csv(output / f"ratings-{rater}.csv", RATING_FIELDS, rows)
     return packet
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, allow_nan=False).encode()).hexdigest()
 
 
 def ordinal_alpha(rows):
@@ -214,6 +229,9 @@ def ordinal_alpha(rows):
 
 
 def agreement(packet, sheets, plan):
+    packet_id = packet.get("packet_id")
+    if packet_id != digest({k: v for k, v in packet.items() if k != "packet_id"}) or packet.get("plan_digest") != digest(plan):
+        raise ValueError("Packet or frozen plan identity mismatch")
     units = {unit["unit_id"] for unit in packet["units"]}
     if not units or len(units) != len(packet["units"]):
         raise ValueError("Invalid packet units")
@@ -227,6 +245,8 @@ def agreement(packet, sheets, plan):
             raise ValueError("Each sheet must have one distinct rater ID")
         raters |= ids
         for row in sheet:
+            if row.get("packet_id") != packet_id:
+                raise ValueError("Rating belongs to a different packet")
             if not row["rater_background"].strip() or row["judgment_mode"] not in ("score", "played"):
                 raise ValueError("Rater background and judgment mode required")
             if row["severity"] not in SEVERITY or any(row[c] not in PRESENCE for c in CATEGORIES):
