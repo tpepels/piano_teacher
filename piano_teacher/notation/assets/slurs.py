@@ -155,7 +155,7 @@ def _identified_slur(page, pair, source):
 
 
 def _page_slurs(svgs, desired):
-    import cairosvg
+    from .vector_art import svg_alpha
     from ...source_svg import parse_svg_geometry
     from ...source_svg import isolate
 
@@ -172,15 +172,12 @@ def _page_slurs(svgs, desired):
                 continue
             try:
                 isolated=isolate(root,group)
-                png=cairosvg.svg2png(bytestring=isolated.encode(),
-                                    output_width=1600)
-                with Image.open(BytesIO(png)) as image:
-                    rgba=image.convert("RGBA")
-                rect=rgba.getchannel("A").getbbox()
+                alpha = svg_alpha(isolated, 1600)
+                rect = alpha.getbbox()
                 if rect:
-                    # Retain only contour pixels, never one full-page RGBA
+                    # Retain only contour pixels, never one full-page raster
                     # image for every slur in a complete performance.
-                    candidates.append((group.get("id"),rgba.crop(rect),rect,rgba.size))
+                    candidates.append((group.get("id"),alpha.crop(rect),rect,alpha.size))
             except (ValueError,RuntimeError,OverflowError,ET.ParseError):
                 continue
         for first,last in desired:
@@ -210,9 +207,8 @@ def _page_slurs(svgs, desired):
                         right-left<pxspace*.5 or pxspace<=4):
                     continue
                 edge=max(2,min(int(pxspace*.8),int((right-left)*.08)))
-                alpha=cut.getchannel("A")
-                start_box=alpha.crop((0,0,edge,cut.height)).getbbox()
-                end_box=alpha.crop((cut.width-edge,0,cut.width,cut.height)).getbbox()
+                start_box=cut.crop((0,0,edge,cut.height)).getbbox()
+                end_box=cut.crop((cut.width-edge,0,cut.width,cut.height)).getbbox()
                 if start_box is None or end_box is None:
                     continue
                 start_y=top+(start_box[1]+start_box[3])*.5
@@ -229,7 +225,7 @@ def _page_slurs(svgs, desired):
                 continue
             left,top,right,bottom=rect
             white=Image.new("RGBA",cut.size,(255,255,255,255))
-            white.putalpha(cut.getchannel("A"))
+            white.putalpha(cut)
             mem=BytesIO()
             white.save(mem,format="PNG",optimize=True)
             bounds=[(left-x0*width)*250/pxspace,
