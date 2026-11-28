@@ -12,9 +12,6 @@ extends RefCounted
 const REQUIRED := [
     "brace",
     "clef_g", "clef_f", "clef_c",
-    "clef_g_8vb", "clef_g_8va", "clef_g_15mb", "clef_g_15ma",
-    "clef_f_8vb", "clef_f_8va", "clef_f_15mb", "clef_f_15ma",
-    "clef_c_8vb",
     "head_whole", "head_half", "head_black", "augmentation_dot",
     "repeat_dot",
     "dynamic_p", "dynamic_pp", "dynamic_ppp", "dynamic_mp", "dynamic_mf",
@@ -27,10 +24,13 @@ const REQUIRED := [
     "rest_16th", "rest_32nd", "rest_64th", "rest_128th",
     "acc_flat", "acc_natural", "acc_sharp",
     "acc_double_sharp", "acc_double_flat",
-    "flag_up_1", "flag_down_1", "flag_up_2", "flag_down_2",
-    "flag_up_3", "flag_down_3", "flag_up_4", "flag_down_4", "flag_up_5", "flag_down_5",
     "time_0", "time_1", "time_2", "time_3", "time_4",
     "time_5", "time_6", "time_7", "time_8", "time_9",
+]
+const OCTAVE_CLEFS := [
+    "clef_g_8vb", "clef_g_8va", "clef_g_15mb", "clef_g_15ma",
+    "clef_f_8vb", "clef_f_8va", "clef_f_15mb", "clef_f_15ma",
+    "clef_c_8vb",
 ]
 const RASTER_SCALE := 1.75
 # Noteheads, stems and flags rendered together by Verovio, not assembled
@@ -190,17 +190,17 @@ const BRACE_SIZE := Vector2i(96,1024)
 const BRACE_OVERSAMPLE := 4
 
 func ready() -> bool:
-    return textures.size() == REQUIRED.size()
+    return not font_name.is_empty()
 
-func load_font(items: Dictionary) -> bool:
-    if ready():
+func load_font(items: Dictionary, octave_clefs: Array) -> bool:
+    if ready() and textures.has_all(octave_clefs):
         return true
     # head_images is replaced below; cutouts derived from the old ones are stale.
     _head_masks.clear_heads()
     var loaded_textures: Dictionary = {}
     var loaded_bounds: Dictionary = {}
     var common_font := ""
-    for name in REQUIRED:
+    for name in REQUIRED + octave_clefs:
         var entry: Dictionary = items.get(name, {})
         if str(entry.get("source", "")) != "verovio":
             error = "Missing authentic Verovio glyph: " + name

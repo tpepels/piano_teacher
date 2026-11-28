@@ -137,26 +137,24 @@ func paint_crowded_meter(canvas, frame: RenderPass, measure: Dictionary, x: floa
         frame.ink(staff),scale)
 
 
+static func octave_clef_glyph(clef: Dictionary) -> String:
+    var sign: String = str(clef.get("sign","G")).to_lower()
+    var suffix: String = {-1:"8vb",1:"8va",-2:"15mb",2:"15ma"}.get(
+        int(clef.get("octave_change",0)), "")
+    return "" if suffix.is_empty() else "clef_"+sign+"_"+suffix
+
+
 func paint_clef(canvas, frame: RenderPass, x: float, center: float, clef: Dictionary,
         gap: float, ink: Color) -> void:
     var sign: String = str(clef.get("sign","G"))
     var line: int = int(clef.get("line", 2 if sign == "G" else 4 if sign == "F" else 3))
-    var octave: int = int(clef.get("octave_change",0))
     var name: String = {"G":"clef_g", "F":"clef_f", "C":"clef_c"}.get(sign, "")
     if name.is_empty() or line < 1 or line > 5:
         return
     # The reference mark is exactly MusicXML's numbered staff line:
     # 1 is bottom, 5 is top. Changing it must NOT transpose note time.
     var origin_y: float = center+(3.0-float(line))*gap
-    var variant: String = ""
-    if octave == -1:
-        variant = name+"_8vb"
-    elif octave == 1:
-        variant = name+"_8va"
-    elif octave == -2:
-        variant = name+"_15mb"
-    elif octave == 2:
-        variant = name+"_15ma"
+    var variant := octave_clef_glyph(clef)
     if not variant.is_empty() and score_layout.glyphs.textures.has(variant):
         name = variant
     score_layout.glyphs.paint(canvas,name,x,origin_y,gap,ink,true)

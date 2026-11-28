@@ -352,6 +352,7 @@ func _start_worker_if_possible() -> void:
             _renderer.size,float(_renderer.configured_density))
     else:
         _worker.refit(_renderer.size,float(_renderer.configured_density))
+    _worker.screen_scale = _renderer.glyphs.screen_scale_for(_renderer)
     _queued.clear()
     _worker_id = WorkerThreadPool.add_task(_worker.run,false,"Prepare authentic score")
     if _worker_id < 0:

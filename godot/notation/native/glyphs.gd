@@ -1,6 +1,7 @@
 extends RefCounted
 # Canvas composition for authenticated Verovio artwork. GlyphAssets is the
 # sole asset/mask store; these established public catalog ports are read-only.
+const StatusInk := preload("res://note_status_ink.gd")
 const Assets := preload("res://notation/native/glyph_assets.gd")
 const REQUIRED = Assets.REQUIRED
 const NOTE_TEMPLATES = Assets.NOTE_TEMPLATES
@@ -68,8 +69,43 @@ func begin_upload() -> void:
 func rewind_upload() -> void:
     _assets.rewind_upload()
 
+# One prepared set per head and screen scale. The worker owns its images
+# through upload. Only the main thread attaches them to their source texture.
+static var _last_head_sizes: Dictionary = {}
+static var _head_size_lock := Mutex.new()
+var _prepared_head_sizes: Dictionary = {}
+
+func prepare_status_sizes(gap: float, screen_scale: Vector2) -> void:
+    var scales: Array = [1.0,StatusInk.CORE_INNER[0]]
+    for ring in StatusInk.BLEED:
+        scales.append(ring[0])
+    for head in head_images:
+        var image: Image = head_images[head]
+        var box: Array = bounds[head]
+        var base_size := Vector2(box[2],box[3]) * (gap / 250.0) * screen_scale
+        _head_size_lock.lock()
+        var known: Dictionary = _last_head_sizes.get(head,{})
+        _head_size_lock.unlock()
+        if known.get("image") == image and known.get("size") == base_size:
+            _prepared_head_sizes[head] = known["sizes"]
+            continue
+        var sizes := {}
+        for scale: float in scales:
+            var size := Vector2i((base_size * scale).round()).clamp(Vector2i.ONE,image.get_size())
+            if not sizes.has(size) and size != image.get_size():
+                sizes[size] = _resample(image,size)
+        _head_size_lock.lock()
+        _last_head_sizes[head] = {"image":image,"size":base_size,"sizes":sizes}
+        _head_size_lock.unlock()
+        _prepared_head_sizes[head] = sizes
+
 func upload_step(budget_usec: int = 2000) -> bool:
-    return _assets.upload_step(budget_usec)
+    if not _assets.upload_step(budget_usec):
+        return false
+    for head in _prepared_head_sizes:
+        textures[head].set_meta("verovio_status_sizes",_prepared_head_sizes[head])
+    _prepared_head_sizes.clear()
+    return true
 
 func source_image(art) -> Image:
     return _assets.source_image(art)
@@ -77,8 +113,8 @@ func source_image(art) -> Image:
 func ready() -> bool:
     return _assets.ready()
 
-func load_font(items: Dictionary) -> bool:
-    return _assets.load_font(items)
+func load_font(items: Dictionary, octave_clefs: Array = Assets.OCTAVE_CLEFS) -> bool:
+    return _assets.load_font(items,octave_clefs)
 
 static func brace_profile(t: float, width: float) -> Vector2:
     return Assets.brace_profile(t, width)
@@ -368,16 +404,26 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
     var cached: Array = _display_cache.get(key,[])
     if cached.size() == 2 and (cached[0] as WeakRef).get_ref() == texture:
         return cached[1]
-    var image: Image = texture.get_meta("verovio_cpu_image") if \
-        texture.has_meta("verovio_cpu_image") else texture.get_image()
-    if image == null or image.is_empty():
-        return texture
+    var size := Vector2i(width,height)
+    var prepared: Dictionary = texture.get_meta("verovio_status_sizes",{})
+    var pixels: Image = prepared.get(size)
+    if pixels == null:
+        var source_image: Image = texture.get_meta("verovio_cpu_image") if \
+            texture.has_meta("verovio_cpu_image") else texture.get_image()
+        if source_image == null or source_image.is_empty():
+            return texture
+        pixels = _resample(source_image,size)
+    var sized := ImageTexture.create_from_image(pixels)
+    _display_cache[key] = [weakref(texture),sized]
+    return sized
+
+static func _resample(image: Image, size: Vector2i) -> Image:
     image = image.duplicate()
     if image.is_compressed():
         image.decompress()
     image.convert(Image.FORMAT_RGBA8)
     image.premultiply_alpha()
-    image.resize(width,height,Image.INTERPOLATE_TRILINEAR)
+    image.resize(size.x,size.y,Image.INTERPOLATE_TRILINEAR)
     var data: PackedByteArray = image.get_data()
     for index in range(0,data.size(),4):
         var alpha: int = data[index+3]
@@ -385,12 +431,9 @@ static func _display_texture(texture: Texture2D, wanted: Vector2) -> Texture2D:
             data[index] = mini(255,roundi(data[index]*255.0/alpha))
             data[index+1] = mini(255,roundi(data[index+1]*255.0/alpha))
             data[index+2] = mini(255,roundi(data[index+2]*255.0/alpha))
-    var sized := ImageTexture.create_from_image(
-        Image.create_from_data(width,height,false,Image.FORMAT_RGBA8,data))
-    _display_cache[key] = [weakref(texture),sized]
-    return sized
+    return Image.create_from_data(size.x,size.y,false,Image.FORMAT_RGBA8,data)
 
-static func _screen_scale(canvas) -> Vector2:
+static func screen_scale_for(canvas) -> Vector2:
     if not (canvas is CanvasItem) or not canvas.is_inside_tree():
         return Vector2.ONE
     var local: Vector2 = canvas.get_global_transform_with_canvas().get_scale().abs()
@@ -403,7 +446,7 @@ static func _screen_scale(canvas) -> Vector2:
 static func draw_fit(canvas, texture: Texture2D, rect: Rect2,
         tile: bool, modulate: Color = Color.WHITE) -> void:
     canvas.draw_texture_rect(_display_texture(texture,
-        rect.size.abs()*_screen_scale(canvas)),rect,tile,modulate)
+        rect.size.abs()*screen_scale_for(canvas)),rect,tile,modulate)
 
 static func draw_fit_region(canvas, texture: Texture2D, rect: Rect2,
         source: Rect2, modulate: Color = Color.WHITE) -> void:
@@ -412,7 +455,7 @@ static func draw_fit_region(canvas, texture: Texture2D, rect: Rect2,
         return
     var full := Vector2(texture.get_width(),texture.get_height())
     var sized: Texture2D = _display_texture(texture,
-        full*(rect.size.abs()*_screen_scale(canvas)/source.size))
+        full*(rect.size.abs()*screen_scale_for(canvas)/source.size))
     var ratio := Vector2(sized.get_width(),sized.get_height())/full
     canvas.draw_texture_rect_region(sized,rect,
         Rect2(source.position*ratio,source.size*ratio),modulate)

@@ -65,10 +65,7 @@ func _block_written_context(gap: float, bins: Dictionary, cell: float) -> void:
                     changes.append({"step":step,"name":"acc_sharp" if signature > 0 else "acc_flat"})
             if opening or score_layout.clef_for(hand,previous) != clef:
                 var name: String = {"G":"clef_g","F":"clef_f","C":"clef_c"}.get(sign,"")
-                var octave: int = int(clef.get("octave_change",0))
-                var variant: String = name+("_8vb" if octave == -1 else
-                    "_8va" if octave == 1 else "_15mb" if octave == -2 else
-                    "_15ma" if octave == 2 else "")
+                var variant := ContextPainter.octave_clef_glyph(clef)
                 if score_layout.glyphs.bounds.has(variant):
                     name = variant
                 var origin_y: float = center+(

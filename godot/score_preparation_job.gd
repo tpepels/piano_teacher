@@ -11,6 +11,7 @@ const LivingScore := preload("res://living_score.gd")
 var body: PackedByteArray
 var request: Dictionary
 var viewport: Vector2
+var screen_scale := Vector2.ONE
 var density: float
 var result: Dictionary = {}
 var _cancel_lock := Mutex.new()
@@ -84,6 +85,8 @@ func _fit() -> void:
     if not engraving.prepare(density,viewport,Spacing.PLAYHEAD_FRACTION):
         result["invalid_bundle"] = engraving.incomplete_assets
         result["error"] = engraving.failure_reason
+    else:
+        engraving.glyphs.prepare_status_sizes(engraving.gap(),screen_scale)
     var elapsed: float = float(Time.get_ticks_usec()-started)*.001
     result["timing"]["geometry_cpu_ms"] += elapsed
     result["timing"]["total_ms"] += elapsed
