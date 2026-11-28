@@ -94,6 +94,7 @@ var _upload_index := 0
 var _uploaded_images: Dictionary = {}
 var _prepared_interiors: Dictionary = {}
 var _prepared_cutouts: Dictionary = {}
+var _cutout_boxes: Dictionary = {}
 # Identical font images are shared across jobs and immutable.
 static var _interior_images: Dictionary = {}
 static var _interior_image_lock := Mutex.new()
@@ -653,9 +654,31 @@ func prepare_cutout(source: String, key: String, index: int, head: String) -> vo
     var identity: String = HeadMasks.cutout_key(source,key,index,head)
     if _prepared_cutouts.has(identity):
         return
+    _cutout_boxes[identity] = template_box(source,key)
     _prepared_cutouts[identity] = HeadMasks.cutout_image(source,index,
         template_images.get(source+":"+key),head_images.get(head),
         template_box(source,key),bounds.get(head,[]),_chord_heads(key))
+
+# The worker consumes image/box pairs; after upload the matching texture
+# is found by the same immutable asset key, never by a second geometry rule.
+func derived_status_images() -> Dictionary:
+    var result: Dictionary = {}
+    for key in _prepared_cutouts:
+        if _prepared_cutouts[key] != null:
+            result["cutout:"+key] = [_prepared_cutouts[key],_cutout_boxes[key]]
+    for head in _prepared_interiors:
+        if _prepared_interiors[head] != null:
+            result["interior:"+str(head)] = [_prepared_interiors[head],bounds[head]]
+    if note_textures.has("whole"):
+        result["whole"] = [note_textures["whole"],note_bounds["whole"]]
+    return result
+
+func derived_status_texture(key: String) -> Texture2D:
+    if key.begins_with("cutout:"):
+        return _head_masks.cached_cutout(key.trim_prefix("cutout:"))
+    if key.begins_with("interior:"):
+        return head_interior(key.trim_prefix("interior:"))
+    return note_textures.get("whole")
 
 func head_cutout(source: String, key: String, index: int, head: String) -> Texture2D:
     return _head_masks.cutout(source,key,index,head,

@@ -28,6 +28,9 @@ func cutout(source: String, key: String, index: int, head: String,
 func install_cutouts(catalog: Dictionary) -> void:
     _head_cutouts.merge(catalog,true)
 
+func cached_cutout(key: String) -> Texture2D:
+    return _head_cutouts.get(key)
+
 static func cutout_key(source: String, key: String, index: int, head: String) -> String:
     return "%s|%s|%d|%s" % [source,key,index,head]
 

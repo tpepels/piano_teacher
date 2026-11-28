@@ -67,6 +67,7 @@ var template_images: Dictionary:
 
 var _assets := Assets.new()
 var _prepared_head_sizes: Dictionary = {}
+var _prepared_derived_sizes: Dictionary = {}
 
 func prepare_head_interiors() -> void:
     _assets.prepare_head_interiors()
@@ -111,14 +112,24 @@ func begin_upload() -> void:
     # The worker's derived head sizes participate in the same bounded
     # upload as the original glyphs. Do not re-rasterize or draw a second
     # batch of warmup nodes during score-ready publication.
-    for head in _prepared_head_sizes:
-        _assets.append_upload_catalog(_prepared_head_sizes[head])
+    for catalog in [_prepared_head_sizes,_prepared_derived_sizes]:
+        for key in catalog:
+            _assets.append_upload_catalog(catalog[key])
 
 func rewind_upload() -> void:
     _assets.rewind_upload()
 
+static func _status_sizes(image: Image, base_size: Vector2, scales: Array) -> Dictionary:
+    var sizes: Dictionary = {}
+    for scale: float in scales:
+        var size := Vector2i((base_size * scale).round()).clamp(Vector2i.ONE,image.get_size())
+        if not sizes.has(size) and size != image.get_size():
+            sizes[size] = _resample(image,size)
+    return sizes
+
 func prepare_status_sizes(gap: float, screen_scale: Vector2) -> void:
     _prepared_head_sizes.clear()
+    _prepared_derived_sizes.clear()
     var scales: Array = [1.0,StatusInk.CORE_INNER[0]]
     for ring in StatusInk.BLEED:
         scales.append(ring[0])
@@ -132,26 +143,35 @@ func prepare_status_sizes(gap: float, screen_scale: Vector2) -> void:
         if known.get("image") == image and known.get("size") == base_size:
             _prepared_head_sizes[head] = known["sizes"].duplicate()
             continue
-        var sizes := {}
-        for scale: float in scales:
-            var size := Vector2i((base_size * scale).round()).clamp(Vector2i.ONE,image.get_size())
-            if not sizes.has(size) and size != image.get_size():
-                sizes[size] = _resample(image,size)
+        var sizes: Dictionary = _status_sizes(image,base_size,scales)
         _head_size_lock.lock()
         _last_head_sizes[head] = {"image":image,"size":base_size,"sizes":sizes}
         _head_size_lock.unlock()
         _prepared_head_sizes[head] = sizes.duplicate()
+    var derived: Dictionary = _assets.derived_status_images()
+    for key in derived:
+        var image: Image = derived[key][0]
+        var box: Array = derived[key][1]
+        var base_size := Vector2(box[2],box[3]) * (gap / 250.0) * screen_scale
+        _prepared_derived_sizes[key] = _status_sizes(image,base_size,
+            [1.0] if str(key).begins_with("interior:") else scales)
+
+func _publish_status_sizes(original: Texture2D, sizes: Dictionary) -> void:
+    if original == null:
+        return
+    for size in sizes:
+        _display_cache[_display_key(original,size)] = [weakref(original),sizes[size]]
 
 func upload_step(budget_usec: int = 2000) -> bool:
     if not _assets.upload_step(budget_usec):
         return false
     prune_display_cache()
     for head in _prepared_head_sizes:
-        var original: Texture2D = textures[head]
-        for size in _prepared_head_sizes[head]:
-            var prepared: Texture2D = _prepared_head_sizes[head][size]
-            _display_cache[_display_key(original,size)] = [weakref(original),prepared]
+        _publish_status_sizes(textures[head],_prepared_head_sizes[head])
+    for key in _prepared_derived_sizes:
+        _publish_status_sizes(_assets.derived_status_texture(key),_prepared_derived_sizes[key])
     _prepared_head_sizes.clear()
+    _prepared_derived_sizes.clear()
     return true
 
 func source_image(art) -> Image:
